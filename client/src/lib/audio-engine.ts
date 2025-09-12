@@ -1,5 +1,5 @@
 import type { ChordData } from "@shared/schema";
-import { midiNoteToFrequency, centsToFrequencyRatio } from "./midi-mapping";
+import { midiNoteToFrequency, centsToFrequencyRatio } from "./midi-mapping.js";
 
 interface AudioChime {
   oscillator: OscillatorNode;

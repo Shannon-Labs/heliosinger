@@ -118,7 +118,9 @@ export class MemStorage implements IStorage {
     const reading: SolarWindReading = {
       ...insertReading,
       id,
-      timestamp: new Date()
+      timestamp: new Date(),
+      bt: insertReading.bt ?? null,
+      temperature: insertReading.temperature ?? null
     };
     this.solarWindReadings.set(id, reading);
     return reading;
@@ -136,7 +138,18 @@ export class MemStorage implements IStorage {
   async createMappingConfig(insertConfig: InsertMappingConfig): Promise<MappingConfig> {
     const id = randomUUID();
     const config: MappingConfig = {
-      ...insertConfig,
+      name: insertConfig.name,
+      velocity_min: insertConfig.velocity_min ?? 200,
+      velocity_max: insertConfig.velocity_max ?? 800,
+      midi_note_min: insertConfig.midi_note_min ?? 36,
+      midi_note_max: insertConfig.midi_note_max ?? 84,
+      density_min: insertConfig.density_min ?? 0.5,
+      density_max: insertConfig.density_max ?? 50.0,
+      decay_time_min: insertConfig.decay_time_min ?? 0.2,
+      decay_time_max: insertConfig.decay_time_max ?? 5.0,
+      bz_detune_cents: insertConfig.bz_detune_cents ?? -20,
+      bz_threshold: insertConfig.bz_threshold ?? -5.0,
+      is_active: insertConfig.is_active ?? "true",
       id,
       created_at: new Date()
     };
@@ -165,7 +178,16 @@ export class MemStorage implements IStorage {
   async createHardwareConfig(insertConfig: InsertHardwareConfig): Promise<HardwareConfig> {
     const id = randomUUID();
     const config: HardwareConfig = {
-      ...insertConfig,
+      device_name: insertConfig.device_name,
+      pin_velocity: insertConfig.pin_velocity ?? 2,
+      pin_density: insertConfig.pin_density ?? 4,
+      pin_bz: insertConfig.pin_bz ?? 5,
+      pin_status_led: insertConfig.pin_status_led ?? 18,
+      pin_sda: insertConfig.pin_sda ?? 21,
+      pin_scl: insertConfig.pin_scl ?? 22,
+      wifi_ssid: insertConfig.wifi_ssid ?? null,
+      update_interval: insertConfig.update_interval ?? 60,
+      firmware_version: insertConfig.firmware_version ?? "1.0.0",
       id,
       created_at: new Date()
     };
@@ -192,7 +214,9 @@ export class MemStorage implements IStorage {
     const id = existing?.id || randomUUID();
     
     const status: SystemStatus = {
-      ...insertStatus,
+      component: insertStatus.component,
+      status: insertStatus.status,
+      details: insertStatus.details ?? null,
       id,
       last_update: new Date()
     };

@@ -33,8 +33,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Fetch real-time data from NOAA DSCOVR
   app.post("/api/solar-wind/fetch", async (req, res) => {
     try {
-      // NOAA SWPC real-time plasma data endpoint
-      const noaaResponse = await fetch('https://services.swpc.noaa.gov/products/real-time-solar-wind.json');
+      // NOAA SWPC real-time plasma data endpoint (updated URL)
+      const noaaResponse = await fetch('https://services.swpc.noaa.gov/products/solar-wind/plasma-2-hour.json');
       
       if (!noaaResponse.ok) {
         throw new Error(`NOAA API error: ${noaaResponse.status}`);
@@ -42,19 +42,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const noaaData = await noaaResponse.json();
       
-      // Parse NOAA data format - typically last entry is most recent
-      const latestData = noaaData[noaaData.length - 1];
+      // Debug: Log the actual data structure
+      console.log("NOAA API Response structure:", {
+        isArray: Array.isArray(noaaData),
+        length: noaaData?.length,
+        firstItem: noaaData?.[0],
+        lastItem: noaaData?.[noaaData?.length - 1]
+      });
       
-      if (!latestData || latestData.length < 7) {
-        throw new Error("Invalid NOAA data format");
+      // Parse NOAA data format - skip header row, take latest entry
+      const dataRows = noaaData.slice(1); // Remove header row
+      const latestData = dataRows[dataRows.length - 1];
+      
+      console.log("Latest data entry:", latestData);
+      
+      if (!latestData || latestData.length < 4) {
+        throw new Error(`Invalid NOAA data format. Expected array with 4+ elements, got: ${JSON.stringify(latestData)}`);
       }
 
-      // NOAA format: [time_tag, density, speed, temperature, bx, by, bz, bt]
+      // New NOAA format: [time_tag, density, speed, temperature]
+      // Note: Bz data needs to be fetched from magnetometer endpoint separately
       const solarWindData = {
         velocity: parseFloat(latestData[2]) || 0, // speed km/s
         density: parseFloat(latestData[1]) || 0, // proton density p/cm³
-        bz: parseFloat(latestData[6]) || 0, // Bz GSM nT
-        bt: parseFloat(latestData[7]) || 0, // Bt nT
+        bz: 0, // Will fetch from mag endpoint later
+        bt: null, // Not available in plasma endpoint
         temperature: parseFloat(latestData[3]) || 0, // temperature K
         raw_data: latestData
       };
@@ -72,14 +84,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching NOAA data:", error);
       
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
       // Update system status to error
       await storage.updateSystemStatus({
         component: 'data_stream',
         status: 'error',
-        details: `NOAA fetch failed: ${error.message}`
+        details: `NOAA fetch failed: ${errorMessage}`
       });
       
-      res.status(500).json({ message: "Failed to fetch NOAA data", error: error.message });
+      res.status(500).json({ message: "Failed to fetch NOAA data", error: errorMessage });
     }
   });
 
@@ -90,7 +104,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(configs);
     } catch (error) {
       console.error("Error fetching mapping configs:", error);
-      res.status(500).json({ message: "Failed to fetch mapping configurations" });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      res.status(500).json({ message: "Failed to fetch mapping configurations", error: errorMessage });
     }
   });
 
@@ -114,7 +129,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(config);
     } catch (error) {
       console.error("Error creating mapping config:", error);
-      res.status(400).json({ message: "Invalid mapping configuration data", error: error.message });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      res.status(400).json({ message: "Invalid mapping configuration data", error: errorMessage });
     }
   });
 
@@ -131,7 +147,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(config);
     } catch (error) {
       console.error("Error updating mapping config:", error);
-      res.status(400).json({ message: "Failed to update mapping configuration", error: error.message });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      res.status(400).json({ message: "Failed to update mapping configuration", error: errorMessage });
     }
   });
 
@@ -251,7 +268,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(201).json(config);
     } catch (error) {
       console.error("Error creating hardware config:", error);
-      res.status(400).json({ message: "Invalid hardware configuration data", error: error.message });
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      res.status(400).json({ message: "Invalid hardware configuration data", error: errorMessage });
     }
   });
 
@@ -352,7 +370,7 @@ const char* ssid = "${hardwareConfig.wifi_ssid || 'YOUR_WIFI_SSID'}";
 const char* password = "YOUR_WIFI_PASSWORD";
 
 // API Configuration
-const char* apiEndpoint = "https://services.swpc.noaa.gov/products/real-time-solar-wind.json";
+const char* apiEndpoint = "https://services.swpc.noaa.gov/products/solar-wind/plasma-2-hour.json";
 const unsigned long updateInterval = ${hardwareConfig.update_interval * 1000}; // milliseconds
 
 // Mapping Configuration (Date-stamped: ${currentDate})
