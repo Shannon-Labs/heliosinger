@@ -6,22 +6,24 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 export function HardwareConfig() {
   const [firmwareCode, setFirmwareCode] = useState("");
   const [showFirmware, setShowFirmware] = useState(false);
+  const [selectedConfigId, setSelectedConfigId] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // Fetch hardware configurations
-  const { data: hardwareConfigs, isLoading } = useQuery({
+  const { data: hardwareConfigs = [], isLoading } = useQuery({
     queryKey: ["/api/hardware/configs"]
   });
 
   // Fetch system status
-  const { data: systemStatus } = useQuery({
+  const { data: systemStatus = [] } = useQuery({
     queryKey: ["/api/system/status"]
   });
 
@@ -122,7 +124,12 @@ export function HardwareConfig() {
     );
   }
 
-  const defaultConfig = hardwareConfigs?.[0];
+  // Initialize selected config when configs are loaded
+  if (hardwareConfigs?.length && !selectedConfigId) {
+    setSelectedConfigId(hardwareConfigs[0].id);
+  }
+
+  const selectedConfig = hardwareConfigs?.find(config => config.id === selectedConfigId) || hardwareConfigs?.[0];
   const chimeStatus = systemStatus?.find(s => s.component === 'chimes');
   const networkStatus = systemStatus?.find(s => s.component === 'network');
 
@@ -136,20 +143,40 @@ export function HardwareConfig() {
           <CardContent className="p-6">
             <h3 className="text-lg font-semibold mb-4 flex items-center">
               <i className="fas fa-microchip mr-2 text-primary" />
-              ESP32 Configuration
+              Hardware Configuration
             </h3>
             
-            {defaultConfig ? (
+            {/* Device Selection */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-2">Select Device:</label>
+              <Select value={selectedConfigId} onValueChange={setSelectedConfigId}>
+                <SelectTrigger data-testid="select-hardware-device">
+                  <SelectValue placeholder="Choose hardware configuration" />
+                </SelectTrigger>
+                <SelectContent>
+                  {hardwareConfigs?.map(config => (
+                    <SelectItem key={config.id} value={config.id}>
+                      {config.device_name}
+                      {config.device_name === "Solar Lighthouse Prototype" && (
+                        <Badge variant="secondary" className="ml-2">New</Badge>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {selectedConfig ? (
               <div className="space-y-4">
                 <div className="bg-secondary/30 rounded-lg p-4">
                   <div className="text-sm font-medium mb-2">Pin Configuration</div>
                   <div className="font-mono text-sm space-y-1">
-                    <div>GPIO {defaultConfig.pin_velocity}: <span className="text-primary">Velocity Chime</span></div>
-                    <div>GPIO {defaultConfig.pin_density}: <span className="text-accent">Density Chime</span></div>
-                    <div>GPIO {defaultConfig.pin_bz}: <span className="text-warning">Bz Chime</span></div>
-                    <div>GPIO {defaultConfig.pin_status_led}: <span className="text-muted-foreground">Status LED</span></div>
-                    <div>GPIO {defaultConfig.pin_sda}: <span className="text-muted-foreground">SDA (I2C)</span></div>
-                    <div>GPIO {defaultConfig.pin_scl}: <span className="text-muted-foreground">SCL (I2C)</span></div>
+                    <div>GPIO {selectedConfig.pin_velocity}: <span className="text-primary">Velocity Chime</span></div>
+                    <div>GPIO {selectedConfig.pin_density}: <span className="text-accent">Density Chime</span></div>
+                    <div>GPIO {selectedConfig.pin_bz}: <span className="text-warning">Bz Chime</span></div>
+                    <div>GPIO {selectedConfig.pin_status_led}: <span className="text-muted-foreground">Status LED</span></div>
+                    <div>GPIO {selectedConfig.pin_sda}: <span className="text-muted-foreground">SDA (I2C)</span></div>
+                    <div>GPIO {selectedConfig.pin_scl}: <span className="text-muted-foreground">SCL (I2C)</span></div>
                   </div>
                 </div>
                 
@@ -162,17 +189,17 @@ export function HardwareConfig() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm">Firmware Version:</span>
-                    <span className="text-muted-foreground font-mono">{defaultConfig.firmware_version}</span>
+                    <span className="text-muted-foreground font-mono">{selectedConfig.firmware_version}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm">Update Interval:</span>
-                    <span className="text-warning">{defaultConfig.update_interval}s</span>
+                    <span className="text-warning">{selectedConfig.update_interval}s</span>
                   </div>
                 </div>
                 
                 <Button 
                   className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                  onClick={() => generateFirmwareMutation.mutate(defaultConfig.id)}
+                  onClick={() => generateFirmwareMutation.mutate(selectedConfigId)}
                   disabled={generateFirmwareMutation.isPending}
                   data-testid="button-generate-firmware"
                 >

@@ -86,6 +86,23 @@ export class MemStorage implements IStorage {
     };
     this.hardwareConfigs.set(defaultHardware.id, defaultHardware);
 
+    // Solar Lighthouse Prototype Configuration
+    const solarLighthouse: HardwareConfig = {
+      id: randomUUID(),
+      device_name: "Solar Lighthouse Prototype",
+      pin_velocity: 12,  // Solenoid 1 (E3 - 164.8 Hz)
+      pin_density: 13,   // Solenoid 2 (A3 - 220.0 Hz)  
+      pin_bz: 14,        // Solenoid 3 (C#4 - 277.2 Hz)
+      pin_status_led: 2, // ESP32-Pico-D4 heartbeat LED
+      pin_sda: 21,       // I2C for future sensors
+      pin_scl: 22,       // I2C for future sensors
+      wifi_ssid: null,
+      update_interval: 58, // Deep sleep 58s as per prototype spec
+      firmware_version: "2.0.0-lighthouse",
+      created_at: new Date()
+    };
+    this.hardwareConfigs.set(solarLighthouse.id, solarLighthouse);
+
     // Initialize system status
     const statusComponents = ['network', 'data_stream', 'power', 'chimes'];
     statusComponents.forEach(component => {

@@ -278,8 +278,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "No active mapping configuration" });
       }
 
-      // Generate ESP32 firmware code
-      const firmwareCode = generateESP32Firmware(config, mappingConfig);
+      // Generate ESP32 firmware code based on device type
+      const firmwareCode = config.device_name === "Solar Lighthouse Prototype"
+        ? generateSolarLighthouseFirmware(config, mappingConfig)
+        : generateESP32Firmware(config, mappingConfig);
       
       res.json({
         firmware_code: firmwareCode,
@@ -544,6 +546,428 @@ void printStatus() {
   Serial.printf("Update Interval: %lu seconds\\n", updateInterval / 1000);
   Serial.printf("Firmware Version: ${hardwareConfig.firmware_version}\\n");
   Serial.println("===============================");
+}
+`;
+}
+
+// Solar Lighthouse Prototype Firmware Generation
+function generateSolarLighthouseFirmware(hardwareConfig: any, mappingConfig: any): string {
+  return `/*
+ * Solar Lighthouse Prototype Firmware
+ * Industrial-grade Solar Wind Chime with advanced power management
+ * 
+ * Hardware: ESP32-Pico-D4, 3x Magnetic Solenoids, Solar Charging
+ * Features: Deep Sleep, Night Mode, Storm Party Override, OTA Updates
+ * 
+ * Acoustic Tuning:
+ * - Chime 1 (Pin ${hardwareConfig.pin_velocity}): E3 - 164.8 Hz (235mm tube)
+ * - Chime 2 (Pin ${hardwareConfig.pin_density}): A3 - 220.0 Hz (195mm tube)  
+ * - Chime 3 (Pin ${hardwareConfig.pin_bz}): C#4 - 277.2 Hz (165mm tube)
+ */
+
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <esp_deep_sleep.h>
+#include <esp_wifi.h>
+#include <WiFiManager.h>
+#include <ArduinoOTA.h>
+#include <Wire.h>
+#include <Adafruit_INA219.h>
+
+// Hardware Configuration
+#define PIN_CHIME_E3     ${hardwareConfig.pin_velocity}  // Solenoid 1: E3 (164.8 Hz)
+#define PIN_CHIME_A3     ${hardwareConfig.pin_density}   // Solenoid 2: A3 (220.0 Hz)
+#define PIN_CHIME_CS4    ${hardwareConfig.pin_bz}        // Solenoid 3: C#4 (277.2 Hz)
+#define PIN_HEARTBEAT    ${hardwareConfig.pin_status_led} // Heartbeat LED
+#define PIN_SDA          ${hardwareConfig.pin_sda}       // I2C Data
+#define PIN_SCL          ${hardwareConfig.pin_scl}       // I2C Clock
+#define PIN_MAST_TAP     27                              // Capacitive touch for storm-party mode
+#define PIN_ALS          34                              // Ambient light sensor (ADC)
+
+// Power Management
+Adafruit_INA219 ina219; // Solar power monitor
+#define BATTERY_MIN_VOLTAGE  2.3  // Min operating voltage
+#define SOLAR_HARVEST_LOG    true // Log daily harvest via OTA
+
+// Timing Configuration
+#define DEEP_SLEEP_TIME     58000000ULL  // 58 seconds (microseconds)
+#define UPDATE_INTERVAL     ${hardwareConfig.update_interval}000  // ms
+#define SOLENOID_PULSE      50           // 50ms pulse duration
+#define SOLENOID_CURRENT    600          // 600mA drive current
+
+// Audio Parameters - Prototype Tuned
+const float CHIME_FREQUENCIES[3] = {164.8, 220.0, 277.2}; // E3, A3, C#4 Hz
+const int CHIME_PINS[3] = {PIN_CHIME_E3, PIN_CHIME_A3, PIN_CHIME_CS4};
+
+// Space Weather Mapping
+#define VELOCITY_MIN        ${mappingConfig.velocity_min}
+#define VELOCITY_MAX        ${mappingConfig.velocity_max}
+#define DENSITY_MIN         ${mappingConfig.density_min}
+#define DENSITY_MAX         ${mappingConfig.density_max}
+#define BZ_THRESHOLD        ${mappingConfig.bz_threshold}
+#define BZ_DETUNE_CENTS     ${mappingConfig.bz_detune_cents}
+
+// Night Mode & Storm Party
+bool nightModeActive = false;
+bool stormPartyMode = false;
+unsigned long stormPartyEndTime = 0;
+int lastTapCount = 0;
+unsigned long lastTapTime = 0;
+unsigned long lastNightStrike = 0;
+
+// Solar Wind Data
+float currentVelocity = 400.0;
+float currentDensity = 5.0;
+float currentBz = 0.0;
+String spaceWeatherCondition = "quiet";
+
+// API Configuration
+const char* apiEndpoint = "https://services.swpc.noaa.gov/products/solar-wind/plasma-2-hour.json";
+const char* firmwareVersion = "${hardwareConfig.firmware_version}";
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println("\\n=== Solar Lighthouse Prototype Starting ===");
+  
+  // Initialize hardware
+  setupPins();
+  setupPowerManagement();
+  
+  // WiFi and OTA setup
+  setupWiFi();
+  setupOTA();
+  
+  // Startup chime sequence
+  playStartupChime();
+  
+  Serial.println("Solar Lighthouse ready for operation");
+}
+
+void loop() {
+  // Check for storm party mode triple-tap
+  checkStormPartyOverride();
+  
+  // Update night mode based on ambient light
+  updateNightMode();
+  
+  // Fetch solar wind data and play chord
+  if (WiFi.status() == WL_CONNECTED) {
+    fetchSolarWindData();
+    
+    // Check if we should play (night mode restrictions)
+    if (shouldPlayChime()) {
+      calculateAndPlayChord();
+    }
+    
+    // Log power telemetry
+    logPowerTelemetry();
+  }
+  
+  // Handle OTA updates
+  ArduinoOTA.handle();
+  
+  // Update heartbeat LED
+  updateHeartbeat();
+  
+  // Enter deep sleep for power conservation
+  Serial.printf("Entering deep sleep for %d seconds\\n", ${hardwareConfig.update_interval});
+  esp_deep_sleep(DEEP_SLEEP_TIME);
+}
+
+void setupPins() {
+  // Solenoid outputs
+  pinMode(PIN_CHIME_E3, OUTPUT);
+  pinMode(PIN_CHIME_A3, OUTPUT);
+  pinMode(PIN_CHIME_CS4, OUTPUT);
+  
+  // Status LED
+  pinMode(PIN_HEARTBEAT, OUTPUT);
+  
+  // Touch sensor for storm party mode
+  pinMode(PIN_MAST_TAP, INPUT);
+  
+  // Ambient light sensor
+  pinMode(PIN_ALS, INPUT);
+  
+  // I2C for power monitoring
+  Wire.begin(PIN_SDA, PIN_SCL);
+  
+  Serial.println("Hardware pins initialized");
+}
+
+void setupPowerManagement() {
+  // Initialize INA219 power monitor
+  if (ina219.begin()) {
+    Serial.println("INA219 Power Monitor initialized");
+    
+    // Check battery voltage
+    float voltage = ina219.getBusVoltage_V();
+    if (voltage < BATTERY_MIN_VOLTAGE) {
+      Serial.printf("WARNING: Low battery voltage: %.2fV\\n", voltage);
+    }
+  } else {
+    Serial.println("Failed to initialize INA219");
+  }
+}
+
+void setupWiFi() {
+  WiFiManager wifiManager;
+  
+  // Auto-connect or start captive portal
+  if (!wifiManager.autoConnect("SolarLighthouse")) {
+    Serial.println("Failed to connect to WiFi");
+    esp_restart();
+  }
+  
+  Serial.printf("WiFi connected: %s\\n", WiFi.localIP().toString().c_str());
+}
+
+void setupOTA() {
+  ArduinoOTA.setHostname("solar-lighthouse");
+  ArduinoOTA.setPassword("space-weather");
+  
+  ArduinoOTA.onStart([]() {
+    Serial.println("OTA Update starting...");
+  });
+  
+  ArduinoOTA.onEnd([]() {
+    Serial.println("\\nOTA Update complete");
+  });
+  
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("OTA Error[%u]: ", error);
+  });
+  
+  ArduinoOTA.begin();
+  Serial.println("OTA updates enabled");
+}
+
+void checkStormPartyOverride() {
+  bool mastTapped = digitalRead(PIN_MAST_TAP);
+  unsigned long currentTime = millis();
+  
+  if (mastTapped && (currentTime - lastTapTime) > 200) { // Debounce
+    lastTapCount++;
+    lastTapTime = currentTime;
+    
+    // Reset tap count after 2 seconds
+    if ((currentTime - lastTapTime) > 2000) {
+      lastTapCount = 0;
+    }
+    
+    // Triple tap activates storm party mode
+    if (lastTapCount >= 3) {
+      stormPartyMode = true;
+      stormPartyEndTime = currentTime + (2 * 60 * 60 * 1000); // 2 hours
+      lastTapCount = 0;
+      
+      Serial.println("*** STORM PARTY MODE ACTIVATED ***");
+      playStormPartyChime();
+    }
+  }
+  
+  // Check if storm party mode expired
+  if (stormPartyMode && currentTime > stormPartyEndTime) {
+    stormPartyMode = false;
+    Serial.println("Storm party mode deactivated");
+  }
+}
+
+void updateNightMode() {
+  int lightLevel = analogRead(PIN_ALS);
+  float lux = map(lightLevel, 0, 4095, 0, 1000); // Convert ADC to approximate lux
+  
+  nightModeActive = (lux < 10.0) && !stormPartyMode;
+  
+  static bool lastNightMode = false;
+  if (nightModeActive != lastNightMode) {
+    Serial.printf("Night mode: %s (%.1f lux)\\n", 
+                 nightModeActive ? "ACTIVE" : "INACTIVE", lux);
+    lastNightMode = nightModeActive;
+  }
+}
+
+bool shouldPlayChime() {
+  unsigned long currentTime = millis();
+  
+  // Storm party mode - always play
+  if (stormPartyMode) return true;
+  
+  // Night mode restrictions
+  if (nightModeActive) {
+    // Limit to 1 strike every 5 minutes
+    if ((currentTime - lastNightStrike) < (5 * 60 * 1000)) {
+      return false;
+    }
+    lastNightStrike = currentTime;
+  }
+  
+  return true;
+}
+
+void fetchSolarWindData() {
+  HTTPClient http;
+  http.begin(apiEndpoint);
+  
+  int httpResponseCode = http.GET();
+  
+  if (httpResponseCode == 200) {
+    String payload = http.getString();
+    parseSolarWindData(payload);
+    Serial.printf("Solar Wind: %.1f km/s, %.1f p/cm³, %.1f nT\\n", 
+                 currentVelocity, currentDensity, currentBz);
+  } else {
+    Serial.printf("HTTP Error: %d\\n", httpResponseCode);
+  }
+  
+  http.end();
+}
+
+void parseSolarWindData(String jsonData) {
+  DynamicJsonDocument doc(8192);
+  deserializeJson(doc, jsonData);
+  
+  if (doc.size() > 1) {
+    JsonArray latestReading = doc[doc.size() - 1];
+    
+    if (latestReading.size() >= 4) {
+      currentVelocity = latestReading[2].as<float>(); // speed km/s
+      currentDensity = latestReading[1].as<float>();  // density p/cm³
+      currentBz = 0.0; // Placeholder - fetch from magnetometer endpoint
+      
+      // Classify space weather condition
+      if (currentVelocity > 700 || currentBz < -15) {
+        spaceWeatherCondition = "extreme";
+      } else if (currentVelocity > 600 || currentBz < -10) {
+        spaceWeatherCondition = "storm";
+      } else if (currentVelocity > 450 || currentBz < -5) {
+        spaceWeatherCondition = "moderate";
+      } else {
+        spaceWeatherCondition = "quiet";
+      }
+    }
+  }
+}
+
+void calculateAndPlayChord() {
+  // Map velocity to primary chime selection (E3, A3, or C#4)
+  float velocityNorm = constrain((currentVelocity - VELOCITY_MIN) / (VELOCITY_MAX - VELOCITY_MIN), 0.0, 1.0);
+  int primaryChime = (int)(velocityNorm * 2.99); // 0, 1, or 2
+  
+  // Calculate strike intensity from density (logarithmic)
+  float densityNorm = constrain(log(currentDensity / DENSITY_MIN) / log(DENSITY_MAX / DENSITY_MIN), 0.0, 1.0);
+  int strikeDuration = 20 + (densityNorm * 80); // 20-100ms
+  
+  // Detune effect for negative Bz (geomagnetic activity)
+  bool shouldDetune = currentBz < BZ_THRESHOLD;
+  
+  // Apply night mode volume reduction
+  float volumeMultiplier = nightModeActive ? 0.32 : 1.0; // -15 dB = 0.32x
+  
+  Serial.printf("Playing chord: Chime %d (%.1f Hz), %dms, Detune: %s, Vol: %.0f%%\\n",
+               primaryChime + 1, CHIME_FREQUENCIES[primaryChime], 
+               strikeDuration, shouldDetune ? "Yes" : "No", volumeMultiplier * 100);
+  
+  // Strike primary chime
+  strikeChime(primaryChime, strikeDuration, volumeMultiplier);
+  
+  // Add harmonic chimes based on space weather condition
+  if (spaceWeatherCondition == "moderate" || spaceWeatherCondition == "storm") {
+    delay(100);
+    strikeChime((primaryChime + 1) % 3, strikeDuration * 0.7, volumeMultiplier * 0.6);
+  }
+  
+  if (spaceWeatherCondition == "storm" || spaceWeatherCondition == "extreme") {
+    delay(150);
+    strikeChime((primaryChime + 2) % 3, strikeDuration * 0.5, volumeMultiplier * 0.4);
+  }
+  
+  // Detune effect with rapid strikes for Bz activity
+  if (shouldDetune) {
+    delay(200);
+    for (int i = 0; i < 3; i++) {
+      strikeChime(primaryChime, 30, volumeMultiplier * 0.3);
+      delay(80);
+    }
+  }
+}
+
+void strikeChime(int chimeIndex, int duration, float volume) {
+  if (chimeIndex < 0 || chimeIndex > 2) return;
+  
+  int pin = CHIME_PINS[chimeIndex];
+  int pulseDuration = (int)(duration * volume);
+  
+  digitalWrite(pin, HIGH);
+  delay(pulseDuration);
+  digitalWrite(pin, LOW);
+}
+
+void playStartupChime() {
+  Serial.println("Playing startup chime sequence");
+  
+  // Ascending arpeggio: E3 -> A3 -> C#4
+  for (int i = 0; i < 3; i++) {
+    strikeChime(i, 60, 0.8);
+    delay(300);
+  }
+  
+  delay(500);
+  
+  // Final chord (all three)
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(CHIME_PINS[i], HIGH);
+  }
+  delay(80);
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(CHIME_PINS[i], LOW);
+  }
+}
+
+void playStormPartyChime() {
+  // Dramatic storm party activation sound
+  for (int i = 0; i < 5; i++) {
+    strikeChime(2, 40, 1.0); // C#4 rapid strikes
+    delay(60);
+  }
+  delay(200);
+  strikeChime(0, 100, 1.0); // Deep E3
+}
+
+void updateHeartbeat() {
+  static unsigned long lastBlink = 0;
+  static bool ledState = false;
+  
+  if (millis() - lastBlink > 1000) {
+    ledState = !ledState;
+    digitalWrite(PIN_HEARTBEAT, ledState);
+    lastBlink = millis();
+  }
+}
+
+void logPowerTelemetry() {
+  if (!SOLAR_HARVEST_LOG) return;
+  
+  float busVoltage = ina219.getBusVoltage_V();
+  float current = ina219.getCurrent_mA();
+  float power = ina219.getPower_mW();
+  
+  Serial.printf("Power: %.2fV, %.1fmA, %.1fmW\\n", busVoltage, current, power);
+  
+  // TODO: Send telemetry via MQTT or HTTP POST for monitoring
+}
+
+void printStatus() {
+  Serial.println("\\n=== Solar Lighthouse Status ===");
+  Serial.printf("Firmware: %s\\n", firmwareVersion);
+  Serial.printf("WiFi: %s\\n", WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected");
+  Serial.printf("Space Weather: %s\\n", spaceWeatherCondition.c_str());
+  Serial.printf("Night Mode: %s\\n", nightModeActive ? "Active" : "Inactive");
+  Serial.printf("Storm Party: %s\\n", stormPartyMode ? "Active" : "Inactive");
+  Serial.printf("Solar Wind: %.1f km/s, %.1f p/cm³, %.1f nT\\n", 
+               currentVelocity, currentDensity, currentBz);
+  Serial.println("================================\\n");
 }
 `;
 }
