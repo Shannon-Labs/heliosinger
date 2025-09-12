@@ -1,0 +1,455 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@300;400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Solar Wind Chime Dark Theme Colors */
+  --background: hsl(210, 30%, 8%);
+  --foreground: hsl(210, 40%, 98%);
+  --card: hsl(210, 30%, 12%);
+  --card-foreground: hsl(210, 40%, 98%);
+  --popover: hsl(210, 30%, 8%);
+  --popover-foreground: hsl(210, 40%, 98%);
+  --primary: hsl(195, 100%, 50%);
+  --primary-foreground: hsl(210, 30%, 8%);
+  --secondary: hsl(210, 30%, 18%);
+  --secondary-foreground: hsl(210, 40%, 98%);
+  --muted: hsl(210, 30%, 15%);
+  --muted-foreground: hsl(210, 30%, 70%);
+  --accent: hsl(142, 76%, 50%);
+  --accent-foreground: hsl(210, 30%, 8%);
+  --destructive: hsl(14, 100%, 60%);
+  --destructive-foreground: hsl(210, 40%, 98%);
+  --border: hsl(210, 30%, 18%);
+  --input: hsl(210, 30%, 18%);
+  --ring: hsl(195, 100%, 50%);
+  --warning: hsl(38, 100%, 60%);
+  --success: hsl(142, 76%, 50%);
+  
+  /* Chart colors for space weather data */
+  --chart-1: hsl(195, 100%, 50%);
+  --chart-2: hsl(142, 76%, 50%);
+  --chart-3: hsl(38, 100%, 60%);
+  --chart-4: hsl(14, 100%, 60%);
+  --chart-5: hsl(270, 95%, 75%);
+  
+  /* Sidebar colors */
+  --sidebar: hsl(210, 30%, 12%);
+  --sidebar-foreground: hsl(210, 40%, 98%);
+  --sidebar-primary: hsl(195, 100%, 50%);
+  --sidebar-primary-foreground: hsl(210, 30%, 8%);
+  --sidebar-accent: hsl(210, 30%, 18%);
+  --sidebar-accent-foreground: hsl(195, 100%, 50%);
+  --sidebar-border: hsl(210, 30%, 18%);
+  --sidebar-ring: hsl(195, 100%, 50%);
+  
+  /* Typography */
+  --font-sans: 'Inter', 'Open Sans', sans-serif;
+  --font-serif: 'Georgia', serif;
+  --font-mono: 'Roboto Mono', 'Menlo', monospace;
+  
+  /* Layout */
+  --radius: 0.75rem;
+  
+  /* Shadows with space theme */
+  --shadow-2xs: 0px 1px 2px 0px hsl(195, 100%, 50%, 0.05);
+  --shadow-xs: 0px 1px 3px 0px hsl(195, 100%, 50%, 0.1), 0px 1px 2px 0px hsl(195, 100%, 50%, 0.06);
+  --shadow-sm: 0px 1px 3px 0px hsl(195, 100%, 50%, 0.1), 0px 1px 2px 0px hsl(195, 100%, 50%, 0.06);
+  --shadow: 0px 1px 3px 0px hsl(195, 100%, 50%, 0.1), 0px 1px 2px 0px hsl(195, 100%, 50%, 0.06);
+  --shadow-md: 0px 4px 6px -1px hsl(195, 100%, 50%, 0.1), 0px 2px 4px -1px hsl(195, 100%, 50%, 0.06);
+  --shadow-lg: 0px 10px 15px -3px hsl(195, 100%, 50%, 0.1), 0px 4px 6px -2px hsl(195, 100%, 50%, 0.05);
+  --shadow-xl: 0px 20px 25px -5px hsl(195, 100%, 50%, 0.1), 0px 10px 10px -5px hsl(195, 100%, 50%, 0.04);
+  --shadow-2xl: 0px 25px 50px -12px hsl(195, 100%, 50%, 0.25);
+  
+  --tracking-normal: 0em;
+  --spacing: 0.25rem;
+}
+
+.dark {
+  /* Dark theme is our primary theme, but keeping this for consistency */
+  --background: hsl(210, 30%, 8%);
+  --foreground: hsl(210, 40%, 98%);
+  --card: hsl(210, 30%, 12%);
+  --card-foreground: hsl(210, 40%, 98%);
+  --popover: hsl(210, 30%, 8%);
+  --popover-foreground: hsl(210, 40%, 98%);
+  --primary: hsl(195, 100%, 50%);
+  --primary-foreground: hsl(210, 30%, 8%);
+  --secondary: hsl(210, 30%, 18%);
+  --secondary-foreground: hsl(210, 40%, 98%);
+  --muted: hsl(210, 30%, 15%);
+  --muted-foreground: hsl(210, 30%, 70%);
+  --accent: hsl(142, 76%, 50%);
+  --accent-foreground: hsl(210, 30%, 8%);
+  --destructive: hsl(14, 100%, 60%);
+  --destructive-foreground: hsl(210, 40%, 98%);
+  --border: hsl(210, 30%, 18%);
+  --input: hsl(210, 30%, 18%);
+  --ring: hsl(195, 100%, 50%);
+  --warning: hsl(38, 100%, 60%);
+  --success: hsl(142, 76%, 50%);
+  
+  --sidebar: hsl(210, 30%, 12%);
+  --sidebar-foreground: hsl(210, 40%, 98%);
+  --sidebar-primary: hsl(195, 100%, 50%);
+  --sidebar-primary-foreground: hsl(210, 30%, 8%);
+  --sidebar-accent: hsl(210, 30%, 18%);
+  --sidebar-accent-foreground: hsl(195, 100%, 50%);
+  --sidebar-border: hsl(210, 30%, 18%);
+  --sidebar-ring: hsl(195, 100%, 50%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Scrollbar styling for dark theme */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-muted opacity-20;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground bg-opacity-20 rounded-md;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground bg-opacity-30;
+  }
+}
+
+@layer components {
+  /* Space-themed glow effect */
+  .glow {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.3);
+  }
+
+  .glow-accent {
+    box-shadow: 0 0 20px hsl(var(--accent) / 0.3);
+  }
+
+  .glow-warning {
+    box-shadow: 0 0 20px hsl(var(--warning) / 0.3);
+  }
+
+  /* Pulse animation for live data indicators */
+  .pulse-animation {
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { 
+      opacity: 1; 
+      transform: scale(1);
+    }
+    50% { 
+      opacity: 0.7; 
+      transform: scale(1.05);
+    }
+  }
+
+  /* Waveform visualization component */
+  .waveform {
+    background: linear-gradient(90deg, 
+      hsl(var(--primary)) 0%, 
+      hsl(var(--accent)) 50%, 
+      hsl(var(--warning)) 100%);
+    height: 2px;
+    position: relative;
+    overflow: hidden;
+    border-radius: 1px;
+  }
+
+  .waveform::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, 
+      transparent 0%, 
+      rgba(255, 255, 255, 0.6) 50%, 
+      transparent 100%);
+    animation: wave 3s infinite;
+  }
+
+  @keyframes wave {
+    0% { left: -100%; }
+    100% { left: 100%; }
+  }
+
+  /* Solar wind parameter sparkline bars */
+  .sparkline-bar {
+    transition: all 0.3s ease-in-out;
+    border-radius: 2px 2px 0 0;
+  }
+
+  .sparkline-bar:hover {
+    opacity: 0.8;
+    transform: scaleY(1.1);
+  }
+
+  /* Space weather condition badges */
+  .condition-quiet {
+    @apply bg-accent/10 text-accent border-accent/30;
+  }
+
+  .condition-moderate {
+    @apply bg-warning/10 text-warning border-warning/30;
+  }
+
+  .condition-storm {
+    @apply bg-destructive/10 text-destructive border-destructive/30;
+  }
+
+  /* Hardware pin configuration display */
+  .pin-config {
+    @apply font-mono text-sm;
+  }
+
+  .pin-config .pin-number {
+    @apply text-primary font-medium;
+  }
+
+  .pin-config .pin-function {
+    @apply text-muted-foreground;
+  }
+
+  /* Firmware code styling */
+  .firmware-code {
+    @apply font-mono text-xs bg-secondary/30 rounded-lg p-4;
+    line-height: 1.4;
+  }
+
+  .firmware-code .comment {
+    @apply text-accent;
+  }
+
+  .firmware-code .keyword {
+    @apply text-primary;
+  }
+
+  .firmware-code .string {
+    @apply text-warning;
+  }
+
+  /* Data stream status indicators */
+  .status-active {
+    @apply bg-accent/10 text-accent;
+  }
+
+  .status-inactive {
+    @apply bg-muted/10 text-muted-foreground;
+  }
+
+  .status-error {
+    @apply bg-destructive/10 text-destructive;
+  }
+
+  .status-testing {
+    @apply bg-warning/10 text-warning;
+  }
+
+  /* Musical chord visualization */
+  .chord-component {
+    @apply transition-all duration-500 ease-in-out;
+  }
+
+  .chord-component:hover {
+    @apply transform scale-105;
+  }
+
+  /* Space weather history chart styling */
+  .history-chart {
+    @apply bg-secondary/30 rounded-lg;
+  }
+
+  .history-chart .trend-rising {
+    @apply text-warning;
+  }
+
+  .history-chart .trend-falling {
+    @apply text-accent;
+  }
+
+  .history-chart .trend-stable {
+    @apply text-muted-foreground;
+  }
+}
+
+@layer utilities {
+  /* Custom space weather utility classes */
+  .text-velocity {
+    color: hsl(var(--primary));
+  }
+
+  .text-density {
+    color: hsl(var(--accent));
+  }
+
+  .text-magnetic-field {
+    color: hsl(var(--warning));
+  }
+
+  .text-geomagnetic-risk {
+    color: hsl(var(--destructive));
+  }
+
+  .bg-velocity {
+    background-color: hsl(var(--primary));
+  }
+
+  .bg-density {
+    background-color: hsl(var(--accent));
+  }
+
+  .bg-magnetic-field {
+    background-color: hsl(var(--warning));
+  }
+
+  .bg-geomagnetic-risk {
+    background-color: hsl(var(--destructive));
+  }
+
+  /* Border utilities for space weather parameters */
+  .border-velocity {
+    border-color: hsl(var(--primary));
+  }
+
+  .border-density {
+    border-color: hsl(var(--accent));
+  }
+
+  .border-magnetic-field {
+    border-color: hsl(var(--warning));
+  }
+
+  .border-geomagnetic-risk {
+    border-color: hsl(var(--destructive));
+  }
+
+  /* Gradient utilities for space themes */
+  .bg-gradient-space {
+    background: linear-gradient(135deg, 
+      hsl(var(--background)) 0%, 
+      hsl(var(--card)) 50%, 
+      hsl(var(--secondary)) 100%);
+  }
+
+  .bg-gradient-aurora {
+    background: linear-gradient(90deg, 
+      hsl(var(--primary) / 0.1) 0%, 
+      hsl(var(--accent) / 0.1) 50%, 
+      hsl(var(--warning) / 0.1) 100%);
+  }
+
+  /* Typography utilities */
+  .text-space-mono {
+    font-family: var(--font-mono);
+    font-feature-settings: "tnum" 1;
+  }
+
+  /* Animation utilities */
+  .animate-glow {
+    animation: glow 2s ease-in-out infinite alternate;
+  }
+
+  @keyframes glow {
+    from {
+      box-shadow: 0 0 10px hsl(var(--primary) / 0.2);
+    }
+    to {
+      box-shadow: 0 0 20px hsl(var(--primary) / 0.4), 0 0 30px hsl(var(--primary) / 0.2);
+    }
+  }
+
+  .animate-solar-wind {
+    animation: solar-wind 4s ease-in-out infinite;
+  }
+
+  @keyframes solar-wind {
+    0%, 100% { transform: translateX(0) scale(1); }
+    25% { transform: translateX(2px) scale(1.02); }
+    50% { transform: translateX(-1px) scale(0.98); }
+    75% { transform: translateX(1px) scale(1.01); }
+  }
+
+  /* Responsive text sizing for space weather data */
+  .text-solar-data {
+    @apply text-3xl font-bold;
+  }
+
+  @media (max-width: 768px) {
+    .text-solar-data {
+      @apply text-2xl;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .text-solar-data {
+      @apply text-xl;
+    }
+  }
+}
+
+/* Focus states for accessibility */
+*:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --background: hsl(0, 0%, 0%);
+    --foreground: hsl(0, 0%, 100%);
+    --primary: hsl(195, 100%, 60%);
+    --accent: hsl(142, 100%, 60%);
+    --warning: hsl(38, 100%, 70%);
+    --destructive: hsl(14, 100%, 70%);
+  }
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .pulse-animation,
+  .waveform::after,
+  .animate-glow,
+  .animate-solar-wind {
+    animation: none;
+  }
+  
+  .sparkline-bar,
+  .chord-component {
+    transition: none;
+  }
+}
+
+/* Print styles */
+@media print {
+  body {
+    @apply bg-white text-black;
+  }
+  
+  .glow,
+  .pulse-animation,
+  .waveform::after {
+    display: none;
+  }
+  
+  .bg-card {
+    @apply bg-gray-50;
+  }
+}
