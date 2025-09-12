@@ -42,19 +42,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const noaaData = await noaaResponse.json();
       
-      // Debug: Log the actual data structure
-      console.log("NOAA API Response structure:", {
-        isArray: Array.isArray(noaaData),
-        length: noaaData?.length,
-        firstItem: noaaData?.[0],
-        lastItem: noaaData?.[noaaData?.length - 1]
-      });
-      
       // Parse NOAA data format - skip header row, take latest entry
       const dataRows = noaaData.slice(1); // Remove header row
       const latestData = dataRows[dataRows.length - 1];
-      
-      console.log("Latest data entry:", latestData);
       
       if (!latestData || latestData.length < 4) {
         throw new Error(`Invalid NOAA data format. Expected array with 4+ elements, got: ${JSON.stringify(latestData)}`);
