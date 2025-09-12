@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertSolarWindReadingSchema, insertMappingConfigSchema, insertHardwareConfigSchema } from "@shared/schema";
+import { insertSolarWindReadingSchema, insertMappingConfigSchema, insertHardwareConfigSchema, insertAmbientSettingsSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -327,6 +327,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error testing chimes:", error);
       res.status(500).json({ message: "Failed to test chimes" });
+    }
+  });
+
+  // Ambient Mode Settings
+  app.get("/api/settings/ambient", async (req, res) => {
+    try {
+      const settings = await storage.getAmbientSettings();
+      if (!settings) {
+        // Return default settings if none exist
+        return res.json({
+          enabled: "false",
+          intensity: 0.5,
+          volume: 0.3,
+          respect_night: "true",
+          day_only: "false",
+          smoothing: 0.8,
+          max_rate: 10.0,
+          battery_min: 20.0
+        });
+      }
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching ambient settings:", error);
+      res.status(500).json({ message: "Failed to fetch ambient settings" });
+    }
+  });
+
+  app.post("/api/settings/ambient", async (req, res) => {
+    try {
+      const validatedData = insertAmbientSettingsSchema.parse(req.body);
+      const settings = await storage.updateAmbientSettings(validatedData);
+      
+      // Update system status to reflect ambient mode state
+      await storage.updateSystemStatus({
+        component: 'chimes',
+        status: settings.enabled === "true" ? 'ambient' : 'active',
+        details: `Ambient mode ${settings.enabled === "true" ? 'enabled' : 'disabled'}: intensity=${settings.intensity}, volume=${settings.volume}`
+      });
+      
+      res.json(settings);
+    } catch (error) {
+      console.error("Error updating ambient settings:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      res.status(400).json({ message: "Invalid ambient settings data", error: errorMessage });
+    }
+  });
+
+  app.get("/api/mode", async (req, res) => {
+    try {
+      const ambientSettings = await storage.getAmbientSettings();
+      const systemStatus = await storage.getSystemStatus();
+      const latestSolarWind = await storage.getLatestSolarWindReading();
+      
+      res.json({
+        ambient: {
+          enabled: ambientSettings?.enabled === "true" || false,
+          intensity: ambientSettings?.intensity || 0.5,
+          volume: ambientSettings?.volume || 0.3
+        },
+        system: {
+          data_stream: systemStatus.find(s => s.component === 'data_stream')?.status || 'unknown',
+          chimes: systemStatus.find(s => s.component === 'chimes')?.status || 'unknown',
+          power: systemStatus.find(s => s.component === 'power')?.status || 'unknown'
+        },
+        solar_wind: latestSolarWind ? {
+          velocity: latestSolarWind.velocity,
+          density: latestSolarWind.density,
+          bz: latestSolarWind.bz,
+          condition: latestSolarWind.velocity > 600 ? 'storm' : latestSolarWind.velocity > 450 ? 'moderate' : 'quiet'
+        } : null
+      });
+    } catch (error) {
+      console.error("Error fetching system mode:", error);
+      res.status(500).json({ message: "Failed to fetch system mode" });
     }
   });
 

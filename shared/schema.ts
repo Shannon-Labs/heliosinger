@@ -58,6 +58,20 @@ export const systemStatus = pgTable("system_status", {
   last_update: timestamp("last_update").notNull().defaultNow(),
 });
 
+// Ambient Mode Settings
+export const ambientSettings = pgTable("ambient_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  enabled: text("enabled").notNull().default("false"), // boolean as string
+  intensity: real("intensity").notNull().default(0.5), // 0.0 - 1.0, controls strike rate
+  volume: real("volume").notNull().default(0.3), // 0.0 - 1.0, ambient audio volume
+  respect_night: text("respect_night").notNull().default("true"), // respect night mode
+  day_only: text("day_only").notNull().default("false"), // only play during day
+  smoothing: real("smoothing").notNull().default(0.8), // 0.0 - 1.0, parameter smoothing
+  max_rate: real("max_rate").notNull().default(10.0), // max strikes per minute
+  battery_min: real("battery_min").notNull().default(20.0), // min battery % to enable
+  last_update: timestamp("last_update").notNull().defaultNow(),
+});
+
 // Create insert schemas
 export const insertSolarWindReadingSchema = createInsertSchema(solarWindReadings).omit({
   id: true,
@@ -79,6 +93,11 @@ export const insertSystemStatusSchema = createInsertSchema(systemStatus).omit({
   last_update: true,
 });
 
+export const insertAmbientSettingsSchema = createInsertSchema(ambientSettings).omit({
+  id: true,
+  last_update: true,
+});
+
 // Types
 export type SolarWindReading = typeof solarWindReadings.$inferSelect;
 export type InsertSolarWindReading = z.infer<typeof insertSolarWindReadingSchema>;
@@ -92,6 +111,9 @@ export type InsertHardwareConfig = z.infer<typeof insertHardwareConfigSchema>;
 export type SystemStatus = typeof systemStatus.$inferSelect;
 export type InsertSystemStatus = z.infer<typeof insertSystemStatusSchema>;
 
+export type AmbientSettings = typeof ambientSettings.$inferSelect;
+export type InsertAmbientSettings = z.infer<typeof insertAmbientSettingsSchema>;
+
 // Space weather condition types
 export type SpaceWeatherCondition = 'quiet' | 'moderate' | 'storm' | 'extreme';
 
@@ -103,4 +125,5 @@ export interface ChordData {
   decayTime: number;
   detuneCents: number;
   condition: SpaceWeatherCondition;
+  density: number; // Solar wind particle density (p/cm³)
 }

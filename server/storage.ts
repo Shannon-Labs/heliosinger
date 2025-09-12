@@ -6,7 +6,9 @@ import {
   type HardwareConfig,
   type InsertHardwareConfig,
   type SystemStatus,
-  type InsertSystemStatus
+  type InsertSystemStatus,
+  type AmbientSettings,
+  type InsertAmbientSettings
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -31,6 +33,10 @@ export interface IStorage {
   // System Status
   getSystemStatus(): Promise<SystemStatus[]>;
   updateSystemStatus(status: InsertSystemStatus): Promise<SystemStatus>;
+
+  // Ambient Mode Settings
+  getAmbientSettings(): Promise<AmbientSettings | undefined>;
+  updateAmbientSettings(settings: InsertAmbientSettings): Promise<AmbientSettings>;
 }
 
 export class MemStorage implements IStorage {
@@ -38,6 +44,7 @@ export class MemStorage implements IStorage {
   private mappingConfigs: Map<string, MappingConfig>;
   private hardwareConfigs: Map<string, HardwareConfig>;
   private systemStatuses: Map<string, SystemStatus>;
+  private ambientSettings: AmbientSettings | null = null;
 
   constructor() {
     this.solarWindReadings = new Map();
@@ -115,6 +122,20 @@ export class MemStorage implements IStorage {
       };
       this.systemStatuses.set(component, status);
     });
+
+    // Initialize default ambient settings
+    this.ambientSettings = {
+      id: randomUUID(),
+      enabled: "false",
+      intensity: 0.5,
+      volume: 0.3,
+      respect_night: "true",
+      day_only: "false",
+      smoothing: 0.8,
+      max_rate: 10.0,
+      battery_min: 20.0,
+      last_update: new Date()
+    };
   }
 
   // Solar Wind Data methods
@@ -137,7 +158,8 @@ export class MemStorage implements IStorage {
       id,
       timestamp: new Date(),
       bt: insertReading.bt ?? null,
-      temperature: insertReading.temperature ?? null
+      temperature: insertReading.temperature ?? null,
+      raw_data: insertReading.raw_data ?? null
     };
     this.solarWindReadings.set(id, reading);
     return reading;
@@ -240,6 +262,31 @@ export class MemStorage implements IStorage {
     
     this.systemStatuses.set(insertStatus.component, status);
     return status;
+  }
+
+  // Ambient Mode Settings methods
+  async getAmbientSettings(): Promise<AmbientSettings | undefined> {
+    return this.ambientSettings || undefined;
+  }
+
+  async updateAmbientSettings(insertSettings: InsertAmbientSettings): Promise<AmbientSettings> {
+    const id = this.ambientSettings?.id || randomUUID();
+    
+    const settings: AmbientSettings = {
+      enabled: insertSettings.enabled ?? "false",
+      intensity: insertSettings.intensity ?? 0.5,
+      volume: insertSettings.volume ?? 0.3,
+      respect_night: insertSettings.respect_night ?? "true",
+      day_only: insertSettings.day_only ?? "false",
+      smoothing: insertSettings.smoothing ?? 0.8,
+      max_rate: insertSettings.max_rate ?? 10.0,
+      battery_min: insertSettings.battery_min ?? 20.0,
+      id,
+      last_update: new Date()
+    };
+    
+    this.ambientSettings = settings;
+    return settings;
   }
 }
 

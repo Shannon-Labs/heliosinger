@@ -15,11 +15,30 @@ interface AudioChime {
   rumbleGain?: GainNode;
 }
 
+interface AmbientOscillator {
+  oscillator: OscillatorNode;
+  gainNode: GainNode;
+  filterNode: BiquadFilterNode;
+  vibratoOsc?: OscillatorNode;
+  vibratoGain?: GainNode;
+  frequencyTarget: number;
+  gainTarget: number;
+  filterTarget: number;
+  detuneTarget: number;
+}
+
 class SolarWindAudioEngine {
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private activeChimes: AudioChime[] = [];
   private noiseBuffer: AudioBuffer | null = null;
+  
+  // Ambient Mode properties
+  private ambientMode: boolean = false;
+  private ambientOscillators: AmbientOscillator[] = [];
+  private ambientGain: GainNode | null = null;
+  private smoothingConstant: number = 0.8; // Exponential smoothing factor
+  private ambientVolume: number = 0.3;
 
   private async initializeAudio(): Promise<void> {
     if (!this.audioContext) {
@@ -556,7 +575,215 @@ class SolarWindAudioEngine {
     osc.stop(now + duration);
   }
 
+  // Ambient Mode Methods
+  public async startAmbient(chordData: ChordData, volume: number = 0.3, smoothing: number = 0.8): Promise<void> {
+    await this.initializeAudio();
+    
+    if (!this.audioContext || !this.masterGain) {
+      throw new Error("Audio context not initialized");
+    }
+
+    if (this.ambientMode) {
+      this.stopAmbient();
+    }
+
+    this.ambientMode = true;
+    this.ambientVolume = volume;
+    this.smoothingConstant = smoothing;
+
+    // Create ambient gain node
+    this.ambientGain = this.audioContext.createGain();
+    this.ambientGain.gain.value = volume;
+    this.ambientGain.connect(this.masterGain);
+
+    // Create persistent oscillators for ambient texture
+    const baseFreq = chordData.frequency;
+    const harmonicRatios = [1.0, 2.0, 3.0, 4.0]; // Fundamental + harmonics
+    
+    for (let i = 0; i < harmonicRatios.length; i++) {
+      const freq = baseFreq * harmonicRatios[i];
+      const ambientOsc = this.createAmbientOscillator(freq, chordData, i);
+      this.ambientOscillators.push(ambientOsc);
+    }
+
+    console.log(`Started ambient mode: ${chordData.baseNote} at ${baseFreq}Hz, volume=${volume}`);
+  }
+
+  private createAmbientOscillator(frequency: number, chordData: ChordData, harmonicIndex: number): AmbientOscillator {
+    if (!this.audioContext || !this.ambientGain) {
+      throw new Error("Audio context not initialized");
+    }
+
+    // Create oscillator with appropriate waveform
+    const oscillator = this.audioContext.createOscillator();
+    oscillator.type = harmonicIndex === 0 ? 'sine' : 'triangle'; // Fundamental sine, harmonics triangle
+    oscillator.frequency.value = frequency;
+
+    // Create gain node with harmonic rolloff
+    const gainNode = this.audioContext.createGain();
+    const harmonicGain = harmonicIndex === 0 ? 0.8 : (0.4 / harmonicIndex); // Decrease gain for higher harmonics
+    gainNode.gain.value = harmonicGain * this.ambientVolume;
+
+    // Create filter for spectral shaping
+    const filterNode = this.audioContext.createBiquadFilter();
+    filterNode.type = 'lowpass';
+    filterNode.frequency.value = frequency * 2; // Initial filter frequency
+    filterNode.Q.value = 1.0;
+
+    // Add vibrato for Bz effects if significant
+    let vibratoOsc: OscillatorNode | undefined;
+    let vibratoGain: GainNode | undefined;
+    
+    if (Math.abs(chordData.detuneCents) > 5) {
+      vibratoOsc = this.audioContext.createOscillator();
+      vibratoGain = this.audioContext.createGain();
+      
+      vibratoOsc.type = 'sine';
+      vibratoOsc.frequency.value = 3 + Math.random() * 2; // 3-5 Hz vibrato
+      vibratoGain.gain.value = Math.abs(chordData.detuneCents) * 0.5; // Vibrato depth based on Bz
+      
+      vibratoOsc.connect(vibratoGain);
+      vibratoGain.connect(oscillator.frequency);
+      vibratoOsc.start();
+    }
+
+    // Connect audio chain
+    oscillator.connect(filterNode);
+    filterNode.connect(gainNode);
+    gainNode.connect(this.ambientGain);
+
+    // Start oscillator
+    oscillator.start();
+
+    const ambientOsc: AmbientOscillator = {
+      oscillator,
+      gainNode,
+      filterNode,
+      vibratoOsc,
+      vibratoGain,
+      frequencyTarget: frequency,
+      gainTarget: harmonicGain * this.ambientVolume,
+      filterTarget: frequency * 2,
+      detuneTarget: chordData.detuneCents
+    };
+
+    return ambientOsc;
+  }
+
+  public updateAmbient(chordData: ChordData): void {
+    if (!this.ambientMode || !this.audioContext) return;
+
+    const baseFreq = chordData.frequency;
+    const harmonicRatios = [1.0, 2.0, 3.0, 4.0];
+
+    this.ambientOscillators.forEach((ambientOsc, index) => {
+      const targetFreq = baseFreq * harmonicRatios[index];
+      const harmonicGain = index === 0 ? 0.8 : (0.4 / index);
+      const targetGain = harmonicGain * this.ambientVolume;
+      const targetFilter = targetFreq * (2 + chordData.density * 0.1); // Density affects filter cutoff
+      
+      // Apply exponential smoothing to prevent audio clicks
+      const smoothingTime = 0.1; // 100ms smooth transition
+      const now = this.audioContext!.currentTime;
+      
+      // Smooth frequency changes
+      ambientOsc.frequencyTarget = this.exponentialSmooth(
+        ambientOsc.frequencyTarget, 
+        targetFreq, 
+        this.smoothingConstant
+      );
+      ambientOsc.oscillator.frequency.exponentialRampToValueAtTime(
+        Math.max(20, ambientOsc.frequencyTarget), 
+        now + smoothingTime
+      );
+
+      // Smooth gain changes
+      ambientOsc.gainTarget = this.exponentialSmooth(
+        ambientOsc.gainTarget,
+        targetGain,
+        this.smoothingConstant
+      );
+      ambientOsc.gainNode.gain.exponentialRampToValueAtTime(
+        Math.max(0.001, ambientOsc.gainTarget),
+        now + smoothingTime
+      );
+
+      // Smooth filter changes  
+      ambientOsc.filterTarget = this.exponentialSmooth(
+        ambientOsc.filterTarget,
+        targetFilter,
+        this.smoothingConstant
+      );
+      ambientOsc.filterNode.frequency.exponentialRampToValueAtTime(
+        Math.max(100, Math.min(20000, ambientOsc.filterTarget)),
+        now + smoothingTime
+      );
+
+      // Update vibrato based on Bz
+      if (ambientOsc.vibratoGain && Math.abs(chordData.detuneCents) > 5) {
+        const vibratoDepth = Math.abs(chordData.detuneCents) * 0.5;
+        ambientOsc.vibratoGain.gain.exponentialRampToValueAtTime(
+          Math.max(0.1, vibratoDepth),
+          now + smoothingTime
+        );
+      }
+    });
+  }
+
+  private exponentialSmooth(current: number, target: number, alpha: number): number {
+    return current * alpha + target * (1 - alpha);
+  }
+
+  public stopAmbient(): void {
+    if (!this.ambientMode) return;
+
+    this.ambientMode = false;
+
+    // Stop all ambient oscillators
+    this.ambientOscillators.forEach(ambientOsc => {
+      try {
+        ambientOsc.oscillator.stop();
+      } catch (error) {
+        // Oscillator may already be stopped
+      }
+      
+      if (ambientOsc.vibratoOsc) {
+        try {
+          ambientOsc.vibratoOsc.stop();
+        } catch (error) {
+          // May already be stopped
+        }
+      }
+    });
+
+    this.ambientOscillators = [];
+
+    // Disconnect ambient gain
+    if (this.ambientGain) {
+      this.ambientGain.disconnect();
+      this.ambientGain = null;
+    }
+
+    console.log("Stopped ambient mode");
+  }
+
+  public setAmbientVolume(volume: number): void {
+    this.ambientVolume = Math.max(0, Math.min(1, volume));
+    
+    if (this.ambientGain) {
+      this.ambientGain.gain.exponentialRampToValueAtTime(
+        Math.max(0.001, this.ambientVolume),
+        this.audioContext!.currentTime + 0.1
+      );
+    }
+  }
+
+  public isAmbientActive(): boolean {
+    return this.ambientMode;
+  }
+
   public dispose(): void {
+    this.stopAmbient();
     this.stopAllChimes();
     if (this.audioContext && this.audioContext.state !== 'closed') {
       this.audioContext.close();
@@ -580,6 +807,27 @@ export const testTone = (frequency: number, duration?: number): Promise<void> =>
 
 export const stopAudio = (): void => {
   audioEngine.stopAllChimes();
+};
+
+// Export ambient mode functions
+export const startAmbient = (chordData: ChordData, volume?: number, smoothing?: number): Promise<void> => {
+  return audioEngine.startAmbient(chordData, volume, smoothing);
+};
+
+export const updateAmbient = (chordData: ChordData): void => {
+  audioEngine.updateAmbient(chordData);
+};
+
+export const stopAmbient = (): void => {
+  audioEngine.stopAmbient();
+};
+
+export const setAmbientVolume = (volume: number): void => {
+  audioEngine.setAmbientVolume(volume);
+};
+
+export const isAmbientActive = (): boolean => {
+  return audioEngine.isAmbientActive();
 };
 
 // Cleanup on page unload

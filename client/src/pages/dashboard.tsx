@@ -1,8 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { SolarWindDisplay } from "@/components/solar-wind-display";
 import { ChordVisualization } from "@/components/chord-visualization";
 import { HardwareConfig } from "@/components/hardware-config";
@@ -11,6 +15,9 @@ import { SystemStatus } from "@/components/system-status";
 import { DataDashboard } from "@/components/data-dashboard";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { startAmbient, updateAmbient, stopAmbient, setAmbientVolume, isAmbientActive } from "@/lib/audio-engine";
+import { mapSolarWindToChord } from "@/lib/midi-mapping";
+import type { AmbientSettings } from "@shared/schema";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -28,6 +35,50 @@ export default function Dashboard() {
     queryKey: ["/api/system/status"],
     refetchInterval: 30000
   });
+
+  // Fetch ambient settings
+  const { data: ambientSettings, isLoading: ambientLoading } = useQuery({
+    queryKey: ["/api/settings/ambient"],
+    refetchInterval: 60000
+  });
+
+  // Local state for ambient controls
+  const [isAmbientEnabled, setIsAmbientEnabled] = useState(false);
+  const [ambientIntensity, setAmbientIntensity] = useState(0.5);
+  const [ambientVolume, setAmbientVolume] = useState(0.3);
+  const [respectNight, setRespectNight] = useState(true);
+  const [dayOnly, setDayOnly] = useState(false);
+
+  // Update ambient settings mutation
+  const updateAmbientMutation = useMutation({
+    mutationFn: (settings: Partial<AmbientSettings>) => 
+      apiRequest("POST", "/api/settings/ambient", settings),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/ambient"] });
+      toast({
+        title: "Settings Updated",
+        description: "Ambient mode settings saved successfully",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Update Failed",
+        description: error.message || "Failed to update ambient settings",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // Sync local state with fetched settings
+  useEffect(() => {
+    if (ambientSettings) {
+      setIsAmbientEnabled(ambientSettings.enabled === "true");
+      setAmbientIntensity(ambientSettings.intensity || 0.5);
+      setAmbientVolume(ambientSettings.volume || 0.3);
+      setRespectNight(ambientSettings.respect_night === "true");
+      setDayOnly(ambientSettings.day_only === "true");
+    }
+  }, [ambientSettings]);
 
   // Fetch NOAA data mutation
   const fetchDataMutation = useMutation({
@@ -57,6 +108,100 @@ export default function Dashboard() {
 
     return () => clearInterval(interval);
   }, []);
+
+  // Ambient mode event handlers
+  const handleAmbientToggle = async (enabled: boolean) => {
+    setIsAmbientEnabled(enabled);
+    
+    if (enabled && currentData) {
+      try {
+        const chordData = generateChordDataFromSolarWind(currentData);
+        await startAmbient(chordData, ambientVolume, 0.8);
+        console.log("Started ambient mode with current solar wind data");
+      } catch (error) {
+        console.error("Failed to start ambient mode:", error);
+        toast({
+          title: "Ambient Mode Failed",
+          description: "Could not start ambient audio. Check browser audio permissions.",
+          variant: "destructive",
+        });
+        setIsAmbientEnabled(false);
+        return;
+      }
+    } else {
+      stopAmbient();
+      console.log("Stopped ambient mode");
+    }
+
+    updateAmbientMutation.mutate({
+      enabled: enabled ? "true" : "false",
+      intensity: ambientIntensity,
+      volume: ambientVolume,
+      respect_night: respectNight ? "true" : "false",
+      day_only: dayOnly ? "true" : "false",
+      smoothing: 0.8,
+      max_rate: 10.0,
+      battery_min: 20.0
+    });
+  };
+
+  const handleVolumeChange = (value: number[]) => {
+    const newVolume = value[0];
+    setAmbientVolume(newVolume);
+    setAmbientVolume(newVolume);
+    
+    if (isAmbientEnabled) {
+      setTimeout(() => {
+        updateAmbientMutation.mutate({
+          volume: newVolume,
+          enabled: "true",
+          intensity: ambientIntensity,
+          respect_night: respectNight ? "true" : "false",
+          day_only: dayOnly ? "true" : "false"
+        });
+      }, 500); // Debounce settings updates
+    }
+  };
+
+  const handleIntensityChange = (value: number[]) => {
+    const newIntensity = value[0];
+    setAmbientIntensity(newIntensity);
+    
+    if (isAmbientEnabled) {
+      setTimeout(() => {
+        updateAmbientMutation.mutate({
+          intensity: newIntensity,
+          enabled: "true",
+          volume: ambientVolume,
+          respect_night: respectNight ? "true" : "false",
+          day_only: dayOnly ? "true" : "false"
+        });
+      }, 500); // Debounce settings updates
+    }
+  };
+
+  const handleSettingChange = (setting: string, value: boolean) => {
+    if (setting === 'respectNight') {
+      setRespectNight(value);
+    } else if (setting === 'dayOnly') {
+      setDayOnly(value);
+    }
+    
+    updateAmbientMutation.mutate({
+      [setting === 'respectNight' ? 'respect_night' : 'day_only']: value ? "true" : "false",
+      enabled: isAmbientEnabled ? "true" : "false",
+      intensity: ambientIntensity,
+      volume: ambientVolume
+    });
+  };
+
+  // Update ambient audio when solar wind data changes
+  useEffect(() => {
+    if (isAmbientEnabled && currentData) {
+      const chordData = generateChordDataFromSolarWind(currentData);
+      updateAmbient(chordData);
+    }
+  }, [currentData, isAmbientEnabled]);
 
   const isDataStreamActive = systemStatus?.find(s => s.component === 'data_stream')?.status === 'active';
 
@@ -139,6 +284,152 @@ export default function Dashboard() {
             bz={currentData.bz}
           />
         )}
+
+        {/* Ambient Mode Controls */}
+        <section className="mb-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <div className={`w-3 h-3 rounded-full mr-3 ${isAmbientEnabled ? 'bg-accent animate-pulse' : 'bg-muted'}`} />
+                Ambient Mode
+                <Badge variant={isAmbientEnabled ? "default" : "secondary"} className="ml-auto">
+                  {isAmbientEnabled ? "Active" : "Inactive"}
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Master Toggle */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label htmlFor="ambient-toggle" className="text-base font-medium">
+                    Always-On Ambient Audio
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Continuous web audio reflecting current solar wind conditions
+                  </p>
+                </div>
+                <Switch
+                  id="ambient-toggle"
+                  checked={isAmbientEnabled}
+                  onCheckedChange={handleAmbientToggle}
+                  disabled={!currentData || ambientLoading}
+                  data-testid="switch-ambient-toggle"
+                />
+              </div>
+
+              {/* Volume Control */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">
+                    Ambient Volume
+                  </Label>
+                  <span className="text-sm text-muted-foreground" data-testid="text-ambient-volume">
+                    {Math.round(ambientVolume * 100)}%
+                  </span>
+                </div>
+                <Slider
+                  value={[ambientVolume]}
+                  onValueChange={handleVolumeChange}
+                  max={1}
+                  min={0}
+                  step={0.01}
+                  className="w-full"
+                  disabled={!isAmbientEnabled}
+                  data-testid="slider-ambient-volume"
+                />
+              </div>
+
+              {/* Intensity Control */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">
+                    Hardware Strike Intensity
+                  </Label>
+                  <span className="text-sm text-muted-foreground" data-testid="text-ambient-intensity">
+                    {Math.round(ambientIntensity * 10)} strikes/min
+                  </span>
+                </div>
+                <Slider
+                  value={[ambientIntensity]}
+                  onValueChange={handleIntensityChange}
+                  max={1}
+                  min={0}
+                  step={0.1}
+                  className="w-full"
+                  disabled={!isAmbientEnabled}
+                  data-testid="slider-ambient-intensity"
+                />
+              </div>
+
+              {/* Advanced Settings */}
+              <div className="border-t border-border pt-4 space-y-4">
+                <h4 className="text-sm font-medium">Advanced Settings</h4>
+                
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="respect-night"
+                    checked={respectNight}
+                    onCheckedChange={(checked) => handleSettingChange('respectNight', checked as boolean)}
+                    data-testid="checkbox-respect-night"
+                  />
+                  <Label htmlFor="respect-night" className="text-sm">
+                    Respect night mode (reduce hardware activity after sunset)
+                  </Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="day-only"
+                    checked={dayOnly}
+                    onCheckedChange={(checked) => handleSettingChange('dayOnly', checked as boolean)}
+                    data-testid="checkbox-day-only"
+                  />
+                  <Label htmlFor="day-only" className="text-sm">
+                    Day only mode (disable hardware strikes at night)
+                  </Label>
+                </div>
+              </div>
+
+              {/* Status and Information */}
+              <div className="bg-secondary/20 rounded-lg p-4 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Audio Engine:</span>
+                  <span className={`font-medium ${isAmbientEnabled ? 'text-accent' : 'text-muted-foreground'}`} data-testid="text-audio-status">
+                    {isAmbientEnabled ? 'Streaming' : 'Stopped'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Current Frequency:</span>
+                  <span className="font-mono" data-testid="text-current-frequency">
+                    {currentData ? `${currentData.velocity.toFixed(1)} km/s → ${(220 + currentData.velocity * 0.8).toFixed(1)} Hz` : 'No data'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Filter Modulation:</span>
+                  <span className="font-mono" data-testid="text-filter-modulation">
+                    {currentData ? `${currentData.density.toFixed(1)} p/cm³` : 'No data'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Bz Detune:</span>
+                  <span className="font-mono" data-testid="text-bz-detune">
+                    {currentData ? `${currentData.bz.toFixed(1)} nT` : 'No data'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Help Text */}
+              <div className="text-xs text-muted-foreground leading-relaxed">
+                <p>
+                  <strong>Ambient Mode</strong> provides continuous audio that mirrors the solar wind in real-time. 
+                  The web audio engine uses persistent oscillators to create a harmonic "bed" that changes 
+                  with velocity (pitch), density (filter), and magnetic field (vibrato). Hardware strikes 
+                  follow a Poisson distribution for power efficiency.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
 
         {/* Data Dashboard */}
         <DataDashboard />

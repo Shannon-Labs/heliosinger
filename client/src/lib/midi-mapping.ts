@@ -283,3 +283,46 @@ export function getHarmonicFrequencies(
   
   return harmonics;
 }
+
+/**
+ * Generate ChordData from solar wind reading using default configuration
+ * This is the main function used by the ambient mode implementation
+ */
+export function generateChordDataFromSolarWind(solarWindData: {
+  velocity: number;
+  density: number;
+  bz: number;
+}): import("@shared/schema").ChordData {
+  // Default configuration for chord mapping
+  const defaultConfig: ChordMappingConfig = {
+    velocityMin: 200,
+    velocityMax: 800,
+    midiNoteMin: MIDI_NOTES.C2,
+    midiNoteMax: MIDI_NOTES.C6,
+    densityMin: 0.5,
+    densityMax: 50.0,
+    decayTimeMin: 0.2,
+    decayTimeMax: 5.0,
+    bzThreshold: -5.0,
+    bzDetuneCents: -20
+  };
+
+  // Map solar wind data to chord using existing function
+  const chordMapping = mapSolarWindToChord(
+    solarWindData.velocity,
+    solarWindData.density,
+    solarWindData.bz,
+    defaultConfig
+  );
+
+  // Convert to ChordData interface format
+  return {
+    baseNote: chordMapping.noteName, // Convert noteName to baseNote
+    frequency: chordMapping.frequency,
+    midiNote: chordMapping.midiNote,
+    decayTime: chordMapping.decayTime,
+    detuneCents: chordMapping.detuneCents,
+    condition: chordMapping.condition,
+    density: solarWindData.density // Include density in the result
+  };
+}
