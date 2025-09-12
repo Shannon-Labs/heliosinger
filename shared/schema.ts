@@ -93,7 +93,7 @@ export type SystemStatus = typeof systemStatus.$inferSelect;
 export type InsertSystemStatus = z.infer<typeof insertSystemStatusSchema>;
 
 // Space weather condition types
-export type SpaceWeatherCondition = 'quiet' | 'moderate' | 'storm';
+export type SpaceWeatherCondition = 'quiet' | 'moderate' | 'storm' | 'extreme';
 
 // Chord data structure
 export interface ChordData {

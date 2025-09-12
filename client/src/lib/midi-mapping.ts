@@ -144,7 +144,12 @@ export function classifySpaceWeatherCondition(
   velocity: number,
   density: number,
   bz: number
-): 'quiet' | 'moderate' | 'storm' {
+): 'quiet' | 'moderate' | 'storm' | 'extreme' {
+  // Extreme storm conditions: very high velocity OR extremely negative Bz
+  if (velocity > 700 || bz < -15) {
+    return 'extreme';
+  }
+  
   // Storm conditions: high velocity OR very negative Bz
   if (velocity > 600 || bz < -10) {
     return 'storm';
@@ -186,7 +191,7 @@ export function mapSolarWindToChord(
   noteName: string;
   decayTime: number;
   detuneCents: number;
-  condition: 'quiet' | 'moderate' | 'storm';
+  condition: 'quiet' | 'moderate' | 'storm' | 'extreme';
 } {
   const midiNote = velocityToMidiNote(
     velocity,
@@ -244,7 +249,7 @@ export const MUSICAL_INTERVALS = {
  */
 export function getHarmonicFrequencies(
   fundamental: number,
-  condition: 'quiet' | 'moderate' | 'storm'
+  condition: 'quiet' | 'moderate' | 'storm' | 'extreme'
 ): number[] {
   const harmonics = [fundamental]; // Always include fundamental
   
@@ -265,6 +270,14 @@ export function getHarmonicFrequencies(
       harmonics.push(fundamental * centsToFrequencyRatio(MUSICAL_INTERVALS.minorSeventh));
       harmonics.push(fundamental * centsToFrequencyRatio(MUSICAL_INTERVALS.tritone));
       harmonics.push(fundamental * 0.5); // Sub-harmonic for ominous effect
+      break;
+      
+    case 'extreme':
+      // Extremely dissonant and menacing
+      harmonics.push(fundamental * centsToFrequencyRatio(MUSICAL_INTERVALS.minorSecond)); // Very dissonant
+      harmonics.push(fundamental * centsToFrequencyRatio(MUSICAL_INTERVALS.tritone));
+      harmonics.push(fundamental * 0.5); // Sub-harmonic
+      harmonics.push(fundamental * 0.25); // Ultra-low sub-harmonic for rumble
       break;
   }
   

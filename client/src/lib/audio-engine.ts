@@ -5,12 +5,21 @@ interface AudioChime {
   oscillator: OscillatorNode;
   gainNode: GainNode;
   filterNode: BiquadFilterNode;
+  // Enhanced for storm effects
+  noiseBuffer?: AudioBuffer;
+  noiseSource?: AudioBufferSourceNode;
+  tremoloOsc?: OscillatorNode;
+  tremoloGain?: GainNode;
+  vibratoOsc?: OscillatorNode;
+  rumbleOsc?: OscillatorNode;
+  rumbleGain?: GainNode;
 }
 
 class SolarWindAudioEngine {
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private activeChimes: AudioChime[] = [];
+  private noiseBuffer: AudioBuffer | null = null;
 
   private async initializeAudio(): Promise<void> {
     if (!this.audioContext) {
@@ -18,6 +27,9 @@ class SolarWindAudioEngine {
       this.masterGain = this.audioContext.createGain();
       this.masterGain.connect(this.audioContext.destination);
       this.masterGain.gain.value = 0.3; // Master volume
+      
+      // Create noise buffer for storm effects
+      this.createNoiseBuffer();
     }
 
     // Resume audio context if suspended (browser autoplay policy)
@@ -26,7 +38,45 @@ class SolarWindAudioEngine {
     }
   }
 
-  private createChime(frequency: number, decayTime: number, detuneCents: number = 0): AudioChime {
+  private createNoiseBuffer(): void {
+    if (!this.audioContext) return;
+    
+    // Create 1 second of white noise for storm effects
+    const bufferSize = this.audioContext.sampleRate * 1.0;
+    this.noiseBuffer = this.audioContext.createBuffer(1, bufferSize, this.audioContext.sampleRate);
+    
+    const output = this.noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = Math.random() * 2 - 1; // White noise (-1 to 1)
+    }
+  }
+
+  private getWaveformForCondition(condition: string): OscillatorType {
+    switch (condition) {
+      case 'quiet': return 'sine';
+      case 'moderate': return 'sine';
+      case 'storm': return 'sawtooth'; // Harsh waveform
+      case 'extreme': return 'square'; // Very harsh waveform
+      default: return 'sine';
+    }
+  }
+
+  private getVolumeMultiplierForCondition(condition: string): number {
+    switch (condition) {
+      case 'quiet': return 1.0;
+      case 'moderate': return 1.1;
+      case 'storm': return 1.5; // Significantly louder
+      case 'extreme': return 2.0; // Very loud and intimidating
+      default: return 1.0;
+    }
+  }
+
+  private createChime(
+    frequency: number, 
+    decayTime: number, 
+    detuneCents: number = 0, 
+    condition: string = 'quiet'
+  ): AudioChime {
     if (!this.audioContext || !this.masterGain) {
       throw new Error("Audio context not initialized");
     }
@@ -35,52 +85,256 @@ class SolarWindAudioEngine {
     const detuneRatio = centsToFrequencyRatio(detuneCents);
     const detunedFrequency = frequency * detuneRatio;
 
-    // Create oscillator for the main tone
+    // Create oscillator with waveform based on condition
     const oscillator = this.audioContext.createOscillator();
-    oscillator.type = 'sine';
+    oscillator.type = this.getWaveformForCondition(condition);
     oscillator.frequency.value = detunedFrequency;
 
-    // Create gain node for amplitude envelope
+    // Create main gain node with volume scaling based on condition
     const gainNode = this.audioContext.createGain();
     gainNode.gain.value = 0;
 
-    // Create filter for timbral control
+    // Create filter - more aggressive for storms
     const filterNode = this.audioContext.createBiquadFilter();
-    filterNode.type = 'lowpass';
-    filterNode.frequency.value = Math.min(8000, detunedFrequency * 4);
-    filterNode.Q.value = 1;
+    if (condition === 'storm' || condition === 'extreme') {
+      filterNode.type = 'bandpass'; // More aggressive filtering
+      filterNode.frequency.value = Math.min(4000, detunedFrequency * 2);
+      filterNode.Q.value = 8; // Higher resonance for harsh sound
+    } else {
+      filterNode.type = 'lowpass';
+      filterNode.frequency.value = Math.min(8000, detunedFrequency * 4);
+      filterNode.Q.value = 1;
+    }
 
-    // Connect nodes: oscillator -> filter -> gain -> master
+    // Basic audio chain: oscillator -> filter -> gain -> master
     oscillator.connect(filterNode);
     filterNode.connect(gainNode);
+
+    const chime: AudioChime = { oscillator, gainNode, filterNode };
+
+    // Add storm-specific effects
+    if (condition === 'storm' || condition === 'extreme') {
+      this.addStormEffects(chime, detunedFrequency, condition);
+    }
+
+    // Connect final gain to master
     gainNode.connect(this.masterGain);
 
-    return { oscillator, gainNode, filterNode };
+    return chime;
+  }
+
+  private addStormEffects(chime: AudioChime, frequency: number, condition: string): void {
+    if (!this.audioContext || !this.masterGain) return;
+
+    // Add tremolo (amplitude modulation) for storm conditions
+    if (condition === 'storm' || condition === 'extreme') {
+      const tremoloRate = condition === 'extreme' ? 8 : 4; // Hz
+      chime.tremoloOsc = this.audioContext.createOscillator();
+      chime.tremoloGain = this.audioContext.createGain();
+      
+      chime.tremoloOsc.type = 'sine';
+      chime.tremoloOsc.frequency.value = tremoloRate;
+      
+      // Tremolo depth - more intense for extreme
+      const tremoloDepth = condition === 'extreme' ? 0.6 : 0.3;
+      chime.tremoloGain.gain.value = tremoloDepth;
+      
+      // Connect tremolo: tremoloOsc -> tremoloGain -> main gainNode.gain
+      chime.tremoloOsc.connect(chime.tremoloGain);
+      chime.tremoloGain.connect(chime.gainNode.gain);
+    }
+
+    // Add pitch vibrato for unstable sound
+    if (condition === 'storm' || condition === 'extreme') {
+      const vibratoRate = condition === 'extreme' ? 6 : 3; // Hz
+      const vibratoDepth = condition === 'extreme' ? 15 : 8; // cents
+      
+      chime.vibratoOsc = this.audioContext.createOscillator();
+      chime.vibratoOsc.type = 'sine';
+      chime.vibratoOsc.frequency.value = vibratoRate;
+      
+      // Connect vibrato to main oscillator frequency
+      const vibratoGain = this.audioContext.createGain();
+      vibratoGain.gain.value = vibratoDepth;
+      
+      chime.vibratoOsc.connect(vibratoGain);
+      vibratoGain.connect(chime.oscillator.frequency);
+    }
+
+    // Add low-frequency rumble for extreme conditions
+    if (condition === 'extreme') {
+      chime.rumbleOsc = this.audioContext.createOscillator();
+      chime.rumbleGain = this.audioContext.createGain();
+      
+      chime.rumbleOsc.type = 'sawtooth';
+      chime.rumbleOsc.frequency.value = Math.random() * 40 + 40; // 40-80 Hz rumble
+      
+      chime.rumbleGain.gain.value = 0;
+      
+      // Connect rumble: rumbleOsc -> rumbleGain -> master
+      chime.rumbleOsc.connect(chime.rumbleGain);
+      chime.rumbleGain.connect(this.masterGain);
+    }
+
+    // Add noise burst for severe geomagnetic conditions
+    if (condition === 'extreme' && this.noiseBuffer) {
+      chime.noiseSource = this.audioContext.createBufferSource();
+      chime.noiseSource.buffer = this.noiseBuffer;
+      chime.noiseSource.loop = true;
+      
+      const noiseGain = this.audioContext.createGain();
+      noiseGain.gain.value = 0;
+      
+      const noiseFilter = this.audioContext.createBiquadFilter();
+      noiseFilter.type = 'bandpass';
+      noiseFilter.frequency.value = frequency * 0.5; // Filter noise around lower frequency
+      noiseFilter.Q.value = 4;
+      
+      // Connect noise: noiseSource -> noiseFilter -> noiseGain -> master
+      chime.noiseSource.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(this.masterGain);
+      
+      // Store noise gain reference for envelope control
+      (chime as any).noiseGain = noiseGain;
+    }
   }
 
   private createChimeEnvelope(
     chime: AudioChime,
     decayTime: number,
-    startTime: number
+    startTime: number,
+    condition: string = 'quiet'
   ): void {
     if (!this.audioContext) return;
 
     const { gainNode, filterNode } = chime;
-    const currentTime = this.audioContext.currentTime;
+    const volumeMultiplier = this.getVolumeMultiplierForCondition(condition);
 
-    // Attack phase (quick rise)
+    // Attack phase - more aggressive for storms
+    const attackTime = condition === 'extreme' ? 0.02 : condition === 'storm' ? 0.03 : 0.05;
+    const peakLevel = 0.8 * volumeMultiplier;
+    
     gainNode.gain.setValueAtTime(0, startTime);
-    gainNode.gain.linearRampToValueAtTime(0.8, startTime + 0.05);
+    
+    if (condition === 'extreme') {
+      // Sudden, shocking attack for extreme conditions
+      gainNode.gain.linearRampToValueAtTime(peakLevel, startTime + attackTime);
+    } else if (condition === 'storm') {
+      // Fast, aggressive attack for storms
+      gainNode.gain.linearRampToValueAtTime(peakLevel, startTime + attackTime);
+    } else {
+      // Gentle attack for quiet/moderate conditions
+      gainNode.gain.linearRampToValueAtTime(peakLevel, startTime + attackTime);
+    }
 
-    // Decay phase (exponential decay)
-    gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + decayTime);
+    // Decay phase - different curves for different conditions
+    if (condition === 'extreme') {
+      // More complex decay with sustain for extreme conditions
+      gainNode.gain.exponentialRampToValueAtTime(peakLevel * 0.6, startTime + decayTime * 0.3);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + decayTime);
+    } else {
+      gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + decayTime);
+    }
 
-    // Filter sweep for more natural sound
+    // Filter envelope - more dramatic for storms
     filterNode.frequency.setValueAtTime(filterNode.frequency.value, startTime);
-    filterNode.frequency.exponentialRampToValueAtTime(
-      Math.max(200, filterNode.frequency.value * 0.3),
-      startTime + decayTime
-    );
+    if (condition === 'storm' || condition === 'extreme') {
+      // More dramatic filter sweep for storms
+      filterNode.frequency.exponentialRampToValueAtTime(
+        Math.max(100, filterNode.frequency.value * 0.1),
+        startTime + decayTime
+      );
+    } else {
+      filterNode.frequency.exponentialRampToValueAtTime(
+        Math.max(200, filterNode.frequency.value * 0.3),
+        startTime + decayTime
+      );
+    }
+
+    // Handle storm-specific effect envelopes
+    if (condition === 'storm' || condition === 'extreme') {
+      this.createStormEffectEnvelopes(chime, decayTime, startTime, condition);
+    }
+  }
+
+  private createStormEffectEnvelopes(
+    chime: AudioChime,
+    decayTime: number,
+    startTime: number,
+    condition: string
+  ): void {
+    if (!this.audioContext) return;
+
+    // Start tremolo and vibrato oscillators
+    if (chime.tremoloOsc) {
+      chime.tremoloOsc.start(startTime);
+      chime.tremoloOsc.stop(startTime + decayTime);
+    }
+
+    if (chime.vibratoOsc) {
+      chime.vibratoOsc.start(startTime);
+      chime.vibratoOsc.stop(startTime + decayTime);
+    }
+
+    // Handle rumble for extreme conditions
+    if (chime.rumbleOsc && chime.rumbleGain && condition === 'extreme') {
+      // Rumble envelope - builds up ominously
+      chime.rumbleGain.gain.setValueAtTime(0, startTime);
+      chime.rumbleGain.gain.linearRampToValueAtTime(0.4, startTime + 0.2);
+      chime.rumbleGain.gain.exponentialRampToValueAtTime(0.001, startTime + decayTime * 1.2);
+      
+      chime.rumbleOsc.start(startTime);
+      chime.rumbleOsc.stop(startTime + decayTime * 1.2);
+    }
+
+    // Handle noise for extreme conditions
+    const noiseGain = (chime as any).noiseGain as GainNode;
+    if (chime.noiseSource && noiseGain && condition === 'extreme') {
+      // Noise burst envelope - sharp attack, quick decay
+      noiseGain.gain.setValueAtTime(0, startTime);
+      noiseGain.gain.linearRampToValueAtTime(0.25, startTime + 0.05);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, startTime + decayTime * 0.3);
+      
+      chime.noiseSource.start(startTime);
+      chime.noiseSource.stop(startTime + decayTime);
+    }
+  }
+
+  private addWarningSirenEffect(frequency: number, decayTime: number, startTime: number): void {
+    if (!this.audioContext || !this.masterGain) return;
+
+    // Create a frequency-sweeping siren effect for extreme conditions
+    const sirenOsc = this.audioContext.createOscillator();
+    const sirenGain = this.audioContext.createGain();
+    const sirenFilter = this.audioContext.createBiquadFilter();
+
+    sirenOsc.type = 'sawtooth';
+    sirenGain.gain.value = 0;
+    
+    sirenFilter.type = 'bandpass';
+    sirenFilter.frequency.value = 800;
+    sirenFilter.Q.value = 10;
+
+    // Connect siren: osc -> filter -> gain -> master
+    sirenOsc.connect(sirenFilter);
+    sirenFilter.connect(sirenGain);
+    sirenGain.connect(this.masterGain);
+
+    // Frequency sweep - emergency siren pattern
+    sirenOsc.frequency.setValueAtTime(frequency * 0.7, startTime);
+    sirenOsc.frequency.exponentialRampToValueAtTime(frequency * 1.3, startTime + 0.4);
+    sirenOsc.frequency.exponentialRampToValueAtTime(frequency * 0.7, startTime + 0.8);
+    sirenOsc.frequency.exponentialRampToValueAtTime(frequency * 1.3, startTime + 1.2);
+    sirenOsc.frequency.exponentialRampToValueAtTime(frequency * 0.7, startTime + decayTime);
+
+    // Siren volume envelope
+    sirenGain.gain.setValueAtTime(0, startTime);
+    sirenGain.gain.linearRampToValueAtTime(0.3, startTime + 0.1);
+    sirenGain.gain.exponentialRampToValueAtTime(0.001, startTime + decayTime);
+
+    sirenOsc.start(startTime);
+    sirenOsc.stop(startTime + decayTime);
   }
 
   private addBeatingEffect(
@@ -134,12 +388,14 @@ class SolarWindAudioEngine {
       this.stopAllChimes();
 
       const startTime = this.audioContext.currentTime + 0.1; // Small delay for smooth start
+      const condition = chordData.condition;
       
-      // Create main chime (velocity-based pitch)
+      // Create main chime with condition-specific effects
       const mainChime = this.createChime(
         chordData.frequency,
         chordData.decayTime,
-        chordData.detuneCents
+        chordData.detuneCents,
+        condition
       );
       this.activeChimes.push(mainChime);
 
@@ -149,30 +405,46 @@ class SolarWindAudioEngine {
         const harmonicChime = this.createChime(
           harmonic.frequency,
           chordData.decayTime * harmonic.decayMultiplier,
-          chordData.detuneCents * harmonic.detuneMultiplier
+          chordData.detuneCents * harmonic.detuneMultiplier,
+          condition
         );
         this.activeChimes.push(harmonicChime);
         
         // Stagger harmonic starts slightly
-        this.createChimeEnvelope(harmonicChime, chordData.decayTime * harmonic.decayMultiplier, startTime + index * 0.02);
+        this.createChimeEnvelope(
+          harmonicChime, 
+          chordData.decayTime * harmonic.decayMultiplier, 
+          startTime + index * 0.02,
+          condition
+        );
         harmonicChime.oscillator.start(startTime + index * 0.02);
         harmonicChime.oscillator.stop(startTime + chordData.decayTime * harmonic.decayMultiplier + 0.1);
       });
 
-      // Main chime envelope and timing
-      this.createChimeEnvelope(mainChime, chordData.decayTime, startTime);
+      // Main chime envelope and timing with condition
+      this.createChimeEnvelope(mainChime, chordData.decayTime, startTime, condition);
       mainChime.oscillator.start(startTime);
       mainChime.oscillator.stop(startTime + chordData.decayTime + 0.1);
 
-      // Add beating effect for geomagnetic activity
+      // Add beating effect for geomagnetic activity (enhanced for storms)
       if (chordData.detuneCents !== 0) {
         this.addBeatingEffect(chordData.frequency, chordData.detuneCents, chordData.decayTime, startTime);
       }
 
+      // Add warning siren effect for extreme conditions
+      if (condition === 'extreme') {
+        this.addWarningSirenEffect(chordData.frequency, chordData.decayTime * 1.5, startTime + 0.2);
+      }
+
+      // Determine cleanup time based on condition (longer for extreme storms)
+      const cleanupTime = condition === 'extreme' 
+        ? (chordData.decayTime * 1.5 + 1.0) * 1000
+        : (chordData.decayTime + 0.5) * 1000;
+
       // Clean up after chord finishes
       setTimeout(() => {
         this.stopAllChimes();
-      }, (chordData.decayTime + 0.5) * 1000);
+      }, cleanupTime);
 
     } catch (error) {
       console.error("Audio playback failed:", error);
@@ -219,9 +491,43 @@ class SolarWindAudioEngine {
   public stopAllChimes(): void {
     this.activeChimes.forEach(chime => {
       try {
+        // Stop main oscillator
         chime.oscillator.stop();
       } catch (error) {
         // Oscillator may already be stopped
+      }
+
+      // Clean up storm effect oscillators
+      try {
+        if (chime.tremoloOsc) {
+          chime.tremoloOsc.stop();
+        }
+      } catch (error) {
+        // May already be stopped
+      }
+
+      try {
+        if (chime.vibratoOsc) {
+          chime.vibratoOsc.stop();
+        }
+      } catch (error) {
+        // May already be stopped
+      }
+
+      try {
+        if (chime.rumbleOsc) {
+          chime.rumbleOsc.stop();
+        }
+      } catch (error) {
+        // May already be stopped
+      }
+
+      try {
+        if (chime.noiseSource) {
+          chime.noiseSource.stop();
+        }
+      } catch (error) {
+        // May already be stopped
       }
     });
     this.activeChimes = [];
