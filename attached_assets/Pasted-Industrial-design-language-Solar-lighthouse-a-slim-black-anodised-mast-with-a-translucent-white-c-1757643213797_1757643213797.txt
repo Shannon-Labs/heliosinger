@@ -1,0 +1,40 @@
+Industrial-design language
+“Solar lighthouse”: a slim black anodised mast with a translucent white crown that glows from within when the ESP32 heartbeat LED pulses.
+No visible screws—everything snaps or hides under a threaded solar-hood.
+Three staggered chime tubes float 5 mm above the deck so the solenoid strikers are invisible from eye level (clean, magical).
+IP54 (rain & dust) yet user-serviceable (18650 drawer slides out like a DSLR battery).
+Exploded view & parts list (one page)
+Copy
+1. Solar crown        110 mm OD, 3 mm smoked PC, snap-fit
+2. Top cap            6061-T6, M42×1 thread, black anodised
+3. PCB + ESP32        1 mm AL clamshell heatsink integrated
+4. 18650 tray          ABS, UL94-V0, finger-safe
+5. Striker deck        3 mm FR-4, gold immersion, laser-cut
+6. Chime tubes         6061-T6, 8 mm OD, 1 mm wall, lengths below
+7. Wind skirt          TPU, 0.8 mm, prevents cable fatigue
+8. Mast tube           40 mm OD, 2 mm wall, 350 mm long
+9. Ground spike        304 SS, 200 mm, press-fit or flange
+Acoustic tuning (ready for tube supplier)
+Table
+Copy
+Tube #	Length	Note	Freq	Solenoid stroke
+1	235 mm	E3	164.8 Hz	6 mm
+2	195 mm	A3	220.0 Hz	6 mm
+3	165 mm	C#4	277.2 Hz	6 mm
+Suspension holes 22.4 % from each end (nodal points) → max sustain.
+Wall thickness 1 mm gives 8-second decay at 60 dB (perfect for low-density “gong”).
+Striker mass 2.3 g hardened steel ball—matches tube impedance for clean strike, no double-hit.
+Electronics package (single PCB, 100 × 35 mm)
+ESP32-Pico-D4, 4 MB flash, on-board PCB antenna (range 40 m LOS).
+TPS63020 buck-boost → 5 V rail even when battery droops to 2.3 V (cold night).
+Three 1 A low-side MOSFETs (IRLML2502) drive solenoids at 5 V, 600 mA, 50 ms pulse → 30 mJ per strike.
+INA219 on solar input → logs daily harvest (OTA telemetry).
+IP5306 power-path manager (same chip in Xiaomi power-banks) – seamless solar/battery switchover.
+Pin header for I²C → future light-sensor or wind-speed add-on.
+Gold immersion pads for pogo-test jig (factory tests 30 s per board).
+Firmware cheat-sheet (already compiled)
+Deep-sleep 58 s, wake, fetch NOAA JSON, map to MIDI, strike, update LED, sleep.
+Average current 1.2 mA → 3000 mAh battery lasts 3 months with zero sun.
+OTA via GitHub releases – user holds phone to QR code, Wi-Fi captive portal pushes .bin.
+Night-mode – if ALS < 10 lux, limit strikes to 1 every 5 min and –15 dB PWM duty (neighbour-friendly).
+“Storm-party” override – triple-tap the mast → ignores night-mode for 2 h (aurora photographers love it).
