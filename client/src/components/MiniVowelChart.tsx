@@ -36,9 +36,21 @@ export function MiniVowelChart({ currentVowel, currentVowelData }: MiniVowelChar
     return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
   };
 
-  if (!currentVowelData) {
+  // Always render if we have vowel data, even if currentVowelData prop is missing
+  const vowelData = currentVowelData || (currentVowel ? VOWEL_FORMANTS[currentVowel] : null);
+  
+  if (!vowelData && !currentVowel) {
     return null;
   }
+
+  // Use provided data or fallback to VOWEL_FORMANTS
+  const displayData = currentVowelData || {
+    name: currentVowel!,
+    displayName: VOWEL_FORMANTS[currentVowel!].displayName,
+    openness: VOWEL_FORMANTS[currentVowel!].openness,
+    frontness: VOWEL_FORMANTS[currentVowel!].frontness,
+    brightness: VOWEL_FORMANTS[currentVowel!].brightness
+  };
 
   return (
     <div className="flex flex-col items-center">
@@ -109,7 +121,7 @@ export function MiniVowelChart({ currentVowel, currentVowelData }: MiniVowelChar
         })}
 
         {/* Current vowel highlight ring */}
-        {currentVowelData && (() => {
+        {currentVowel && (() => {
           const vowel = vowels.find(v => v.name === currentVowel);
           if (!vowel) return null;
           const pos = getVowelPosition(vowel);
@@ -132,10 +144,10 @@ export function MiniVowelChart({ currentVowel, currentVowelData }: MiniVowelChar
       {/* Current vowel info */}
       <div className="mt-2 text-center">
         <div className="text-sm font-semibold">
-          {currentVowelData.displayName}
-          {VOWEL_FORMANTS[currentVowelData.name] && (
+          {displayData.displayName}
+          {VOWEL_FORMANTS[displayData.name] && (
             <span className="text-xs text-muted-foreground ml-1">
-              {VOWEL_FORMANTS[currentVowelData.name].ipaSymbol}
+              {VOWEL_FORMANTS[displayData.name].ipaSymbol}
             </span>
           )}
         </div>
