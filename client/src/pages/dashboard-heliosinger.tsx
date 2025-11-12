@@ -48,6 +48,10 @@ export default function Dashboard() {
     }
   });
 
+  // Local state for adaptive refetch interval (must be declared before queries that use it)
+  const [updateFrequency, setUpdateFrequency] = useState(60000);
+  const previousComprehensiveDataRef = useRef<ComprehensiveSpaceWeatherData | undefined>(undefined);
+
   // Fetch comprehensive space weather data (used for adaptive interval calculation)
   const { data: comprehensiveData, isLoading: comprehensiveLoading } = useQuery<ComprehensiveSpaceWeatherData>({
     queryKey: ["/api/space-weather/comprehensive"],
@@ -71,7 +75,7 @@ export default function Dashboard() {
   // Fetch current solar wind data (uses adaptive interval)
   const { data: currentData, isLoading: currentLoading, error: currentError } = useQuery<any>({
     queryKey: ["/api/solar-wind/current"],
-    refetchInterval: updateFrequency,
+    refetchInterval: () => updateFrequency,
     retry: false
   });
 
@@ -84,13 +88,11 @@ export default function Dashboard() {
   // Fetch ambient settings (uses adaptive interval)
   const { data: ambientSettings, isLoading: ambientLoading } = useQuery({
     queryKey: ["/api/settings/ambient"],
-    refetchInterval: updateFrequency
+    refetchInterval: () => updateFrequency
   });
 
   // Local state for controls
   const [notificationSettings, setNotificationSettings] = useState(() => getNotificationSettings());
-  const [updateFrequency, setUpdateFrequency] = useState(60000);
-  const previousComprehensiveDataRef = useRef<ComprehensiveSpaceWeatherData | undefined>(undefined);
 
   // Update ambient settings mutation (saves to localStorage for static site)
   const updateAmbientMutation = useMutation({
