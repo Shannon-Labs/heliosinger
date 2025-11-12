@@ -8,15 +8,15 @@ interface MusicStaffProps {
 }
 
 /**
- * Convert note name from "C4" format to VexFlow format "c/4"
+ * Convert note name from "C4" or "Eb4" format to VexFlow format "c/4" or "eb/4"
  */
 function convertToVexFlowNote(noteName: string): string {
-  // Extract note and octave: "C4" -> ["C", "4"]
-  const match = noteName.match(/([A-G]#?)(\d+)/);
+  // Extract note and octave: "C4" -> ["C", "4"], "Eb4" -> ["Eb", "4"]
+  const match = noteName.match(/([A-G][#b]?)(\d+)/);
   if (!match) return noteName;
 
   const [, note, octave] = match;
-  // Convert to lowercase and add slash: "C4" -> "c/4", "D#4" -> "d#/4"
+  // Convert to lowercase and add slash: "C4" -> "c/4", "Eb4" -> "eb/4", "D#4" -> "d#/4"
   return `${note.toLowerCase()}/${octave}`;
 }
 
@@ -50,22 +50,33 @@ export function MusicStaff({ chordVoicing, clef = 'treble' }: MusicStaffProps) {
       // Convert chord tones to VexFlow notes
       const notes = chordVoicing.map((tone, index) => {
         const vexFlowNote = convertToVexFlowNote(tone.noteName);
+        console.log(`Converting ${tone.noteName} to VexFlow format: ${vexFlowNote}`);
         
-        // Create note with appropriate styling
-        const note = new StaveNote({
-          clef: clef,
-          keys: [vexFlowNote],
-          duration: 'w' // Whole note
-        });
+        try {
+          // Create note with appropriate styling
+          const note = new StaveNote({
+            clef: clef,
+            keys: [vexFlowNote],
+            duration: 'w' // Whole note
+          });
 
-        // Color-code: root note gets primary color, others get accent
-        if (index === 0) {
-          note.setStyle({ fillStyle: 'hsl(191, 100%, 42%)', strokeStyle: 'hsl(191, 100%, 42%)' });
-        } else {
-          note.setStyle({ fillStyle: 'hsl(67, 100%, 50%)', strokeStyle: 'hsl(67, 100%, 50%)' });
+          // Color-code: root note gets primary color, others get accent
+          if (index === 0) {
+            note.setStyle({ fillStyle: 'hsl(191, 100%, 42%)', strokeStyle: 'hsl(191, 100%, 42%)' });
+          } else {
+            note.setStyle({ fillStyle: 'hsl(67, 100%, 50%)', strokeStyle: 'hsl(67, 100%, 50%)' });
+          }
+
+          return note;
+        } catch (error) {
+          console.error(`Failed to create note for ${tone.noteName} (${vexFlowNote}):`, error);
+          // Return a simple note as fallback
+          return new StaveNote({
+            clef: clef,
+            keys: ['c/4'],
+            duration: 'w'
+          });
         }
-
-        return note;
       });
 
       // Create voice and format
@@ -73,10 +84,15 @@ export function MusicStaff({ chordVoicing, clef = 'treble' }: MusicStaffProps) {
       voice.addTickables(notes);
       
       // Format notes to fit on staff
-      new Formatter().joinVoices([voice]).format([voice], 350);
-      
-      // Draw notes
-      voice.draw(ctx, stave);
+      try {
+        new Formatter().joinVoices([voice]).format([voice], 350);
+        
+        // Draw notes
+        voice.draw(ctx, stave);
+        console.log('Music staff rendered successfully');
+      } catch (error) {
+        console.error('Failed to format or draw notes:', error);
+      }
     }).catch((error) => {
       console.error('Failed to load VexFlow:', error);
     });

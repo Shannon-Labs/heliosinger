@@ -524,6 +524,45 @@ function calculateChordVoicing(
 }
 
 /**
+ * Get proper enharmonic spelling for chord tones
+ * Returns correct note name (Eb vs D#, etc.) based on root and interval
+ * For proper chord spelling: minor intervals use flats, major intervals use sharps/naturals
+ */
+function getProperChordNoteName(rootNote: string, intervalSemitones: number, midiNote: number): string {
+  const octave = Math.floor((midiNote - 12) / 12);
+  const noteNameIndex = (midiNote - 12) % 12;
+  
+  // Standard sharp-based note names
+  const sharpNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  
+  // For proper chord spelling, convert sharps to flats for minor intervals
+  // Minor 3rd (3 semitones): D# → Eb, G# → Ab, A# → Bb
+  // Minor 6th (8 semitones): G# → Ab, A# → Bb  
+  // Minor 7th (10 semitones): A# → Bb
+  
+  if (intervalSemitones === 3) {
+    // Minor 3rd: prefer flats
+    if (noteNameIndex === 3) return `Eb${octave}`; // D# → Eb
+    if (noteNameIndex === 8) return `Ab${octave}`; // G# → Ab
+    if (noteNameIndex === 10) return `Bb${octave}`; // A# → Bb
+  }
+  
+  if (intervalSemitones === 8) {
+    // Minor 6th: prefer flats
+    if (noteNameIndex === 8) return `Ab${octave}`; // G# → Ab
+    if (noteNameIndex === 10) return `Bb${octave}`; // A# → Bb
+  }
+  
+  if (intervalSemitones === 10) {
+    // Minor 7th: prefer flats
+    if (noteNameIndex === 10) return `Bb${octave}`; // A# → Bb
+  }
+  
+  // Default: use standard sharp-based naming
+  return `${sharpNames[noteNameIndex]}${octave}`;
+}
+
+/**
  * Create a chord tone from an interval in semitones
  */
 function createChordToneFromInterval(
@@ -536,11 +575,8 @@ function createChordToneFromInterval(
   const midiNote = fundamentalMidi + intervalSemitones;
   const frequency = midiNoteToFrequency(midiNote);
   
-  // Get note name
-  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-  const octave = Math.floor((midiNote - 12) / 12);
-  const noteNameIndex = (midiNote - 12) % 12;
-  const noteName = `${noteNames[noteNameIndex]}${octave}`;
+  // Get proper chord spelling (Eb instead of D# for minor 3rd, etc.)
+  const noteName = getProperChordNoteName(fundamentalNote, intervalSemitones, midiNote);
   
   return {
     frequency,
@@ -568,11 +604,10 @@ function normalizeChordOctaves(chordTones: ChordTone[], rootMidi: number): Chord
       const newMidiNote = tone.midiNote + adjustment;
       const newFreq = midiNoteToFrequency(newMidiNote);
       
-      // Get note name
-      const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-      const newOctave = Math.floor((newMidiNote - 12) / 12);
-      const noteNameIndex = (newMidiNote - 12) % 12;
-      const newNoteName = `${noteNames[noteNameIndex]}${newOctave}`;
+      // Get note name using proper spelling
+      const rootNote = chordTones[0]?.noteName || 'C4';
+      const intervalFromRoot = newMidiNote - rootMidi;
+      const newNoteName = getProperChordNoteName(rootNote, intervalFromRoot, newMidiNote);
       
       return {
         ...tone,
