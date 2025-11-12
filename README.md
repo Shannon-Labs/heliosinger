@@ -2,7 +2,7 @@
 
 Real-time space weather sonification - transforms live space weather data from NOAA into beautiful ambient audio. The sun sings its space weather story through vowel-shaped formants and harmonic layers.
 
-🌐 **Live Site**: https://heliosinger.pages.dev
+🌐 **Live Site**: https://heliosinger.com
 
 ## What is Heliosinger?
 
@@ -12,15 +12,32 @@ Heliosinger is an interactive web application that converts real-time space weat
 
 - **Enhanced Multi-Layer Sonification**: Scientifically-informed audio architecture with distinct perceptual layers
   - **Foundation Layer**: Solar wind velocity → Pentatonic pitch scales (C2-C6)
-  - **Harmonic Richness**: Density controls harmonic count (1-8 partials), temperature controls spectral brightness
-  - **Spatial Audio**: IMF vector (Bx/By/Bz) mapped to stereo field and modulation
-  - **Rhythmic Layer**: K-index drives pulsing rate (0.5-8 Hz) and complexity
-  - **Texture Layer**: Temperature shimmer + sub-bass rumble during storms
+  - **Harmonic Richness**: Density controls harmonic count (1-12 partials), temperature controls spectral brightness, Alfvén Mach number enhances harmonic richness
+  - **Spatial Audio**: IMF vector (Bx/By/Bz) mapped to stereo field with clock angle-based auto-pan rotation
+  - **Rhythmic Layer**: K-index drives pulsing rate (0.5-8 Hz) and complexity, magnetometer H-component adds slow pulses and LF "thuds"
+  - **Texture Layer**: Temperature shimmer + electron flux shimmer + sub-bass rumble from proton flux during radiation storms
 
-- **Real-Time Data**: Fetches live data from NOAA Space Weather Prediction Center every 60 seconds
-- **Scientific Accuracy**: Preserves physical relationships (velocity-density anticorrelation, temperature-velocity correlation, southward Bz effects)
-- **Musical Coherence**: Pentatonic scales and harmonic series prevent dissonance
-- **Visual Display**: Real-time visualization of all space weather parameters
+- **Advanced Space Weather Parameters**: Comprehensive integration of multiple space weather data sources
+  - **X-ray Flux (GOES)**: Solar flare detection → transient brightness boosts and filter openings
+  - **Proton Flux (GOES)**: Radiation storms → sub-bass rumble gain and enhanced reverb density
+  - **Electron Flux (GOES)**: High-energy electrons → high-frequency shimmer and air
+  - **Magnetometer (Boulder)**: Geomagnetic disturbances → tremolo depth and rhythmic pulses
+
+- **Derived Metrics**: Computed physical parameters for enhanced sonification
+  - **Dynamic Pressure (Pdyn)**: Solar wind pressure shocks → percussive delay feedback modulation
+  - **IMF Clock Angle (θc)**: Interplanetary magnetic field orientation → stereo auto-pan rotation
+  - **Interplanetary Electric Field (Ey)**: Reconnection potential → vibrato rate modulation
+  - **Alfvén Mach Number (MA)**: Flow speed relative to Alfvén speed → harmonic richness and modulation depth
+  - **Plasma Beta (β)**: Pressure-to-magnetic field ratio → filter brightness and vowel openness
+
+- **Transient Event Detection**: Real-time spike detection for dramatic audio events
+  - X-ray flare spikes (2x+ increase) → brief filter brightness bursts
+  - Dynamic pressure shocks (1.5x+ increase) → percussive delay feedback resets
+
+- **Real-Time Data**: Fetches live data from NOAA Space Weather Prediction Center with adaptive refetch intervals (1-60 seconds based on activity)
+- **Scientific Accuracy**: Preserves physical relationships and uses correct formulas for derived metrics
+- **Musical Coherence**: Pentatonic scales and harmonic series prevent dissonance, vowel formants create natural vocal timbres
+- **Visual Display**: Real-time visualization of all space weather parameters and derived metrics
 
 ## Data Sources
 
