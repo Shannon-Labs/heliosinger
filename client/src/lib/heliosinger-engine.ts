@@ -402,7 +402,19 @@ class HeliosingerEngine {
     layer.masterPanner.connect(this.masterGain);
     
     // Start harmonic oscillators
-    layer.harmonicOscs.forEach(osc => osc.start());
+    layer.harmonicOscs.forEach(osc => {
+      try {
+        osc.start();
+        console.log(`Started harmonic oscillator at ${osc.frequency.value.toFixed(1)}Hz`);
+      } catch (error) {
+        console.error(`Failed to start harmonic oscillator:`, error);
+      }
+    });
+    
+    // Log audio graph for debugging (especially important for mobile)
+    console.log(`Created Heliosinger layer: ${layer.chordToneLayers.length} chord tones, ${layer.harmonicOscs.length} harmonics`);
+    console.log(`Master gain: value=${this.masterGain.gain.value.toFixed(3)}, connected=${this.masterGain.numberOfOutputs > 0}`);
+    console.log(`Audio context state: ${this.audioContext.state}, sampleRate: ${this.audioContext.sampleRate}Hz`);
     
     return layer;
   }
