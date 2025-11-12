@@ -11,6 +11,11 @@ import { DataDashboard } from "@/components/data-dashboard";
 import { ComprehensiveSpaceWeather } from "@/components/comprehensive-space-weather";
 import { HeliosingerGuide } from "@/components/heliosinger-guide";
 import { VowelChart } from "@/components/vowel-chart";
+import { Footer } from "@/components/Footer";
+import { DataSourceAttribution } from "@/components/DataSourceAttribution";
+import { ChangeTracker } from "@/components/ChangeTracker";
+import { EnhancedSpaceWeatherViz } from "@/components/EnhancedSpaceWeatherViz";
+import { SpaceWeatherExamples } from "@/components/SpaceWeatherExamples";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getAmbientSettings, saveAmbientSettings } from "@/lib/localStorage";
@@ -247,19 +252,43 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* ARIA Live Region for Dynamic Updates */}
+      <div
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {comprehensiveData && (
+          <>
+            Space weather updated. Velocity: {comprehensiveData.solar_wind?.velocity.toFixed(1)} km/s.
+            K-index: {comprehensiveData.k_index?.kp.toFixed(1)}.
+          </>
+        )}
+      </div>
+
       {/* Navigation Header */}
-      <nav className="border-b border-border/50 bg-gradient-to-r from-background via-primary/5 to-background backdrop-blur-md sticky top-0 z-50 shadow-sm">
+      <nav 
+        className="border-b border-border/50 bg-gradient-to-r from-background via-primary/5 to-background backdrop-blur-md sticky top-0 z-50 shadow-sm"
+        role="navigation"
+        aria-label="Main navigation"
+      >
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-primary via-accent to-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
-                <i className="fas fa-sun text-2xl text-primary-foreground animate-pulse" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent" data-testid="text-app-title">
-                  Heliosinger
-                </h1>
-                <p className="text-xs text-muted-foreground font-medium">The Sun Sings Space Weather</p>
+              <img 
+                src="/preview.webp" 
+                alt="Heliosinger Logo" 
+                className="w-12 h-12 rounded-xl object-contain"
+                aria-hidden="true"
+              />
+              <div className="flex items-center gap-2">
+                <img 
+                  src="/name.webp" 
+                  alt="Heliosinger" 
+                  className="h-8 object-contain"
+                  data-testid="text-app-title"
+                />
+                <p className="text-xs text-muted-foreground font-medium hidden sm:block">The Sun Sings Space Weather</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -288,13 +317,19 @@ export default function Dashboard() {
         {/* Hero Section */}
         <section className="mb-12 text-center">
           <div className="inline-block mb-4">
-            <div className="w-20 h-20 bg-gradient-to-br from-primary via-accent to-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20 animate-pulse">
-              <i className="fas fa-sun text-4xl text-primary-foreground" />
-            </div>
+            <img 
+              src="/preview.webp" 
+              alt="Heliosinger Logo" 
+              className="w-20 h-20 rounded-2xl object-contain mx-auto shadow-lg"
+            />
           </div>
-          <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
-            Heliosinger
-          </h1>
+          <div className="flex justify-center mb-3">
+            <img 
+              src="/name.webp" 
+              alt="Heliosinger" 
+              className="h-16 object-contain"
+            />
+          </div>
           <p className="text-xl text-muted-foreground mb-2">
             The Sun Sings Space Weather
           </p>
@@ -307,6 +342,23 @@ export default function Dashboard() {
         {/* Comprehensive Space Weather Display */}
         <div className="mb-8">
           <ComprehensiveSpaceWeather />
+        </div>
+
+        {/* Enhanced Visualizations with Change Tracking */}
+        <div className="mb-8">
+          <EnhancedSpaceWeatherViz data={comprehensiveData} />
+        </div>
+
+        {/* Change Tracker */}
+        {comprehensiveData && (
+          <div className="mb-8">
+            <ChangeTracker data={comprehensiveData} enabled={true} />
+          </div>
+        )}
+
+        {/* Data Source Attribution */}
+        <div className="mb-8">
+          <DataSourceAttribution />
         </div>
 
         {/* Heliosinger Mode Controls */}
@@ -328,7 +380,7 @@ export default function Dashboard() {
                   <Label htmlFor="heliosinger-toggle" className="text-base font-medium">
                     🌞 Let the Sun Sing
                   </Label>
-                  <p className="text-sm text-muted-foreground">
+                  <p id="heliosinger-description" className="text-sm text-muted-foreground">
                     The sun literally sings space weather using vowel sounds and harmonic synthesis
                   </p>
                 </div>
@@ -338,6 +390,8 @@ export default function Dashboard() {
                   onCheckedChange={handleHeliosingerToggle}
                   disabled={!comprehensiveData || ambientLoading}
                   data-testid="switch-heliosinger-toggle"
+                  aria-label="Enable Heliosinger mode to hear the sun sing space weather"
+                  aria-describedby="heliosinger-description"
                 />
               </div>
 
@@ -360,6 +414,10 @@ export default function Dashboard() {
                   className="w-full"
                   disabled={!isHeliosingerEnabled}
                   data-testid="slider-ambient-volume"
+                  aria-label="Solar volume control"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(ambientVolume * 100)}
                 />
               </div>
 
@@ -667,6 +725,11 @@ export default function Dashboard() {
           </section>
         )}
 
+        {/* Space Weather Examples - What You're Listening For */}
+        <section className="mb-8">
+          <SpaceWeatherExamples />
+        </section>
+
         {/* Educational Guide */}
         <section className="mb-8">
           <HeliosingerGuide />
@@ -694,41 +757,7 @@ export default function Dashboard() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-border bg-card/30">
-        <div className="container mx-auto px-4 py-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div>
-              <h4 className="font-semibold mb-4">Heliosinger</h4>
-              <p className="text-sm text-muted-foreground">
-                The sun sings space weather in real-time.
-              </p>
-            </div>
-            
-            <div>
-              <h4 className="font-semibold mb-4">Data Sources</h4>
-              <ul className="text-sm text-muted-foreground space-y-1">
-                <li>NOAA Space Weather Prediction Center</li>
-                <li>DSCOVR L1 Lagrange Point Observatory</li>
-                <li>Real-time solar wind plasma data</li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="font-semibold mb-4">Technology</h4>
-              <ul className="text-sm text-muted-foreground space-y-1">
-                <li>Web Audio API with formant filters</li>
-                <li>Real-time data processing</li>
-                <li>Vowel synthesis & harmonic series</li>
-                <li>Space weather sonification</li>
-              </ul>
-            </div>
-          </div>
-          
-          <div className="border-t border-border pt-8 mt-8 text-center text-sm text-muted-foreground">
-            © 2025 Heliosinger - The Sun Sings Space Weather
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

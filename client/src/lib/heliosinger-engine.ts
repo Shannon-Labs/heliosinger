@@ -79,64 +79,84 @@ class HeliosingerEngine {
   private noiseBuffer: AudioBuffer | null = null;
   
   private async initializeAudio(): Promise<void> {
-    if (!this.audioContext) {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      
-      // Create master audio chain
-      this.masterGain = this.audioContext.createGain();
-      this.compressor = this.audioContext.createDynamicsCompressor();
-      this.limiter = this.audioContext.createDynamicsCompressor();
-      
-      // Configure compressor for overall balance
-      this.compressor.threshold.value = -24;
-      this.compressor.knee.value = 10;
-      this.compressor.ratio.value = 4;
-      this.compressor.attack.value = 0.003;
-      this.compressor.release.value = 0.25;
-      
-      // Configure limiter for protection during storms
-      this.limiter.threshold.value = -6;
-      this.limiter.knee.value = 1;
-      this.limiter.ratio.value = 20;
-      this.limiter.attack.value = 0.001;
-      this.limiter.release.value = 0.1;
-      
-      // Create delay node (will be configured when starting)
-      this.delayNode = this.audioContext.createDelay(1.0);
-      this.delayGain = this.audioContext.createGain();
-      this.delayFeedbackGain = this.audioContext.createGain();
-      
-      // Create reverb convolver (will be configured when starting)
-      this.reverbConvolver = this.audioContext.createConvolver();
-      this.reverbGain = this.audioContext.createGain();
-      
-      // Connect chain: masterGain -> delay -> reverb -> compressor -> limiter -> destination
-      // Delay feedback loop: delay -> delayFeedbackGain -> delay (input)
-      this.masterGain.connect(this.delayNode);
-      this.delayNode.connect(this.delayGain);
-      this.delayGain.connect(this.reverbConvolver);
-      this.reverbConvolver.connect(this.reverbGain);
-      this.reverbGain.connect(this.compressor);
-      this.compressor.connect(this.limiter);
-      this.limiter.connect(this.audioContext.destination);
-      
-      // Delay feedback
-      this.delayNode.connect(this.delayFeedbackGain);
-      this.delayFeedbackGain.connect(this.delayNode);
-      
-      // Set master volume
-      this.masterGain.gain.value = this.targetVolume;
-      
-      // Create noise buffer for texture layer
-      this.createNoiseBuffer();
-      
-      // Create reverb impulse response
-      this.createReverbImpulse();
-    }
+    try {
+      if (!this.audioContext) {
+        // Check if AudioContext is supported
+        if (!window.AudioContext && !(window as any).webkitAudioContext) {
+          throw new Error('Web Audio API is not supported in this browser');
+        }
 
-    // Resume audio context if suspended
-    if (this.audioContext.state === 'suspended') {
-      await this.audioContext.resume();
+        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+        
+        // Create master audio chain
+        this.masterGain = this.audioContext.createGain();
+        this.compressor = this.audioContext.createDynamicsCompressor();
+        this.limiter = this.audioContext.createDynamicsCompressor();
+        
+        // Configure compressor for overall balance
+        this.compressor.threshold.value = -24;
+        this.compressor.knee.value = 10;
+        this.compressor.ratio.value = 4;
+        this.compressor.attack.value = 0.003;
+        this.compressor.release.value = 0.25;
+        
+        // Configure limiter for protection during storms
+        this.limiter.threshold.value = -6;
+        this.limiter.knee.value = 1;
+        this.limiter.ratio.value = 20;
+        this.limiter.attack.value = 0.001;
+        this.limiter.release.value = 0.1;
+        
+        // Create delay node (will be configured when starting)
+        this.delayNode = this.audioContext.createDelay(1.0);
+        this.delayGain = this.audioContext.createGain();
+        this.delayFeedbackGain = this.audioContext.createGain();
+        
+        // Create reverb convolver (will be configured when starting)
+        this.reverbConvolver = this.audioContext.createConvolver();
+        this.reverbGain = this.audioContext.createGain();
+        
+        // Connect chain: masterGain -> delay -> reverb -> compressor -> limiter -> destination
+        // Delay feedback loop: delay -> delayFeedbackGain -> delay (input)
+        this.masterGain.connect(this.delayNode);
+        this.delayNode.connect(this.delayGain);
+        this.delayGain.connect(this.reverbConvolver);
+        this.reverbConvolver.connect(this.reverbGain);
+        this.reverbGain.connect(this.compressor);
+        this.compressor.connect(this.limiter);
+        this.limiter.connect(this.audioContext.destination);
+        
+        // Delay feedback
+        this.delayNode.connect(this.delayFeedbackGain);
+        this.delayFeedbackGain.connect(this.delayNode);
+        
+        // Set master volume
+        this.masterGain.gain.value = this.targetVolume;
+        
+        // Create noise buffer for texture layer
+        this.createNoiseBuffer();
+        
+        // Create reverb impulse response
+        this.createReverbImpulse();
+      }
+
+      // Resume audio context if suspended (browser autoplay policy)
+      if (this.audioContext.state === 'suspended') {
+        try {
+          await this.audioContext.resume();
+        } catch (resumeError) {
+          console.warn('Failed to resume audio context:', resumeError);
+          throw new Error('Audio requires user interaction. Please click to enable audio.');
+        }
+      }
+
+      // Check if audio context is in a valid state
+      if (this.audioContext.state === 'closed') {
+        throw new Error('Audio context has been closed');
+      }
+    } catch (error) {
+      console.error('Failed to initialize audio:', error);
+      throw error instanceof Error ? error : new Error('Failed to initialize audio system');
     }
   }
   
