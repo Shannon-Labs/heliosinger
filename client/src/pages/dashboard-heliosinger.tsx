@@ -5,20 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { SolarWindDisplay } from "@/components/solar-wind-display";
-import { ChordVisualization } from "@/components/chord-visualization";
-import { MappingAlgorithm } from "@/components/mapping-algorithm";
 import { SystemStatus } from "@/components/system-status";
 import { DataDashboard } from "@/components/data-dashboard";
 import { ComprehensiveSpaceWeather } from "@/components/comprehensive-space-weather";
+import { HeliosingerGuide } from "@/components/heliosinger-guide";
+import { VowelChart } from "@/components/vowel-chart";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getAmbientSettings, saveAmbientSettings } from "@/lib/localStorage";
 import { useHeliosinger } from "@/hooks/use-heliosinger";
-import { startAmbient, updateAmbient, stopAmbient, setAmbientVolume } from "@/lib/audio-engine";
-import { generateChordDataFromSolarWind } from "@/lib/midi-mapping";
 import type { AmbientSettings, ComprehensiveSpaceWeatherData } from "@shared/schema";
 
 export default function Dashboard() {
@@ -71,10 +67,7 @@ export default function Dashboard() {
     refetchInterval: 60000
   });
 
-  // Local state for legacy controls
-  const [isLegacyAmbientEnabled, setIsLegacyAmbientEnabled] = useState(false);
-  const [respectNight, setRespectNight] = useState(true);
-  const [dayOnly, setDayOnly] = useState(false);
+  // Local state for controls
   const [gentleMode, setGentleMode] = useState(false);
 
   // Update ambient settings mutation (saves to localStorage for static site)
@@ -114,8 +107,6 @@ export default function Dashboard() {
     
     if (settings && typeof settings === 'object') {
       setAmbientVolume((settings as any).volume || 0.3);
-      setRespectNight((settings as any).respect_night === "true");
-      setDayOnly((settings as any).day_only === "true");
       setGentleMode((settings as any).gentle_mode === "true");
     }
   }, [ambientSettings]);
@@ -175,43 +166,12 @@ export default function Dashboard() {
     updateAmbientMutation.mutate({
       enabled: enabled ? "true" : "false",
       volume: ambientVolume,
-      respect_night: respectNight ? "true" : "false",
-      day_only: dayOnly ? "true" : "false",
       smoothing: 0.8,
       max_rate: 10.0,
       battery_min: 20.0
     });
   };
 
-  // Legacy ambient toggle (for backwards compatibility)
-  const handleLegacyAmbientToggle = async (enabled: boolean) => {
-    setIsLegacyAmbientEnabled(enabled);
-    
-    if (enabled && currentData && typeof currentData === 'object' && 'velocity' in currentData) {
-      try {
-        // Stop Heliosinger if it's active
-        if (isHeliosingerEnabled) {
-          setIsHeliosingerEnabled(false);
-        }
-        
-        const chordData = generateChordDataFromSolarWind(currentData as { velocity: number; density: number; bz: number });
-        await startAmbient(chordData, ambientVolume, 0.8);
-        console.log("Started legacy ambient mode with current solar wind data");
-      } catch (error) {
-        console.error("Failed to start ambient mode:", error);
-        toast({
-          title: "Ambient Mode Failed",
-          description: "Could not start ambient audio. Check browser audio permissions.",
-          variant: "destructive",
-        });
-        setIsLegacyAmbientEnabled(false);
-        return;
-      }
-    } else {
-      stopAmbient();
-      console.log("Stopped ambient mode");
-    }
-  };
 
   // Volume change handler
   const handleVolumeChange = (value: number[]) => {
@@ -220,29 +180,17 @@ export default function Dashboard() {
     
     if (isHeliosingerEnabled) {
       heliosinger.setVolume(newVolume);
-    } else if (isLegacyAmbientEnabled) {
-      setAmbientVolume(newVolume);
     }
     
-    if (isHeliosingerEnabled || isLegacyAmbientEnabled) {
+    if (isHeliosingerEnabled) {
       setTimeout(() => {
         updateAmbientMutation.mutate({
           volume: newVolume,
-          enabled: (isHeliosingerEnabled || isLegacyAmbientEnabled) ? "true" : "false",
-          respect_night: respectNight ? "true" : "false",
-          day_only: dayOnly ? "true" : "false"
+          enabled: "true"
         });
       }, 500);
     }
   };
-
-  // Update legacy ambient audio when solar wind data changes
-  useEffect(() => {
-    if (isLegacyAmbientEnabled && !isHeliosingerEnabled && currentData && typeof currentData === 'object' && 'velocity' in currentData) {
-      const chordData = generateChordDataFromSolarWind(currentData as { velocity: number; density: number; bz: number });
-      updateAmbient(chordData);
-    }
-  }, [currentData, isLegacyAmbientEnabled, isHeliosingerEnabled]);
 
   const isDataStreamActive = Array.isArray(systemStatus) && systemStatus.find((s: any) => s.component === 'data_stream')?.status === 'active';
 
@@ -275,22 +223,24 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* Navigation Header */}
-      <nav className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+      <nav className="border-b border-border/50 bg-gradient-to-r from-background via-primary/5 to-background backdrop-blur-md sticky top-0 z-50 shadow-sm">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center">
-                <i className="fas fa-sun text-primary-foreground" />
+              <div className="w-12 h-12 bg-gradient-to-br from-primary via-accent to-primary rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
+                <i className="fas fa-sun text-2xl text-primary-foreground animate-pulse" />
               </div>
               <div>
-                <h1 className="text-xl font-bold" data-testid="text-app-title">Heliosinger</h1>
-                <p className="text-sm text-muted-foreground">The Sun Sings Space Weather</p>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent" data-testid="text-app-title">
+                  Heliosinger
+                </h1>
+                <p className="text-xs text-muted-foreground font-medium">The Sun Sings Space Weather</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 bg-secondary/50 px-3 py-1 rounded-full">
-                <div className={`w-2 h-2 rounded-full ${isDataStreamActive ? 'bg-accent pulse-animation' : 'bg-destructive'}`} />
-                <span className="text-sm" data-testid="text-data-status">
+              <div className="flex items-center space-x-2 bg-gradient-to-r from-accent/20 to-primary/20 px-4 py-2 rounded-full border border-accent/30">
+                <div className={`w-2.5 h-2.5 rounded-full ${isDataStreamActive ? 'bg-accent animate-pulse shadow-lg shadow-accent/50' : 'bg-destructive'}`} />
+                <span className="text-sm font-medium" data-testid="text-data-status">
                   {isDataStreamActive ? 'Live Data' : 'Offline'}
                 </span>
               </div>
@@ -300,6 +250,7 @@ export default function Dashboard() {
                 onClick={() => fetchDataMutation.mutate()}
                 disabled={fetchDataMutation.isPending}
                 data-testid="button-refresh-data"
+                className="hover:bg-primary/10"
               >
                 <i className={`fas fa-sync-alt ${fetchDataMutation.isPending ? 'animate-spin' : ''}`} />
               </Button>
@@ -309,31 +260,33 @@ export default function Dashboard() {
       </nav>
 
       <main className="container mx-auto px-4 py-8">
+        {/* Hero Section */}
+        <section className="mb-12 text-center">
+          <div className="inline-block mb-4">
+            <div className="w-20 h-20 bg-gradient-to-br from-primary via-accent to-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20 animate-pulse">
+              <i className="fas fa-sun text-4xl text-primary-foreground" />
+            </div>
+          </div>
+          <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
+            Heliosinger
+          </h1>
+          <p className="text-xl text-muted-foreground mb-2">
+            The Sun Sings Space Weather
+          </p>
+          <p className="text-sm text-muted-foreground max-w-2xl mx-auto">
+            Experience space weather as the sun literally sings its story in real-time. 
+            Each moment creates a unique vowel sound, pitch, and rhythm based on solar wind conditions.
+          </p>
+        </section>
+
         {/* Comprehensive Space Weather Display */}
         <div className="mb-8">
           <ComprehensiveSpaceWeather />
         </div>
 
-        {/* Solar Wind Data Display */}
-        <SolarWindDisplay 
-          data={(currentData && typeof currentData === 'object' && 'velocity' in currentData) ? (currentData as any) : undefined} 
-          loading={currentLoading}
-          onRefresh={() => fetchDataMutation.mutate()}
-          refreshing={fetchDataMutation.isPending}
-        />
-
-        {/* Current Chord Visualization */}
-        {currentData && typeof currentData === 'object' && 'velocity' in currentData && (
-          <ChordVisualization 
-            velocity={(currentData as any).velocity}
-            density={(currentData as any).density}
-            bz={(currentData as any).bz}
-          />
-        )}
-
         {/* Heliosinger Mode Controls */}
         <section className="mb-8">
-          <Card>
+          <Card className="bg-gradient-to-br from-background via-primary/5 to-accent/5 border-primary/20 shadow-lg">
             <CardHeader>
               <CardTitle className="flex items-center">
                 <div className={`w-3 h-3 rounded-full mr-3 ${isHeliosingerEnabled ? 'bg-accent animate-pulse' : 'bg-muted'}`} />
@@ -380,7 +333,7 @@ export default function Dashboard() {
                   min={0}
                   step={0.01}
                   className="w-full"
-                  disabled={!isHeliosingerEnabled && !isLegacyAmbientEnabled}
+                  disabled={!isHeliosingerEnabled}
                   data-testid="slider-ambient-volume"
                 />
               </div>
@@ -414,15 +367,15 @@ export default function Dashboard() {
 
               {/* Current Vowel Display */}
               {heliosinger.currentData && (
-                <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-lg p-4 border border-primary/20">
-                  <div className="text-center space-y-2">
-                    <div className="text-6xl font-bold text-primary" data-testid="current-vowel">
+                <div className="bg-gradient-to-br from-primary/20 via-accent/10 to-primary/20 rounded-xl p-6 border-2 border-primary/30 shadow-lg">
+                  <div className="text-center space-y-3">
+                    <div className="text-7xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent drop-shadow-lg" data-testid="current-vowel">
                       "{heliosinger.currentData.currentVowel.displayName}"
                     </div>
-                    <div className="text-lg text-muted-foreground" data-testid="vowel-description">
+                    <div className="text-lg font-medium text-muted-foreground" data-testid="vowel-description">
                       {heliosinger.currentData.vowelDescription}
                     </div>
-                    <div className="text-sm italic text-accent" data-testid="solar-mood">
+                    <div className="text-base italic font-semibold text-accent bg-accent/10 px-4 py-2 rounded-lg inline-block" data-testid="solar-mood">
                       {heliosinger.currentData.solarMood}
                     </div>
                   </div>
@@ -434,7 +387,7 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Audio Status:</span>
                   <span className={`font-medium ${isHeliosingerEnabled ? 'text-accent' : 'text-muted-foreground'}`} data-testid="text-audio-status">
-                    {isHeliosingerEnabled ? '🌞 Singing' : isLegacyAmbientEnabled ? 'Streaming' : 'Silent'}
+                    {isHeliosingerEnabled ? '🌞 Singing' : 'Silent'}
                   </span>
                 </div>
                 
@@ -493,58 +446,31 @@ export default function Dashboard() {
                 ) : null}
               </div>
 
-              {/* Help Text */}
-              <div className="text-xs text-muted-foreground leading-relaxed">
-                <p>
-                  <strong>Heliosinger</strong> makes the sun literally sing space weather. The sun's "voice" changes 
-                  based on solar wind conditions - density shapes the vowel, temperature affects brightness, 
-                  magnetic field creates stereo space, and geomagnetic activity adds rhythm. Each moment in space 
-                  weather creates a unique sung note.
-                </p>
-              </div>
             </CardContent>
           </Card>
         </section>
 
-        {/* Legacy Ambient Mode (Hidden by default, can be toggled for backwards compatibility) */}
+        {/* Educational Guide */}
         <section className="mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <div className={`w-3 h-3 rounded-full mr-3 ${isLegacyAmbientEnabled ? 'bg-accent animate-pulse' : 'bg-muted'}`} />
-                Legacy Audio Modes
-                <Badge variant={isLegacyAmbientEnabled ? "default" : "secondary"} className="ml-auto">
-                  {isLegacyAmbientEnabled ? "Active" : "Inactive"}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <Label htmlFor="legacy-ambient-toggle" className="text-base font-medium">
-                    Simple Ambient Mode (Legacy)
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Original ambient mode - continuous web audio reflecting solar wind conditions
-                  </p>
-                </div>
-                <Switch
-                  id="legacy-ambient-toggle"
-                  checked={isLegacyAmbientEnabled}
-                  onCheckedChange={handleLegacyAmbientToggle}
-                  disabled={!currentData || ambientLoading || isHeliosingerEnabled}
-                  data-testid="switch-legacy-ambient-toggle"
-                />
-              </div>
-            </CardContent>
-          </Card>
+          <HeliosingerGuide />
+        </section>
+
+        {/* Vowel Chart */}
+        <section className="mb-8">
+          <VowelChart 
+            currentVowel={heliosinger.currentData?.vowelName}
+            currentVowelData={heliosinger.currentData ? {
+              name: heliosinger.currentData.vowelName,
+              displayName: heliosinger.currentData.currentVowel.displayName,
+              openness: heliosinger.currentData.currentVowel.openness,
+              frontness: heliosinger.currentData.currentVowel.frontness,
+              brightness: heliosinger.currentData.currentVowel.brightness
+            } : undefined}
+          />
         </section>
 
         {/* Data Dashboard */}
         <DataDashboard />
-
-        {/* Mapping Algorithm */}
-        <MappingAlgorithm />
 
         {/* System Status */}
         <SystemStatus />
