@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { mapSpaceWeatherToAudio, createDefaultAudioMapping } from '@/lib/audio-mapping';
 import { startEnhancedAmbient, updateEnhancedAmbient, stopEnhancedAmbient, setEnhancedAmbientVolume } from '@/lib/enhanced-audio-engine';
