@@ -198,7 +198,7 @@ export function getVowelFromSpaceWeather(
  */
 export function getSolarMoodDescription(
   vowel: VowelFormants,
-  condition: 'quiet' | 'moderate' | 'storm' | 'extreme'
+  condition: 'quiet' | 'moderate' | 'storm' | 'extreme' | 'super_extreme'
 ): string {
   const moodDescriptions = {
     'quiet': {
@@ -228,6 +228,13 @@ export function getSolarMoodDescription(
       'A': 'The sun sings with profound resonance',
       'O': 'The sun intones with cosmic strength',
       'U': 'The sun resonates with deep majesty'
+    },
+    'super_extreme': {
+      'I': 'The sun screams with blinding, white-hot energy',
+      'E': 'The sun roars with the power of a stellar flare',
+      'A': 'The sun unleashes a torrent of raw, untamed sound',
+      'O': 'The sun bellows with the full force of the solar wind',
+      'U': 'The sun groans under the strain of immense cosmic forces'
     }
   };
 
@@ -291,9 +298,26 @@ export function getFormantFiltersForVowel(
     const bandwidth = vowel.bandwidths[i] || 100;
     
     // Adjust gain based on vowel characteristics and formant number
-    const baseGain = 1.0 - (i * 0.15); // Higher formants are quieter
-    const brightnessBoost = vowel.brightness * 0.3;
-    const gain = Math.max(0.1, Math.min(1.5, baseGain + brightnessBoost));
+    // F1 and F2 are most important for vowel recognition - boost them significantly
+    // Bandpass filters remove energy, so we need high gains to compensate
+    let baseGain: number;
+    if (i === 0) {
+      // F1 (first formant) - most important for vowel height/openness
+      baseGain = 4.0; // Strong boost for F1
+    } else if (i === 1) {
+      // F2 (second formant) - most important for vowel frontness/backness
+      baseGain = 3.5; // Strong boost for F2
+    } else if (i === 2) {
+      // F3 - adds clarity and brightness
+      baseGain = 2.0;
+    } else {
+      // F4 - subtle presence
+      baseGain = 1.2;
+    }
+    
+    // Add brightness boost for brighter vowels
+    const brightnessBoost = vowel.brightness * 0.5;
+    const gain = Math.max(1.0, Math.min(6.0, baseGain + brightnessBoost));
     
     return {
       frequency: scaledFrequency,

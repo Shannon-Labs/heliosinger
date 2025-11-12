@@ -390,16 +390,20 @@ class HeliosingerEngine {
       toneLayer.osc.frequency.value = chordTone.frequency;
       
       // Set gain based on amplitude (fundamental is loudest)
-      toneLayer.oscGain.gain.value = chordTone.amplitude * 0.4;
+      // Increased from 0.4 to 0.7 to make vowels more audible
+      toneLayer.oscGain.gain.value = chordTone.amplitude * 0.7;
       
       // Create formant filters for this chord tone (apply vowel shape to each note)
+      // Formants are connected in parallel to emphasize vowel characteristics
       data.formantFilters.forEach((formant, i) => {
         const filter = this.audioContext!.createBiquadFilter();
         filter.type = 'bandpass';
         filter.frequency.value = formant.frequency;
+        // Q value determines filter sharpness - higher Q = more focused on formant frequency
         filter.Q.value = formant.frequency / formant.bandwidth;
         
         const gain = this.audioContext!.createGain();
+        // Use the gain from formant calculation (now boosted for clarity)
         gain.gain.value = formant.gain;
         
         toneLayer.formantFilters.push(filter);
