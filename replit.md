@@ -1,4 +1,4 @@
-# Solar Wind Chime Project
+# Heliochime Project
 
 ## Overview
 

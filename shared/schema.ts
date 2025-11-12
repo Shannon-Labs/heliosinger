@@ -33,22 +33,6 @@ export const mappingConfigs = pgTable("mapping_configs", {
   is_active: text("is_active").notNull().default("true"),
 });
 
-// Hardware Configuration for ESP32
-export const hardwareConfigs = pgTable("hardware_configs", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  device_name: text("device_name").notNull(),
-  pin_velocity: integer("pin_velocity").notNull().default(2),
-  pin_density: integer("pin_density").notNull().default(4),
-  pin_bz: integer("pin_bz").notNull().default(5),
-  pin_status_led: integer("pin_status_led").notNull().default(18),
-  pin_sda: integer("pin_sda").notNull().default(21),
-  pin_scl: integer("pin_scl").notNull().default(22),
-  wifi_ssid: text("wifi_ssid"),
-  update_interval: integer("update_interval").notNull().default(60), // seconds
-  firmware_version: text("firmware_version").notNull().default("1.0.0"),
-  created_at: timestamp("created_at").notNull().defaultNow(),
-});
-
 // System Status and Monitoring
 export const systemStatus = pgTable("system_status", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -83,11 +67,6 @@ export const insertMappingConfigSchema = createInsertSchema(mappingConfigs).omit
   created_at: true,
 });
 
-export const insertHardwareConfigSchema = createInsertSchema(hardwareConfigs).omit({
-  id: true,
-  created_at: true,
-});
-
 export const insertSystemStatusSchema = createInsertSchema(systemStatus).omit({
   id: true,
   last_update: true,
@@ -105,9 +84,6 @@ export type InsertSolarWindReading = z.infer<typeof insertSolarWindReadingSchema
 export type MappingConfig = typeof mappingConfigs.$inferSelect;
 export type InsertMappingConfig = z.infer<typeof insertMappingConfigSchema>;
 
-export type HardwareConfig = typeof hardwareConfigs.$inferSelect;
-export type InsertHardwareConfig = z.infer<typeof insertHardwareConfigSchema>;
-
 export type SystemStatus = typeof systemStatus.$inferSelect;
 export type InsertSystemStatus = z.infer<typeof insertSystemStatusSchema>;
 
@@ -117,7 +93,67 @@ export type InsertAmbientSettings = z.infer<typeof insertAmbientSettingsSchema>;
 // Space weather condition types
 export type SpaceWeatherCondition = 'quiet' | 'moderate' | 'storm' | 'extreme';
 
-// Chord data structure
+// Space Weather Data Types
+export interface KIndexData {
+  timestamp: string;
+  kp: number;
+  a_running: number;
+  station_count?: number;
+  history?: Array<{ timestamp: string; kp: number; a_running: number }>;
+}
+
+export interface XrayFluxData {
+  timestamp: string;
+  short_wave?: number;
+  long_wave?: number;
+  flare_class?: string;
+  begin?: string;
+  current?: string;
+  end?: string;
+  max_flux?: string;
+  note?: string;
+}
+
+export interface ProtonFluxData {
+  timestamp: string;
+  flux_10mev: number;
+  flux_50mev: number;
+  flux_100mev: number;
+  note?: string;
+}
+
+export interface ElectronFluxData {
+  timestamp: string;
+  flux_2mev: number;
+  flux_0_8mev: number;
+  note?: string;
+}
+
+export interface MagnetometerData {
+  timestamp: string;
+  h_component: number;
+  d_component: number;
+  z_component: number;
+  note?: string;
+}
+
+export interface ComprehensiveSpaceWeatherData {
+  timestamp: string;
+  solar_wind: {
+    timestamp: string;
+    velocity: number;
+    density: number;
+    bz: number;
+    temperature: number;
+  } | null;
+  k_index: KIndexData | null;
+  xray_flux: XrayFluxData | null;
+  proton_flux: ProtonFluxData | null;
+  electron_flux: ElectronFluxData | null;
+  magnetometer: MagnetometerData | null;
+}
+
+// Chord data structure (expanded for multi-parameter audio)
 export interface ChordData {
   baseNote: string;
   frequency: number;
@@ -126,4 +162,10 @@ export interface ChordData {
   detuneCents: number;
   condition: SpaceWeatherCondition;
   density: number; // Solar wind particle density (p/cm³)
+  // New parameters for multi-layer audio
+  kIndex?: number; // For rhythm/tempo
+  xrayFlux?: number; // For brightness/volume bursts
+  protonFlux?: number; // For harmonic richness
+  electronFlux?: number; // For high-frequency content
+  magnetometerH?: number; // For low-frequency rumble
 }

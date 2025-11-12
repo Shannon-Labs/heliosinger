@@ -9,15 +9,17 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { SolarWindDisplay } from "@/components/solar-wind-display";
 import { ChordVisualization } from "@/components/chord-visualization";
-import { HardwareConfig } from "@/components/hardware-config";
 import { MappingAlgorithm } from "@/components/mapping-algorithm";
 import { SystemStatus } from "@/components/system-status";
 import { DataDashboard } from "@/components/data-dashboard";
+import { ComprehensiveSpaceWeather } from "@/components/comprehensive-space-weather";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { startAmbient, updateAmbient, stopAmbient, setAmbientVolume, isAmbientActive } from "@/lib/audio-engine";
-import { mapSolarWindToChord } from "@/lib/midi-mapping";
-import type { AmbientSettings } from "@shared/schema";
+import { startMultiParameter, updateMultiParameter, stopMultiParameter } from "@/lib/multi-parameter-audio-engine";
+import { generateChordDataFromSolarWind, generateChordDataFromComprehensive } from "@/lib/midi-mapping";
+import { getAmbientSettings, saveAmbientSettings } from "@/lib/localStorage";
+import type { AmbientSettings, ComprehensiveSpaceWeatherData } from "@shared/schema";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -28,6 +30,13 @@ export default function Dashboard() {
     queryKey: ["/api/solar-wind/current"],
     refetchInterval: 60000, // Refetch every minute
     retry: false
+  });
+
+  // Fetch comprehensive space weather data
+  const { data: comprehensiveData, isLoading: comprehensiveLoading } = useQuery<ComprehensiveSpaceWeatherData>({
+    queryKey: ["/api/space-weather/comprehensive"],
+    queryFn: () => apiRequest("GET", "/api/space-weather/comprehensive"),
+    refetchInterval: 60000, // Refetch every minute
   });
 
   // Fetch system status
@@ -44,15 +53,26 @@ export default function Dashboard() {
 
   // Local state for ambient controls
   const [isAmbientEnabled, setIsAmbientEnabled] = useState(false);
+  const [isMultiParameterEnabled, setIsMultiParameterEnabled] = useState(false);
   const [ambientIntensity, setAmbientIntensity] = useState(0.5);
   const [ambientVolume, setAmbientVolume] = useState(0.3);
   const [respectNight, setRespectNight] = useState(true);
   const [dayOnly, setDayOnly] = useState(false);
 
-  // Update ambient settings mutation
+  // Update ambient settings mutation (saves to localStorage for static site)
   const updateAmbientMutation = useMutation({
-    mutationFn: (settings: Partial<AmbientSettings>) => 
-      apiRequest("POST", "/api/settings/ambient", settings),
+    mutationFn: async (settings: Partial<AmbientSettings>) => {
+      // Save to localStorage
+      saveAmbientSettings(settings as any);
+      // Also try to save via API (for Cloudflare Functions)
+      try {
+        await apiRequest("POST", "/api/settings/ambient", settings);
+      } catch (error) {
+        // Ignore API errors, localStorage is the source of truth
+        console.warn('Failed to save settings via API, using localStorage only:', error);
+      }
+      return new Response(JSON.stringify(settings));
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/settings/ambient"] });
       toast({
@@ -69,14 +89,17 @@ export default function Dashboard() {
     }
   });
 
-  // Sync local state with fetched settings
+  // Sync local state with fetched settings or localStorage
   useEffect(() => {
-    if (ambientSettings) {
-      setIsAmbientEnabled(ambientSettings.enabled === "true");
-      setAmbientIntensity(ambientSettings.intensity || 0.5);
-      setAmbientVolume(ambientSettings.volume || 0.3);
-      setRespectNight(ambientSettings.respect_night === "true");
-      setDayOnly(ambientSettings.day_only === "true");
+    const stored = getAmbientSettings();
+    const settings = ambientSettings || stored;
+    
+    if (settings) {
+      setIsAmbientEnabled(settings.enabled === "true");
+      setAmbientIntensity(settings.intensity || 0.5);
+      setAmbientVolume(settings.volume || 0.3);
+      setRespectNight(settings.respect_night === "true");
+      setDayOnly(settings.day_only === "true");
     }
   }, [ambientSettings]);
 
@@ -148,7 +171,6 @@ export default function Dashboard() {
   const handleVolumeChange = (value: number[]) => {
     const newVolume = value[0];
     setAmbientVolume(newVolume);
-    setAmbientVolume(newVolume);
     
     if (isAmbientEnabled) {
       setTimeout(() => {
@@ -197,11 +219,21 @@ export default function Dashboard() {
 
   // Update ambient audio when solar wind data changes
   useEffect(() => {
-    if (isAmbientEnabled && currentData) {
+    if (isAmbientEnabled && !isMultiParameterEnabled && currentData) {
       const chordData = generateChordDataFromSolarWind(currentData);
       updateAmbient(chordData);
     }
-  }, [currentData, isAmbientEnabled]);
+  }, [currentData, isAmbientEnabled, isMultiParameterEnabled]);
+
+  // Update multi-parameter audio when comprehensive data changes
+  useEffect(() => {
+    if (isMultiParameterEnabled && comprehensiveData) {
+      // Always update - the engine handles starting/updating internally
+      updateMultiParameter(comprehensiveData);
+    } else if (!isMultiParameterEnabled) {
+      stopMultiParameter();
+    }
+  }, [comprehensiveData, isMultiParameterEnabled]);
 
   const isDataStreamActive = systemStatus?.find(s => s.component === 'data_stream')?.status === 'active';
 
@@ -242,7 +274,7 @@ export default function Dashboard() {
                 <i className="fas fa-satellite-dish text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-xl font-bold" data-testid="text-app-title">Solar Wind Chime</h1>
+                <h1 className="text-xl font-bold" data-testid="text-app-title">Heliochime</h1>
                 <p className="text-sm text-muted-foreground">Real-time Space Weather Sonification</p>
               </div>
             </div>
@@ -268,6 +300,11 @@ export default function Dashboard() {
       </nav>
 
       <main className="container mx-auto px-4 py-8">
+        {/* Comprehensive Space Weather Display */}
+        <div className="mb-8">
+          <ComprehensiveSpaceWeather />
+        </div>
+
         {/* Solar Wind Data Display */}
         <SolarWindDisplay 
           data={currentData} 
@@ -305,7 +342,9 @@ export default function Dashboard() {
                     Always-On Ambient Audio
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                    Continuous web audio reflecting current solar wind conditions
+                    {isMultiParameterEnabled 
+                      ? "Multi-parameter audio: All space weather data sources"
+                      : "Continuous web audio reflecting current solar wind conditions"}
                   </p>
                 </div>
                 <Switch
@@ -314,6 +353,46 @@ export default function Dashboard() {
                   onCheckedChange={handleAmbientToggle}
                   disabled={!currentData || ambientLoading}
                   data-testid="switch-ambient-toggle"
+                />
+              </div>
+
+              {/* Multi-Parameter Mode Toggle */}
+              <div className="flex items-center justify-between border-t pt-4">
+                <div className="space-y-1">
+                  <Label htmlFor="multi-param-toggle" className="text-base font-medium">
+                    Multi-Parameter Mode
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Use all space weather data sources (X-ray, protons, electrons, K-index, magnetometer) for rich layered audio
+                  </p>
+                </div>
+                <Switch
+                  id="multi-param-toggle"
+                  checked={isMultiParameterEnabled}
+                  onCheckedChange={(checked) => {
+                    setIsMultiParameterEnabled(checked);
+                    if (checked) {
+                      // Stop simple ambient mode
+                      if (isAmbientEnabled) {
+                        stopAmbient();
+                        setIsAmbientEnabled(false);
+                      }
+                      // Start multi-parameter mode
+                      if (comprehensiveData) {
+                        startMultiParameter(comprehensiveData, ambientVolume);
+                      }
+                    } else {
+                      // Stop multi-parameter mode
+                      stopMultiParameter();
+                      // Optionally start simple ambient mode
+                      if (isAmbientEnabled && currentData) {
+                        const chordData = generateChordDataFromSolarWind(currentData);
+                        startAmbient(chordData, ambientVolume);
+                      }
+                    }
+                  }}
+                  disabled={!comprehensiveData || ambientLoading}
+                  data-testid="switch-multi-param-toggle"
                 />
               </div>
 
@@ -343,7 +422,7 @@ export default function Dashboard() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-medium">
-                    Hardware Strike Intensity
+                    Audio Intensity
                   </Label>
                   <span className="text-sm text-muted-foreground" data-testid="text-ambient-intensity">
                     {Math.round(ambientIntensity * 10)} strikes/min
@@ -373,7 +452,7 @@ export default function Dashboard() {
                     data-testid="checkbox-respect-night"
                   />
                   <Label htmlFor="respect-night" className="text-sm">
-                    Respect night mode (reduce hardware activity after sunset)
+                    Respect night mode (reduce audio activity after sunset)
                   </Label>
                 </div>
 
@@ -385,7 +464,7 @@ export default function Dashboard() {
                     data-testid="checkbox-day-only"
                   />
                   <Label htmlFor="day-only" className="text-sm">
-                    Day only mode (disable hardware strikes at night)
+                    Day only mode (disable audio at night)
                   </Label>
                 </div>
               </div>
@@ -423,8 +502,7 @@ export default function Dashboard() {
                 <p>
                   <strong>Ambient Mode</strong> provides continuous audio that mirrors the solar wind in real-time. 
                   The web audio engine uses persistent oscillators to create a harmonic "bed" that changes 
-                  with velocity (pitch), density (filter), and magnetic field (vibrato). Hardware strikes 
-                  follow a Poisson distribution for power efficiency.
+                  with velocity (pitch), density (filter), and magnetic field (vibrato).
                 </p>
               </div>
             </CardContent>
@@ -434,61 +512,11 @@ export default function Dashboard() {
         {/* Data Dashboard */}
         <DataDashboard />
 
-        {/* Hardware Configuration */}
-        <HardwareConfig />
-
         {/* Mapping Algorithm */}
         <MappingAlgorithm />
 
         {/* System Status */}
         <SystemStatus />
-
-        {/* Patent Information */}
-        <section className="mb-8">
-          <Card>
-            <CardContent className="p-6">
-              <h2 className="text-2xl font-bold mb-4 flex items-center">
-                <i className="fas fa-copyright mr-3 text-warning" />
-                Patent Information
-              </h2>
-              
-              <div className="bg-warning/10 border border-warning/30 rounded-lg p-6">
-                <h3 className="text-lg font-semibold text-warning mb-3">
-                  "Resonant notification device converting real-time solar-wind parameters into multi-modal acoustic and optical cues"
-                </h3>
-                
-                <div className="space-y-4 text-sm">
-                  <div>
-                    <span className="font-medium">Status:</span>
-                    <Badge variant="outline" className="ml-2 text-warning border-warning">
-                      Provisional File Ready
-                    </Badge>
-                  </div>
-                  
-                  <div className="bg-secondary/30 rounded-lg p-4 font-mono text-xs">
-                    <div className="text-muted-foreground mb-2">Claim 1 (Draft):</div>
-                    <div className="leading-relaxed">
-                      "A space-weather alert device comprising:<br />
-                      (a) a receiver module configured to download at least solar-wind velocity, density, and interplanetary magnetic-field orientation;<br />
-                      (b) a mapper that translates each parameter into a distinct acoustic feature selected from the group consisting of pitch, decay envelope, and beat frequency; and<br />
-                      (c) at least one electromechanical striker configured to excite a resonator in accordance with the mapped acoustic feature, whereby a listener perceives the combined acoustic output as a single space-weather chord."
-                    </div>
-                  </div>
-                  
-                  <div className="text-muted-foreground">
-                    <div className="font-medium mb-2">Required Enablement Documentation:</div>
-                    <ul className="list-disc list-inside space-y-1 ml-4">
-                      <li>ESP-32 pinout configuration</li>
-                      <li>Three-line lookup table implementation</li>
-                      <li>Spectrograms for quiet, moderate, and storm conditions</li>
-                      <li>Wind-chime geometry specifications</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
       </main>
 
       {/* Footer */}
@@ -496,9 +524,9 @@ export default function Dashboard() {
         <div className="container mx-auto px-4 py-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
-              <h4 className="font-semibold mb-4">Solar Wind Chime</h4>
+              <h4 className="font-semibold mb-4">Heliochime</h4>
               <p className="text-sm text-muted-foreground">
-                Real-time space weather sonification for educational and research purposes.
+                Listen to the sounds of space! Real-time solar wind data transformed into beautiful ambient music.
               </p>
             </div>
             
@@ -514,16 +542,16 @@ export default function Dashboard() {
             <div>
               <h4 className="font-semibold mb-4">Technology</h4>
               <ul className="text-sm text-muted-foreground space-y-1">
-                <li>ESP32 microcontroller platform</li>
-                <li>Solar-powered operation</li>
+                <li>Web Audio API</li>
+                <li>Real-time data processing</li>
                 <li>MIDI-based audio synthesis</li>
-                <li>Magnetic chime actuators</li>
+                <li>Space weather sonification</li>
               </ul>
             </div>
           </div>
           
           <div className="border-t border-border pt-8 mt-8 text-center text-sm text-muted-foreground">
-            © 2024 Solar Wind Chime Project. Educational and research use.
+            © 2025 Heliochime. Made with ❤️ for space weather enthusiasts.
           </div>
         </div>
       </footer>

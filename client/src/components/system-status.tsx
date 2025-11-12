@@ -1,14 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 
 export function SystemStatus() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   // Fetch system status
   const { data: systemStatus, isLoading } = useQuery({
@@ -16,24 +11,6 @@ export function SystemStatus() {
     refetchInterval: 30000 // Refresh every 30 seconds
   });
 
-  // Test chimes mutation
-  const testChimesMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/system/test-chimes"),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/system/status"] });
-      toast({
-        title: "Chime Test Started",
-        description: "Testing all chimes - check hardware for audio feedback",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Test Failed",
-        description: error.message || "Failed to start chime test",
-        variant: "destructive",
-      });
-    }
-  });
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -56,9 +33,7 @@ export function SystemStatus() {
   const getComponentIcon = (component: string) => {
     switch (component) {
       case 'network': return 'fas fa-wifi text-2xl';
-      case 'data_stream': return 'fas fa-database text-2xl';
-      case 'power': return 'fas fa-battery-three-quarters text-2xl';
-      case 'chimes': return 'fas fa-bell text-2xl';
+      case 'data_stream': return 'fas fa-satellite-dish text-2xl';
       default: return 'fas fa-cog text-2xl';
     }
   };
@@ -67,8 +42,6 @@ export function SystemStatus() {
     switch (component) {
       case 'network': return 'Network';
       case 'data_stream': return 'Data Stream';
-      case 'power': return 'Power';
-      case 'chimes': return 'Chimes';
       default: return component;
     }
   };
@@ -78,13 +51,9 @@ export function SystemStatus() {
     
     switch (component) {
       case 'network':
-        return status === 'active' ? 'Connected' : 'Disconnected';
+        return status === 'active' ? 'Online' : 'Offline';
       case 'data_stream':
-        return status === 'active' ? 'Receiving' : 'Offline';
-      case 'power':
-        return status === 'active' ? '78% Solar' : 'Battery Low';
-      case 'chimes':
-        return status === 'active' ? '3 Active' : status === 'testing' ? 'Testing...' : 'Inactive';
+        return status === 'active' ? 'Connected to NOAA' : 'Offline';
       default:
         return status;
     }
@@ -96,8 +65,8 @@ export function SystemStatus() {
         <Card>
           <CardContent className="p-6">
             <Skeleton className="h-8 w-64 mb-6" />
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              {[1, 2, 3, 4].map(i => (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {[1, 2].map(i => (
                 <div key={i} className="bg-secondary/10 rounded-lg p-4 text-center">
                   <Skeleton className="h-8 w-8 mx-auto mb-2" />
                   <Skeleton className="h-4 w-16 mx-auto mb-1" />
@@ -121,15 +90,15 @@ export function SystemStatus() {
     return acc;
   }, {} as Record<string, any>) || {};
 
-  const expectedComponents = ['network', 'data_stream', 'power', 'chimes'];
+  const expectedComponents = ['network', 'data_stream'];
 
   return (
     <section className="mb-8">
       <Card>
         <CardContent className="p-6">
-          <h2 className="text-2xl font-bold mb-6">System Status & Control</h2>
+          <h2 className="text-2xl font-bold mb-6">System Status</h2>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             {expectedComponents.map(component => {
               const status = statusByComponent[component];
               const componentStatus = status?.status || 'unknown';
@@ -150,41 +119,6 @@ export function SystemStatus() {
             })}
           </div>
           
-          <div className="flex flex-wrap gap-4">
-            <Button 
-              onClick={() => testChimesMutation.mutate()}
-              disabled={testChimesMutation.isPending}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-              data-testid="button-test-all-chimes"
-            >
-              <i className={`fas ${testChimesMutation.isPending ? 'fa-spinner fa-spin' : 'fa-play-circle'} mr-2`} />
-              {testChimesMutation.isPending ? "Testing..." : "Test All Chimes"}
-            </Button>
-            
-            <Button 
-              variant="secondary"
-              data-testid="button-calibrate-system"
-            >
-              <i className="fas fa-cog mr-2" />
-              Calibrate System
-            </Button>
-            
-            <Button 
-              variant="outline"
-              data-testid="button-export-data"
-            >
-              <i className="fas fa-download mr-2" />
-              Export Data
-            </Button>
-            
-            <Button 
-              variant="ghost"
-              data-testid="button-documentation"
-            >
-              <i className="fas fa-book mr-2" />
-              Documentation
-            </Button>
-          </div>
 
           {/* Detailed Status Information */}
           {systemStatus && systemStatus.length > 0 && (

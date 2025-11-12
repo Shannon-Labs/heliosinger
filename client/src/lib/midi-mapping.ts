@@ -285,6 +285,53 @@ export function getHarmonicFrequencies(
 }
 
 /**
+ * Map K-index to pulse rate (Hz) for rhythmic modulation
+ */
+export function kIndexToPulseRate(kp: number): number {
+  if (kp <= 2) return 0.5; // Slow, gentle
+  if (kp <= 4) return 2.0; // Moderate
+  if (kp <= 6) return 4.0; // Fast, urgent
+  return 8.0; // Very fast, intense (K7-K9)
+}
+
+/**
+ * Map X-ray flux to brightness multiplier
+ */
+export function xrayFluxToBrightness(xrayFlux: number): number {
+  if (xrayFlux < 1e-8) return 1.0;
+  // Normalize to 0-1 range, then scale to 1.0-2.5x brightness
+  const normalized = Math.min(1.0, Math.max(0, (xrayFlux - 1e-8) / 1e-5));
+  return 1.0 + (normalized * 1.5);
+}
+
+/**
+ * Map proton flux to harmonic count
+ */
+export function protonFluxToHarmonicCount(protonFlux: number): number {
+  if (protonFlux < 1) return 0;
+  // Log scale: 1-10 → 1 harmonic, 10-100 → 2, 100-1000 → 3, etc.
+  const logFlux = Math.log10(protonFlux);
+  return Math.min(5, Math.max(0, Math.floor(logFlux)));
+}
+
+/**
+ * Map electron flux to high-frequency oscillator count
+ */
+export function electronFluxToHighFreqCount(electronFlux: number): number {
+  if (electronFlux < 1) return 0;
+  const logFlux = Math.log10(electronFlux);
+  return Math.min(3, Math.max(0, Math.floor(logFlux / 2)));
+}
+
+/**
+ * Map magnetometer H component to rumble intensity
+ */
+export function magnetometerToRumbleIntensity(hComponent: number, baseline: number = 20000): number {
+  const variation = Math.abs(hComponent - baseline);
+  return Math.min(1.0, variation / 1000); // Normalize to 0-1
+}
+
+/**
  * Generate ChordData from solar wind reading using default configuration
  * This is the main function used by the ambient mode implementation
  */
@@ -324,5 +371,38 @@ export function generateChordDataFromSolarWind(solarWindData: {
     detuneCents: chordMapping.detuneCents,
     condition: chordMapping.condition,
     density: solarWindData.density // Include density in the result
+  };
+}
+
+/**
+ * Generate comprehensive ChordData from all space weather parameters
+ */
+export function generateChordDataFromComprehensive(
+  data: import("@shared/schema").ComprehensiveSpaceWeatherData
+): import("@shared/schema").ChordData {
+  const baseChord = data.solar_wind 
+    ? generateChordDataFromSolarWind({
+        velocity: data.solar_wind.velocity,
+        density: data.solar_wind.density,
+        bz: data.solar_wind.bz
+      })
+    : {
+        baseNote: 'C4',
+        frequency: 261.63,
+        midiNote: 60,
+        decayTime: 2.0,
+        detuneCents: 0,
+        condition: 'quiet' as const,
+        density: 5.0
+      };
+
+  // Add multi-parameter data
+  return {
+    ...baseChord,
+    kIndex: data.k_index?.kp,
+    xrayFlux: data.xray_flux?.short_wave || data.xray_flux?.long_wave,
+    protonFlux: data.proton_flux?.flux_10mev,
+    electronFlux: data.electron_flux?.flux_2mev,
+    magnetometerH: data.magnetometer?.h_component
   };
 }

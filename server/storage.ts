@@ -3,8 +3,6 @@ import {
   type InsertSolarWindReading,
   type MappingConfig,
   type InsertMappingConfig,
-  type HardwareConfig,
-  type InsertHardwareConfig,
   type SystemStatus,
   type InsertSystemStatus,
   type AmbientSettings,
@@ -24,12 +22,6 @@ export interface IStorage {
   createMappingConfig(config: InsertMappingConfig): Promise<MappingConfig>;
   updateMappingConfig(id: string, config: Partial<MappingConfig>): Promise<MappingConfig | undefined>;
 
-  // Hardware Configuration
-  getHardwareConfigs(): Promise<HardwareConfig[]>;
-  getHardwareConfig(id: string): Promise<HardwareConfig | undefined>;
-  createHardwareConfig(config: InsertHardwareConfig): Promise<HardwareConfig>;
-  updateHardwareConfig(id: string, config: Partial<HardwareConfig>): Promise<HardwareConfig | undefined>;
-
   // System Status
   getSystemStatus(): Promise<SystemStatus[]>;
   updateSystemStatus(status: InsertSystemStatus): Promise<SystemStatus>;
@@ -42,14 +34,12 @@ export interface IStorage {
 export class MemStorage implements IStorage {
   private solarWindReadings: Map<string, SolarWindReading>;
   private mappingConfigs: Map<string, MappingConfig>;
-  private hardwareConfigs: Map<string, HardwareConfig>;
   private systemStatuses: Map<string, SystemStatus>;
   private ambientSettings: AmbientSettings | null = null;
 
   constructor() {
     this.solarWindReadings = new Map();
     this.mappingConfigs = new Map();
-    this.hardwareConfigs = new Map();
     this.systemStatuses = new Map();
     
     // Initialize with default configurations
@@ -75,40 +65,6 @@ export class MemStorage implements IStorage {
       is_active: "true"
     };
     this.mappingConfigs.set(defaultMapping.id, defaultMapping);
-
-    // Default hardware configuration
-    const defaultHardware: HardwareConfig = {
-      id: randomUUID(),
-      device_name: "Solar Wind Chime ESP32",
-      pin_velocity: 2,
-      pin_density: 4,
-      pin_bz: 5,
-      pin_status_led: 18,
-      pin_sda: 21,
-      pin_scl: 22,
-      wifi_ssid: null,
-      update_interval: 60,
-      firmware_version: "1.0.0",
-      created_at: new Date()
-    };
-    this.hardwareConfigs.set(defaultHardware.id, defaultHardware);
-
-    // Solar Lighthouse Prototype Configuration
-    const solarLighthouse: HardwareConfig = {
-      id: randomUUID(),
-      device_name: "Solar Lighthouse Prototype",
-      pin_velocity: 12,  // Solenoid 1 (E3 - 164.8 Hz)
-      pin_density: 13,   // Solenoid 2 (A3 - 220.0 Hz)  
-      pin_bz: 14,        // Solenoid 3 (C#4 - 277.2 Hz)
-      pin_status_led: 2, // ESP32-Pico-D4 heartbeat LED
-      pin_sda: 21,       // I2C for future sensors
-      pin_scl: 22,       // I2C for future sensors
-      wifi_ssid: null,
-      update_interval: 58, // Deep sleep 58s as per prototype spec
-      firmware_version: "2.0.0-lighthouse",
-      created_at: new Date()
-    };
-    this.hardwareConfigs.set(solarLighthouse.id, solarLighthouse);
 
     // Initialize system status
     const statusComponents = ['network', 'data_stream', 'power', 'chimes'];
@@ -202,44 +158,6 @@ export class MemStorage implements IStorage {
 
     const updated = { ...existing, ...updates };
     this.mappingConfigs.set(id, updated);
-    return updated;
-  }
-
-  // Hardware Configuration methods
-  async getHardwareConfigs(): Promise<HardwareConfig[]> {
-    return Array.from(this.hardwareConfigs.values());
-  }
-
-  async getHardwareConfig(id: string): Promise<HardwareConfig | undefined> {
-    return this.hardwareConfigs.get(id);
-  }
-
-  async createHardwareConfig(insertConfig: InsertHardwareConfig): Promise<HardwareConfig> {
-    const id = randomUUID();
-    const config: HardwareConfig = {
-      device_name: insertConfig.device_name,
-      pin_velocity: insertConfig.pin_velocity ?? 2,
-      pin_density: insertConfig.pin_density ?? 4,
-      pin_bz: insertConfig.pin_bz ?? 5,
-      pin_status_led: insertConfig.pin_status_led ?? 18,
-      pin_sda: insertConfig.pin_sda ?? 21,
-      pin_scl: insertConfig.pin_scl ?? 22,
-      wifi_ssid: insertConfig.wifi_ssid ?? null,
-      update_interval: insertConfig.update_interval ?? 60,
-      firmware_version: insertConfig.firmware_version ?? "1.0.0",
-      id,
-      created_at: new Date()
-    };
-    this.hardwareConfigs.set(id, config);
-    return config;
-  }
-
-  async updateHardwareConfig(id: string, updates: Partial<HardwareConfig>): Promise<HardwareConfig | undefined> {
-    const existing = this.hardwareConfigs.get(id);
-    if (!existing) return undefined;
-
-    const updated = { ...existing, ...updates };
-    this.hardwareConfigs.set(id, updated);
     return updated;
   }
 
