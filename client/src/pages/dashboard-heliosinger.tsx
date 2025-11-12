@@ -32,7 +32,7 @@ import {
 } from "@/lib/notifications";
 import { calculateRefetchInterval, getUpdateFrequencyDescription } from "@/lib/adaptive-refetch";
 import { getChordQuality, getChordSelectionExplanation } from "@/lib/chord-utils";
-import type { AmbientSettings, ComprehensiveSpaceWeatherData } from "@shared/schema";
+import type { AmbientSettings, ComprehensiveSpaceWeatherData, SolarWindReading, SystemStatus } from "@shared/schema";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -82,20 +82,20 @@ export default function Dashboard() {
   });
 
   // Fetch current solar wind data (uses adaptive interval)
-  const { data: currentData, isLoading: currentLoading, error: currentError } = useQuery<any>({
+  const { data: currentData, isLoading: currentLoading, error: currentError } = useQuery<SolarWindReading>({
     queryKey: ["/api/solar-wind/current"],
     refetchInterval: () => updateFrequency,
     retry: false
   });
 
   // Fetch system status (always 30 seconds)
-  const { data: systemStatus } = useQuery({
+  const { data: systemStatus } = useQuery<SystemStatus[]>({
     queryKey: ["/api/system/status"],
     refetchInterval: 30000
   });
 
   // Fetch ambient settings (uses adaptive interval)
-  const { data: ambientSettings, isLoading: ambientLoading } = useQuery({
+  const { data: ambientSettings, isLoading: ambientLoading } = useQuery<AmbientSettings>({
     queryKey: ["/api/settings/ambient"],
     refetchInterval: () => updateFrequency
   });
@@ -309,6 +309,9 @@ export default function Dashboard() {
                 src="/preview.webp" 
                 alt="Heliosinger Logo" 
                 className="w-10 h-10 rounded-lg object-contain"
+                loading="lazy"
+                decoding="async"
+                fetchPriority="low"
                 aria-hidden="true"
               />
               <h1 className="text-xl font-bold text-foreground" data-testid="text-app-title">
@@ -330,14 +333,14 @@ export default function Dashboard() {
                 data-testid="button-refresh-data"
                 className="hover:bg-primary/10"
               >
-                <i className={`fas fa-sync-alt ${fetchDataMutation.isPending ? 'animate-spin' : ''}`} />
+                <i className={`fas fa-sync-alt ${fetchDataMutation.isPending ? 'animate-spin' : ''}`} aria-hidden="true" />
               </Button>
             </div>
           </div>
         </div>
       </nav>
 
-      <main className="container mx-auto px-4 py-8">
+      <main id="main" className="container mx-auto px-4 py-8">
         {/* Hero Section */}
         <section className="mb-12 text-center">
           <div className="flex justify-center mb-6">
@@ -345,6 +348,9 @@ export default function Dashboard() {
               src="/preview.webp" 
               alt="Heliosinger Logo" 
               className="h-24 w-24 rounded-2xl object-contain shadow-lg"
+              loading="eager"
+              decoding="async"
+              fetchPriority="high"
             />
           </div>
           <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
@@ -371,7 +377,7 @@ export default function Dashboard() {
 
         {/* Heliosinger Mode Controls - Moved to Top */}
         <section className="mb-8">
-          <Card className="bg-gradient-to-br from-background via-primary/5 to-accent/5 border-primary/20 shadow-lg">
+          <Card className="bg-gradient-to-br from-background via-primary/5 to-accent/5 border-primary/20 shadow-lg" aria-busy={comprehensiveLoading}>
             <CardHeader>
               <CardTitle className="flex items-center">
                 <div className={`w-3 h-3 rounded-full mr-3 ${isHeliosingerEnabled ? 'bg-accent animate-pulse' : 'bg-muted'}`} />

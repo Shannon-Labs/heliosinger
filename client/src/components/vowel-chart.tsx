@@ -39,7 +39,7 @@ export function VowelChart({ currentVowel, currentVowelData }: VowelChartProps) 
     <Card className="bg-gradient-to-br from-background via-primary/5 to-accent/5 border-primary/20">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <i className="fas fa-chart-area text-primary" />
+          <i className="fas fa-chart-area text-primary" aria-hidden="true" />
           Vowel Chart
         </CardTitle>
       </CardHeader>
@@ -49,7 +49,13 @@ export function VowelChart({ currentVowel, currentVowelData }: VowelChartProps) 
           <div className="relative w-full max-w-full overflow-x-auto">
             <div className="mx-auto" style={{ width: chartWidth, height: chartHeight }}>
               {/* SVG Chart */}
-              <svg width={chartWidth} height={chartHeight} className="border border-border rounded-lg bg-background/50 w-full h-auto">
+              <svg 
+                width={chartWidth} 
+                height={chartHeight} 
+                role="img"
+                aria-label={`Vowel chart. Current vowel: ${currentVowelData ? currentVowelData.displayName : 'none'}`}
+                className="border border-border rounded-lg bg-background/50 w-full h-auto"
+              >
               {/* Grid lines */}
               <defs>
                 <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">

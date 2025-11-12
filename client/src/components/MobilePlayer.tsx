@@ -43,7 +43,7 @@ export function MobilePlayer({
                 className="flex-shrink-0"
                 aria-label={isPlaying ? 'Pause' : 'Play'}
               >
-                <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'} text-lg`} />
+                <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'} text-lg`} aria-hidden="true" />
               </Button>
               
               <div className="flex-1 min-w-0" onClick={() => setIsExpanded(true)}>
@@ -74,7 +74,7 @@ export function MobilePlayer({
                 onClick={() => setIsExpanded(true)}
                 aria-label="Expand player"
               >
-                <i className="fas fa-chevron-up" />
+                <i className="fas fa-chevron-up" aria-hidden="true" />
               </Button>
             </div>
           )}
@@ -90,7 +90,7 @@ export function MobilePlayer({
                   onClick={() => setIsExpanded(false)}
                   aria-label="Collapse player"
                 >
-                  <i className="fas fa-chevron-down" />
+                  <i className="fas fa-chevron-down" aria-hidden="true" />
                 </Button>
               </div>
 
@@ -118,7 +118,7 @@ export function MobilePlayer({
                     onClick={onToggle}
                     className="flex-1"
                   >
-                    <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'} mr-2`} />
+                    <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'} mr-2`} aria-hidden="true" />
                     {isPlaying ? 'Pause' : 'Play'}
                   </Button>
                 </div>
@@ -136,6 +136,7 @@ export function MobilePlayer({
                     min={0}
                     step={0.01}
                     className="w-full"
+                    aria-label="Volume"
                   />
                 </div>
 

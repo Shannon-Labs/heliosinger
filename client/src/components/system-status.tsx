@@ -61,7 +61,7 @@ export function SystemStatus() {
 
   if (isLoading) {
     return (
-      <section className="mb-8">
+      <section className="mb-8" aria-busy="true">
         <Card>
           <CardContent className="p-6">
             <Skeleton className="h-8 w-64 mb-6" />
@@ -109,7 +109,7 @@ export function SystemStatus() {
                   key={component}
                   className={`rounded-lg p-4 text-center ${getStatusColor(componentStatus)}`}
                 >
-                  <i className={`${getComponentIcon(component)} ${getStatusColor(componentStatus).includes('accent') ? 'text-accent' : getStatusColor(componentStatus).includes('warning') ? 'text-warning' : getStatusColor(componentStatus).includes('destructive') ? 'text-destructive' : 'text-muted-foreground'} mb-2`} />
+                  <i className={`${getComponentIcon(component)} ${getStatusColor(componentStatus).includes('accent') ? 'text-accent' : getStatusColor(componentStatus).includes('warning') ? 'text-warning' : getStatusColor(componentStatus).includes('destructive') ? 'text-destructive' : 'text-muted-foreground'} mb-2`} aria-hidden="true" />
                   <div className="text-sm font-medium">{getComponentLabel(component)}</div>
                   <div className="text-xs" data-testid={`text-${component}-status`}>
                     {componentDetails}
@@ -128,7 +128,7 @@ export function SystemStatus() {
                 {systemStatus.map(status => (
                   <div key={status.id} className="flex items-center justify-between p-3 bg-secondary/20 rounded-lg">
                     <div className="flex items-center space-x-3">
-                      <i className={getStatusIcon(status.status)} />
+                      <i className={getStatusIcon(status.status)} aria-hidden="true" />
                       <div>
                         <div className="font-medium">{getComponentLabel(status.component)}</div>
                         <div className="text-sm text-muted-foreground">{status.details}</div>

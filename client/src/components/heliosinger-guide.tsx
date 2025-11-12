@@ -7,7 +7,7 @@ export function HeliosingerGuide() {
       <CardHeader>
         <CardTitle className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-            <i className="fas fa-book-open text-primary text-lg" />
+            <i className="fas fa-book-open text-primary text-lg" aria-hidden="true" />
           </div>
           <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             How Heliosinger Works
@@ -19,7 +19,7 @@ export function HeliosingerGuide() {
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-              <i className="fas fa-music text-primary text-sm" />
+              <i className="fas fa-music text-primary text-sm" aria-hidden="true" />
             </div>
             <h3 className="font-semibold text-lg">Pitch (Solar Wind Velocity)</h3>
           </div>
@@ -38,29 +38,29 @@ export function HeliosingerGuide() {
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
-              <i className="fas fa-comments text-accent text-sm" />
+              <i className="fas fa-comments text-accent text-sm" aria-hidden="true" />
             </div>
-            <h3 className="font-semibold text-lg">Vowel (Density + Temperature)</h3>
+            <h3 className="font-semibold text-lg">Vowel (Density + Temperature + Bz + Velocity)</h3>
           </div>
           <p className="text-sm text-muted-foreground ml-10">
-            The sun's "vocal tract" shapes different vowels based on plasma conditions:
+            The sun's "vocal tract" shapes different vowels based on multiple plasma conditions:
           </p>
           <div className="ml-10 space-y-2 text-sm">
             <div className="flex items-start gap-2">
-              <Badge variant="secondary" className="mt-0.5">High Density</Badge>
-              <span className="text-muted-foreground">→ Closed vowels like <strong>"ee"</strong> and <strong>"i"</strong> (bright, tight)</span>
+              <Badge variant="secondary" className="mt-0.5">Density</Badge>
+              <span className="text-muted-foreground">→ Controls openness: High density = closed vowels (<strong>"ee"</strong>, <strong>"i"</strong>), Low density = open vowels (<strong>"ah"</strong>, <strong>"oh"</strong>)</span>
             </div>
             <div className="flex items-start gap-2">
-              <Badge variant="secondary" className="mt-0.5">Low Density</Badge>
-              <span className="text-muted-foreground">→ Open vowels like <strong>"ah"</strong> and <strong>"oh"</strong> (relaxed, spacious)</span>
+              <Badge variant="secondary" className="mt-0.5">Temperature + Velocity</Badge>
+              <span className="text-muted-foreground">→ Controls brightness: High temp/fast wind = bright vowels (<strong>"I"</strong>), Low temp/slow wind = dark vowels (<strong>"U"</strong>)</span>
             </div>
             <div className="flex items-start gap-2">
-              <Badge variant="secondary" className="mt-0.5">High Temperature</Badge>
-              <span className="text-muted-foreground">→ Bright vowels with higher formants (brilliant, energetic)</span>
+              <Badge variant="secondary" className="mt-0.5">Bz (Magnetic Field)</Badge>
+              <span className="text-muted-foreground">→ Controls frontness: Southward Bz = front vowels (<strong>"I"</strong>, <strong>"E"</strong>), Northward Bz = back vowels (<strong>"O"</strong>, <strong>"U"</strong>), Near zero = central (<strong>"A"</strong>)</span>
             </div>
             <div className="flex items-start gap-2">
-              <Badge variant="secondary" className="mt-0.5">Low Temperature</Badge>
-              <span className="text-muted-foreground">→ Dark vowels with lower formants (deep, resonant)</span>
+              <Badge variant="secondary" className="mt-0.5">Kp (Activity)</Badge>
+              <span className="text-muted-foreground">→ Adds variability: Higher Kp introduces more random vowel shifts during active periods</span>
             </div>
           </div>
         </div>
@@ -69,7 +69,7 @@ export function HeliosingerGuide() {
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
-              <i className="fas fa-volume-up text-purple-500 text-sm" />
+              <i className="fas fa-volume-up text-purple-500 text-sm" aria-hidden="true" />
             </div>
             <h3 className="font-semibold text-lg">Stereo Spread (Bz Magnetic Field)</h3>
           </div>
@@ -84,7 +84,7 @@ export function HeliosingerGuide() {
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center">
-              <i className="fas fa-wave-square text-orange-500 text-sm" />
+              <i className="fas fa-wave-square text-orange-500 text-sm" aria-hidden="true" />
             </div>
             <h3 className="font-semibold text-lg">Rhythm (K-index)</h3>
           </div>
@@ -104,7 +104,7 @@ export function HeliosingerGuide() {
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
-              <i className="fas fa-layer-group text-blue-500 text-sm" />
+              <i className="fas fa-layer-group text-blue-500 text-sm" aria-hidden="true" />
             </div>
             <h3 className="font-semibold text-lg">Harmonics (Density + Temperature)</h3>
           </div>
@@ -118,9 +118,9 @@ export function HeliosingerGuide() {
         <div className="space-y-3 pt-4 border-t border-border/50">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
-              <i className="fas fa-guitar text-purple-500 text-sm" />
+              <i className="fas fa-guitar text-purple-500 text-sm" aria-hidden="true" />
             </div>
-            <h3 className="font-semibold text-lg">Chord Harmony (Temperature + Density + Bz + Kp)</h3>
+            <h3 className="font-semibold text-lg">Chord Harmony (Temperature + Density + Bz + Condition)</h3>
           </div>
           <p className="text-sm text-muted-foreground ml-10">
             The sun's voice includes harmonic chords that reflect the complexity of space weather conditions:
@@ -138,9 +138,9 @@ export function HeliosingerGuide() {
               <div className="font-semibold text-accent">Physics Mapping</div>
               <p className="text-muted-foreground">
                 <strong>Temperature</strong> determines major/minor quality (≥100,000K = Major, &lt;100,000K = Minor). 
-                <strong>Density</strong> controls harmonic richness (low = simple triads, high = extended chords with 7ths/9ths). 
-                <strong>Bz (magnetic field)</strong> adds tensions—southward Bz creates dissonant intervals like minor 2nds or tritones. 
-                <strong>Kp (geomagnetic activity)</strong> influences chord complexity—higher Kp can add more notes or create more dramatic voicings.
+                <strong>Density</strong> controls harmonic richness (low &lt;5 p/cm³ = simple triads, medium 5-20 = 6th/7th chords, high &gt;20 = extended 9th chords). 
+                <strong>Bz (magnetic field)</strong> adds tensions—southward Bz (&lt;-5 nT) creates dissonant extensions like minor 7ths. 
+                <strong>Condition</strong> (quiet/storm/extreme) influences chord complexity—extreme conditions create dissonant intervals like minor 2nds or tritones.
               </p>
             </div>
             <div className="bg-destructive/5 rounded-lg p-3 space-y-2">

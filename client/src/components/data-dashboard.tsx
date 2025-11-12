@@ -68,7 +68,7 @@ export function DataDashboard() {
 
   if (historyLoading) {
     return (
-      <section className="mb-8">
+      <section className="mb-8" aria-busy="true">
         <h2 className="text-2xl font-bold mb-6">Real-time Data Dashboard</h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {[1, 2].map(i => (
@@ -141,7 +141,7 @@ export function DataDashboard() {
                 </div>
               ) : (
                 <div className="bg-secondary/30 rounded-lg p-4 text-center text-muted-foreground">
-                  <i className="fas fa-database text-2xl mb-2" />
+                  <i className="fas fa-database text-2xl mb-2" aria-hidden="true" />
                   <div>No recent data available</div>
                 </div>
               )}
@@ -181,7 +181,7 @@ export function DataDashboard() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-primary">Solar Wind Velocity</span>
                   <div className="flex items-center space-x-2">
-                    <i className={getTrendIcon(getParameterTrend(historyData, 'velocity'))} />
+                    <i className={getTrendIcon(getParameterTrend(historyData, 'velocity'))} aria-hidden="true" />
                     <span className="text-xs text-muted-foreground">
                       {getParameterTrend(historyData, 'velocity')}
                     </span>
@@ -215,7 +215,7 @@ export function DataDashboard() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-accent">Plasma Density</span>
                   <div className="flex items-center space-x-2">
-                    <i className={getTrendIcon(getParameterTrend(historyData, 'density'))} />
+                    <i className={getTrendIcon(getParameterTrend(historyData, 'density'))} aria-hidden="true" />
                     <span className="text-xs text-muted-foreground">
                       {getParameterTrend(historyData, 'density')}
                     </span>
@@ -249,7 +249,7 @@ export function DataDashboard() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium text-warning">Bz Magnetic Field</span>
                   <div className="flex items-center space-x-2">
-                    <i className={getTrendIcon(getParameterTrend(historyData, 'bz'))} />
+                    <i className={getTrendIcon(getParameterTrend(historyData, 'bz'))} aria-hidden="true" />
                     <span className="text-xs text-muted-foreground">
                       {getParameterTrend(historyData, 'bz')}
                     </span>

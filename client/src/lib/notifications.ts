@@ -178,7 +178,7 @@ export function sendNotification(
   try {
     const notification = new Notification(title, {
       body,
-      icon: '/favicon.ico', // Use site icon
+      icon: '/preview.webp', // Use site icon
       tag: tag || 'heliosinger-event', // Prevent duplicate notifications
       requireInteraction: false,
       silent: !settings.soundEnabled,

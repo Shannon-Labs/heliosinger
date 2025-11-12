@@ -58,6 +58,8 @@ export function MiniVowelChart({ currentVowel, currentVowelData }: MiniVowelChar
       <svg 
         width={chartWidth} 
         height={chartHeight} 
+        role="img"
+        aria-label={`Mini vowel chart showing current vowel ${displayData.displayName}`}
         className="border border-border rounded-lg bg-background/50"
       >
         {/* Grid pattern */}
