@@ -114,6 +114,47 @@ export function HeliosingerGuide() {
           </p>
         </div>
 
+        {/* Chord Harmony Section */}
+        <div className="space-y-3 pt-4 border-t border-border/50">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
+              <i className="fas fa-guitar text-purple-500 text-sm" />
+            </div>
+            <h3 className="font-semibold text-lg">Chord Harmony (Temperature + Density + Bz + Kp)</h3>
+          </div>
+          <p className="text-sm text-muted-foreground ml-10">
+            The sun's voice includes harmonic chords that reflect the complexity of space weather conditions:
+          </p>
+          <div className="ml-10 space-y-3 text-sm">
+            <div className="bg-primary/5 rounded-lg p-3 space-y-2">
+              <div className="font-semibold text-primary">Chord Construction</div>
+              <p className="text-muted-foreground">
+                Chords are built using Western tertian harmony principles—stacking intervals of thirds (major 3rd = 4 semitones, minor 3rd = 3 semitones). 
+                Simple triads contain three notes (root, 3rd, 5th), while extended chords add 7ths, 9ths, or other tensions. 
+                The interval ratios create consonant or dissonant sounds that reflect space weather conditions.
+              </p>
+            </div>
+            <div className="bg-accent/5 rounded-lg p-3 space-y-2">
+              <div className="font-semibold text-accent">Physics Mapping</div>
+              <p className="text-muted-foreground">
+                <strong>Temperature</strong> determines major/minor quality (≥100,000K = Major, &lt;100,000K = Minor). 
+                <strong>Density</strong> controls harmonic richness (low = simple triads, high = extended chords with 7ths/9ths). 
+                <strong>Bz (magnetic field)</strong> adds tensions—southward Bz creates dissonant intervals like minor 2nds or tritones. 
+                <strong>Kp (geomagnetic activity)</strong> influences chord complexity—higher Kp can add more notes or create more dramatic voicings.
+              </p>
+            </div>
+            <div className="bg-destructive/5 rounded-lg p-3 space-y-2">
+              <div className="font-semibold text-destructive">Musical Mapping</div>
+              <p className="text-muted-foreground italic">
+                These mappings are creative interpretations that translate physical parameters into musical language. 
+                The thresholds (like 100,000K for major/minor) are aesthetic choices designed to create meaningful musical variation. 
+                Major chords sound "resolved" and stable, reflecting quiet conditions, while minor chords create tension and drama for active periods. 
+                Extended chords and dissonances add complexity and urgency during storms and extreme events.
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div className="pt-4 border-t border-border/50">
           <p className="text-xs text-muted-foreground italic">
             Each moment in space weather creates a unique sung note. The sun literally sings its story in real-time.

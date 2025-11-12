@@ -41,11 +41,6 @@ export function VowelChart({ currentVowel, currentVowelData }: VowelChartProps) 
         <CardTitle className="flex items-center gap-2">
           <i className="fas fa-chart-area text-primary" />
           Vowel Chart
-          {currentVowelData && (
-            <Badge variant="default" className="ml-auto">
-              Current: "{currentVowelData.displayName}"
-            </Badge>
-          )}
         </CardTitle>
       </CardHeader>
       <CardContent>

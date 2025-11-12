@@ -18,7 +18,7 @@ import { EnhancedSpaceWeatherViz } from "@/components/EnhancedSpaceWeatherViz";
 import { SpaceWeatherExamples } from "@/components/SpaceWeatherExamples";
 import { EventsTicker } from "@/components/EventsTicker";
 import { MobilePlayer } from "@/components/MobilePlayer";
-import { MusicStaff } from "@/components/MusicStaff";
+import { MiniVowelChart } from "@/components/MiniVowelChart";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getAmbientSettings, saveAmbientSettings } from "@/lib/localStorage";
@@ -453,18 +453,35 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* Current Vowel Display */}
+              {/* Current Vowel Display with Mini Chart */}
               {heliosinger.currentData && (
                 <div className="bg-gradient-to-br from-primary/20 via-accent/10 to-primary/20 rounded-xl p-6 border-2 border-primary/30 shadow-lg">
-                  <div className="text-center space-y-3">
-                    <div className="text-7xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent drop-shadow-lg" data-testid="current-vowel">
-                      "{heliosinger.currentData.currentVowel.displayName}"
+                  <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 items-center">
+                    {/* Mini Vowel Chart */}
+                    <div className="flex justify-center md:justify-start">
+                      <MiniVowelChart
+                        currentVowel={heliosinger.currentData.vowelName}
+                        currentVowelData={{
+                          name: heliosinger.currentData.vowelName,
+                          displayName: heliosinger.currentData.currentVowel.displayName,
+                          openness: heliosinger.currentData.currentVowel.openness,
+                          frontness: heliosinger.currentData.currentVowel.frontness,
+                          brightness: heliosinger.currentData.currentVowel.brightness
+                        }}
+                      />
                     </div>
-                    <div className="text-lg font-medium text-muted-foreground" data-testid="vowel-description">
-                      {heliosinger.currentData.vowelDescription}
-                    </div>
-                    <div className="text-base italic font-semibold text-accent bg-accent/10 px-4 py-2 rounded-lg inline-block" data-testid="solar-mood">
-                      {heliosinger.currentData.solarMood}
+                    
+                    {/* Large Vowel Display */}
+                    <div className="text-center md:text-left space-y-3">
+                      <div className="text-7xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent drop-shadow-lg" data-testid="current-vowel">
+                        "{heliosinger.currentData.currentVowel.displayName}"
+                      </div>
+                      <div className="text-lg font-medium text-muted-foreground" data-testid="vowel-description">
+                        {heliosinger.currentData.vowelDescription}
+                      </div>
+                      <div className="text-base italic font-semibold text-accent bg-accent/10 px-4 py-2 rounded-lg inline-block" data-testid="solar-mood">
+                        {heliosinger.currentData.solarMood}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -497,6 +514,7 @@ export default function Dashboard() {
                 
                 {heliosinger.currentData && (
                   <>
+                    {/* Chord Information - Consolidated */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">Chord:</span>
@@ -523,79 +541,22 @@ export default function Dashboard() {
                           heliosinger.currentData.kIndex
                         );
                         return (
-                          <div className="text-xs space-y-1 pl-2 border-l-2 border-primary/30">
-                            <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-sm">
                               <span className="text-muted-foreground">Quality:</span>
                               <Badge variant="outline" className="text-xs font-semibold">
                                 {chordQuality.name} ({chordQuality.symbol})
                               </Badge>
                             </div>
-                            <p className="text-muted-foreground italic">
+                            <p className="text-xs text-muted-foreground italic text-right">
                               {chordQuality.description}
                             </p>
-                            <div className="text-xs space-y-2">
-                              <div>
-                                <strong className="text-primary">Construction:</strong>
-                                <p className="text-muted-foreground mt-1">
-                                  {chordQuality.construction}
-                                </p>
-                              </div>
-                              <div>
-                                <strong className="text-accent">Physics:</strong>
-                                <p className="text-muted-foreground mt-1">
-                                  {chordQuality.physicsMapping}
-                                </p>
-                              </div>
-                              <div>
-                                <strong className="text-destructive">Musical Mapping:</strong>
-                                <p className="text-muted-foreground mt-1 italic">
-                                  {chordQuality.aestheticMapping}
-                                </p>
-                              </div>
-                            </div>
                           </div>
                         );
                       })()}
                     </div>
                     
-                    {/* Music Staff Visualization */}
-                    <div className="mt-4">
-                      <MusicStaff 
-                        chordVoicing={heliosinger.currentData.chordVoicing}
-                        clef="treble"
-                      />
-                    </div>
-                    
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Note:</span>
-                      <span className="font-mono" data-testid="text-current-note">
-                        {heliosinger.currentData.baseNote} ({heliosinger.currentData.frequency.toFixed(1)} Hz)
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Harmonics:</span>
-                      <span className="font-mono" data-testid="text-harmonic-count">
-                        {heliosinger.currentData.harmonicCount} partials
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Reverb:</span>
-                      <span className="text-xs">
-                        {Math.round(heliosinger.currentData.reverbRoomSize * 100)}% room
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Delay:</span>
-                      <span className="text-xs">
-                        {(heliosinger.currentData.delayTime * 1000).toFixed(0)}ms ({Math.round(heliosinger.currentData.delayGain * 100)}%)
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">K-index:</span>
-                      <span className="font-mono" data-testid="text-k-index">
-                        {heliosinger.currentData.kIndex}
-                      </span>
-                    </div>
+                    {/* Condition Badge */}
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Condition:</span>
                       <Badge variant={heliosinger.currentData.condition === 'extreme' ? 'destructive' : 
