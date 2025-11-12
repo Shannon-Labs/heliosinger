@@ -16,29 +16,29 @@ import { ComprehensiveSpaceWeather } from "@/components/comprehensive-space-weat
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getAmbientSettings, saveAmbientSettings } from "@/lib/localStorage";
-import { useEnhancedAudio } from "@/hooks/use-enhanced-audio";
+import { useHeliosinger } from "@/hooks/use-heliosinger";
+import { startAmbient, updateAmbient, stopAmbient, setAmbientVolume } from "@/lib/audio-engine";
+import { generateChordDataFromSolarWind } from "@/lib/midi-mapping";
 import type { AmbientSettings, ComprehensiveSpaceWeatherData } from "@shared/schema";
 
 export default function Dashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Local state for ambient controls (must be declared before use)
-  const [isAmbientEnabled, setIsAmbientEnabled] = useState(false);
+  // Heliosinger hook - primary sonification system
+  const [isHeliosingerEnabled, setIsHeliosingerEnabled] = useState(false);
   const [ambientVolume, setAmbientVolume] = useState(0.3);
-  const [respectNight, setRespectNight] = useState(true);
-  const [dayOnly, setDayOnly] = useState(false);
   
-  // Enhanced audio hook - primary sonification system
-  const enhancedAudio = useEnhancedAudio({
-    enabled: isAmbientEnabled, // Enabled when ambient mode is on
+  const heliosinger = useHeliosinger({
+    enabled: isHeliosingerEnabled,
     volume: ambientVolume,
     onError: (error) => {
       toast({
-        title: "Audio Error",
+        title: "Heliosinger Error",
         description: error.message,
         variant: "destructive",
       });
+      setIsHeliosingerEnabled(false);
     }
   });
 
@@ -67,6 +67,11 @@ export default function Dashboard() {
     queryKey: ["/api/settings/ambient"],
     refetchInterval: 60000
   });
+
+  // Local state for legacy controls
+  const [isLegacyAmbientEnabled, setIsLegacyAmbientEnabled] = useState(false);
+  const [respectNight, setRespectNight] = useState(true);
+  const [dayOnly, setDayOnly] = useState(false);
 
   // Update ambient settings mutation (saves to localStorage for static site)
   const updateAmbientMutation = useMutation({
@@ -104,7 +109,6 @@ export default function Dashboard() {
     const settings = ambientSettings || stored;
     
     if (settings) {
-      setIsAmbientEnabled(settings.enabled === "true");
       setAmbientVolume(settings.volume || 0.3);
       setRespectNight(settings.respect_night === "true");
       setDayOnly(settings.day_only === "true");
@@ -140,11 +144,29 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  // Ambient mode event handlers - uses enhanced audio as default
-  // The useEnhancedAudio hook automatically starts/stops when enabled changes
-  const handleAmbientToggle = (enabled: boolean) => {
-    setIsAmbientEnabled(enabled);
+  // Heliosinger toggle
+  const handleHeliosingerToggle = async (enabled: boolean) => {
+    setIsHeliosingerEnabled(enabled);
     
+    if (enabled) {
+      try {
+        // Heliosinger hook handles starting automatically
+        console.log("🌞 Heliosinger mode enabled - the sun will sing");
+      } catch (error) {
+        console.error("Failed to start Heliosinger:", error);
+        toast({
+          title: "Heliosinger Failed",
+          description: "Could not start Heliosinger audio. Check browser audio permissions.",
+          variant: "destructive",
+        });
+        setIsHeliosingerEnabled(false);
+        return;
+      }
+    } else {
+      // Heliosinger hook handles stopping automatically
+      console.log("🌞 Heliosinger mode disabled");
+    }
+
     updateAmbientMutation.mutate({
       enabled: enabled ? "true" : "false",
       volume: ambientVolume,
@@ -156,43 +178,66 @@ export default function Dashboard() {
     });
   };
 
+  // Legacy ambient toggle (for backwards compatibility)
+  const handleLegacyAmbientToggle = async (enabled: boolean) => {
+    setIsLegacyAmbientEnabled(enabled);
+    
+    if (enabled && currentData) {
+      try {
+        // Stop Heliosinger if it's active
+        if (isHeliosingerEnabled) {
+          setIsHeliosingerEnabled(false);
+        }
+        
+        const chordData = generateChordDataFromSolarWind(currentData);
+        await startAmbient(chordData, ambientVolume, 0.8);
+        console.log("Started legacy ambient mode with current solar wind data");
+      } catch (error) {
+        console.error("Failed to start ambient mode:", error);
+        toast({
+          title: "Ambient Mode Failed",
+          description: "Could not start ambient audio. Check browser audio permissions.",
+          variant: "destructive",
+        });
+        setIsLegacyAmbientEnabled(false);
+        return;
+      }
+    } else {
+      stopAmbient();
+      console.log("Stopped ambient mode");
+    }
+  };
+
+  // Volume change handler
   const handleVolumeChange = (value: number[]) => {
     const newVolume = value[0];
     setAmbientVolume(newVolume);
     
-    // Update enhanced audio volume immediately
-    if (isAmbientEnabled && enhancedAudio.isActive) {
-      enhancedAudio.setVolume(newVolume);
+    if (isHeliosingerEnabled) {
+      heliosinger.setVolume(newVolume);
+    } else if (isLegacyAmbientEnabled) {
+      setAmbientVolume(newVolume);
     }
     
-    if (isAmbientEnabled) {
+    if (isHeliosingerEnabled || isLegacyAmbientEnabled) {
       setTimeout(() => {
         updateAmbientMutation.mutate({
           volume: newVolume,
-          enabled: "true",
+          enabled: (isHeliosingerEnabled || isLegacyAmbientEnabled) ? "true" : "false",
           respect_night: respectNight ? "true" : "false",
           day_only: dayOnly ? "true" : "false"
         });
-      }, 500); // Debounce settings updates
+      }, 500);
     }
   };
 
-  const handleSettingChange = (setting: string, value: boolean) => {
-    if (setting === 'respectNight') {
-      setRespectNight(value);
-    } else if (setting === 'dayOnly') {
-      setDayOnly(value);
+  // Update legacy ambient audio when solar wind data changes
+  useEffect(() => {
+    if (isLegacyAmbientEnabled && !isHeliosingerEnabled && currentData) {
+      const chordData = generateChordDataFromSolarWind(currentData);
+      updateAmbient(chordData);
     }
-    
-    updateAmbientMutation.mutate({
-      [setting === 'respectNight' ? 'respect_night' : 'day_only']: value ? "true" : "false",
-      enabled: isAmbientEnabled ? "true" : "false",
-      volume: ambientVolume
-    });
-  };
-
-  // Enhanced audio updates are handled automatically by the useEnhancedAudio hook
-  // when comprehensiveData changes, so no additional useEffect needed here
+  }, [currentData, isLegacyAmbientEnabled, isHeliosingerEnabled]);
 
   const isDataStreamActive = systemStatus?.find(s => s.component === 'data_stream')?.status === 'active';
 
@@ -230,11 +275,11 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center">
-                <i className="fas fa-satellite-dish text-primary-foreground" />
+                <i className="fas fa-sun text-primary-foreground" />
               </div>
               <div>
                 <h1 className="text-xl font-bold" data-testid="text-app-title">Heliosinger</h1>
-                <p className="text-sm text-muted-foreground">Real-time Space Weather Sonification</p>
+                <p className="text-sm text-muted-foreground">The Sun Sings Space Weather</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -281,15 +326,15 @@ export default function Dashboard() {
           />
         )}
 
-        {/* Ambient Mode Controls */}
+        {/* Heliosinger Mode Controls */}
         <section className="mb-8">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
-                <div className={`w-3 h-3 rounded-full mr-3 ${isAmbientEnabled ? 'bg-accent animate-pulse' : 'bg-muted'}`} />
-                Ambient Mode
-                <Badge variant={isAmbientEnabled ? "default" : "secondary"} className="ml-auto">
-                  {isAmbientEnabled ? "Active" : "Inactive"}
+                <div className={`w-3 h-3 rounded-full mr-3 ${isHeliosingerEnabled ? 'bg-accent animate-pulse' : 'bg-muted'}`} />
+                Heliosinger Mode
+                <Badge variant={isHeliosingerEnabled ? "default" : "secondary"} className="ml-auto">
+                  {isHeliosingerEnabled ? "Singing" : "Silent"}
                 </Badge>
               </CardTitle>
             </CardHeader>
@@ -297,19 +342,19 @@ export default function Dashboard() {
               {/* Master Toggle */}
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <Label htmlFor="ambient-toggle" className="text-base font-medium">
-                    Enhanced Ambient Audio
+                  <Label htmlFor="heliosinger-toggle" className="text-base font-medium">
+                    🌞 Let the Sun Sing
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                    Multi-layer sonification using all space weather parameters (solar wind, K-index, X-ray flux, and more)
+                    The sun literally sings space weather using vowel sounds and harmonic synthesis
                   </p>
                 </div>
                 <Switch
-                  id="ambient-toggle"
-                  checked={isAmbientEnabled}
-                  onCheckedChange={handleAmbientToggle}
-                  disabled={!currentData || ambientLoading}
-                  data-testid="switch-ambient-toggle"
+                  id="heliosinger-toggle"
+                  checked={isHeliosingerEnabled}
+                  onCheckedChange={handleHeliosingerToggle}
+                  disabled={!comprehensiveData || ambientLoading}
+                  data-testid="switch-heliosinger-toggle"
                 />
               </div>
 
@@ -317,7 +362,7 @@ export default function Dashboard() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-medium">
-                    Ambient Volume
+                    Solar Volume
                   </Label>
                   <span className="text-sm text-muted-foreground" data-testid="text-ambient-volume">
                     {Math.round(ambientVolume * 100)}%
@@ -330,66 +375,86 @@ export default function Dashboard() {
                   min={0}
                   step={0.01}
                   className="w-full"
-                  disabled={!isAmbientEnabled}
+                  disabled={!isHeliosingerEnabled && !isLegacyAmbientEnabled}
                   data-testid="slider-ambient-volume"
                 />
               </div>
 
-              {/* Advanced Settings */}
-              <div className="border-t border-border pt-4 space-y-4">
-                <h4 className="text-sm font-medium">Advanced Settings</h4>
-                
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="respect-night"
-                    checked={respectNight}
-                    onCheckedChange={(checked) => handleSettingChange('respectNight', checked as boolean)}
-                    data-testid="checkbox-respect-night"
-                  />
-                  <Label htmlFor="respect-night" className="text-sm">
-                    Respect night mode (reduce audio activity after sunset)
-                  </Label>
+              {/* Current Vowel Display */}
+              {heliosinger.currentData && (
+                <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-lg p-4 border border-primary/20">
+                  <div className="text-center space-y-2">
+                    <div className="text-6xl font-bold text-primary" data-testid="current-vowel">
+                      "{heliosinger.currentData.currentVowel.displayName}"
+                    </div>
+                    <div className="text-lg text-muted-foreground" data-testid="vowel-description">
+                      {heliosinger.currentData.vowelDescription}
+                    </div>
+                    <div className="text-sm italic text-accent" data-testid="solar-mood">
+                      {heliosinger.currentData.solarMood}
+                    </div>
+                  </div>
                 </div>
-
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="day-only"
-                    checked={dayOnly}
-                    onCheckedChange={(checked) => handleSettingChange('dayOnly', checked as boolean)}
-                    data-testid="checkbox-day-only"
-                  />
-                  <Label htmlFor="day-only" className="text-sm">
-                    Day only mode (disable audio at night)
-                  </Label>
-                </div>
-              </div>
+              )}
 
               {/* Status and Information */}
-              <div className="bg-secondary/20 rounded-lg p-4 space-y-2">
+              <div className="bg-secondary/20 rounded-lg p-4 space-y-3">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Audio Engine:</span>
-                  <span className={`font-medium ${isAmbientEnabled ? 'text-accent' : 'text-muted-foreground'}`} data-testid="text-audio-status">
-                    {isAmbientEnabled ? 'Enhanced Mode Active' : 'Stopped'}
+                  <span className="text-muted-foreground">Audio Status:</span>
+                  <span className={`font-medium ${isHeliosingerEnabled ? 'text-accent' : 'text-muted-foreground'}`} data-testid="text-audio-status">
+                    {isHeliosingerEnabled ? '🌞 Singing' : isLegacyAmbientEnabled ? 'Streaming' : 'Silent'}
                   </span>
                 </div>
-                {enhancedAudio.currentMapping && (
+                
+                {heliosinger.currentData && (
                   <>
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Base Note:</span>
-                      <span className="font-mono" data-testid="text-base-note">
-                        {enhancedAudio.currentMapping.baseNote} ({enhancedAudio.currentMapping.frequency.toFixed(1)} Hz)
+                      <span className="text-muted-foreground">Note:</span>
+                      <span className="font-mono" data-testid="text-current-note">
+                        {heliosinger.currentData.baseNote} ({heliosinger.currentData.frequency.toFixed(1)} Hz)
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Harmonics:</span>
-                      <span className="font-mono" data-testid="text-harmonics">
-                        {enhancedAudio.currentMapping.harmonicCount} partials
+                      <span className="font-mono" data-testid="text-harmonic-count">
+                        {heliosinger.currentData.harmonicCount} partials
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">K-index:</span>
+                      <span className="font-mono" data-testid="text-k-index">
+                        {heliosinger.currentData.kIndex}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Condition:</span>
-                      <span className="font-mono" data-testid="text-condition">
-                        {enhancedAudio.currentMapping.condition}
+                      <Badge variant={heliosinger.currentData.condition === 'extreme' ? 'destructive' : 
+                                     heliosinger.currentData.condition === 'storm' ? 'warning' : 'default'}
+                             className="text-xs">
+                        {heliosinger.currentData.condition}
+                      </Badge>
+                    </div>
+                  </>
+                )}
+                
+                {!heliosinger.currentData && currentData && (
+                  <>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Velocity:</span>
+                      <span className="font-mono" data-testid="text-velocity">
+                        {currentData.velocity.toFixed(1)} km/s
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Density:</span>
+                      <span className="font-mono" data-testid="text-density">
+                        {currentData.density.toFixed(1)} p/cm³
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Bz:</span>
+                      <span className="font-mono" data-testid="text-bz">
+                        {currentData.bz.toFixed(1)} nT
                       </span>
                     </div>
                   </>
@@ -399,10 +464,45 @@ export default function Dashboard() {
               {/* Help Text */}
               <div className="text-xs text-muted-foreground leading-relaxed">
                 <p>
-                  <strong>Enhanced Ambient Mode</strong> uses a scientifically-informed multi-layer sonification system that transforms 
-                  real-time space weather data into rich, evolving audio. The system maps solar wind velocity to pitch, density to harmonic 
-                  richness, temperature to spectral brightness, magnetic field to spatial audio, and K-index to rhythmic pulsing.
+                  <strong>Heliosinger</strong> makes the sun literally sing space weather. The sun's "voice" changes 
+                  based on solar wind conditions - density shapes the vowel, temperature affects brightness, 
+                  magnetic field creates stereo space, and geomagnetic activity adds rhythm. Each moment in space 
+                  weather creates a unique sung note.
                 </p>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        {/* Legacy Ambient Mode (Hidden by default, can be toggled for backwards compatibility) */}
+        <section className="mb-8">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <div className={`w-3 h-3 rounded-full mr-3 ${isLegacyAmbientEnabled ? 'bg-accent animate-pulse' : 'bg-muted'}`} />
+                Legacy Audio Modes
+                <Badge variant={isLegacyAmbientEnabled ? "default" : "secondary"} className="ml-auto">
+                  {isLegacyAmbientEnabled ? "Active" : "Inactive"}
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label htmlFor="legacy-ambient-toggle" className="text-base font-medium">
+                    Simple Ambient Mode (Legacy)
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Original ambient mode - continuous web audio reflecting solar wind conditions
+                  </p>
+                </div>
+                <Switch
+                  id="legacy-ambient-toggle"
+                  checked={isLegacyAmbientEnabled}
+                  onCheckedChange={handleLegacyAmbientToggle}
+                  disabled={!currentData || ambientLoading || isHeliosingerEnabled}
+                  data-testid="switch-legacy-ambient-toggle"
+                />
               </div>
             </CardContent>
           </Card>
@@ -425,7 +525,7 @@ export default function Dashboard() {
             <div>
               <h4 className="font-semibold mb-4">Heliosinger</h4>
               <p className="text-sm text-muted-foreground">
-                Real-time space weather data sonification.
+                The sun sings space weather in real-time.
               </p>
             </div>
             
@@ -441,16 +541,16 @@ export default function Dashboard() {
             <div>
               <h4 className="font-semibold mb-4">Technology</h4>
               <ul className="text-sm text-muted-foreground space-y-1">
-                <li>Web Audio API</li>
+                <li>Web Audio API with formant filters</li>
                 <li>Real-time data processing</li>
-                <li>MIDI-based audio synthesis</li>
+                <li>Vowel synthesis & harmonic series</li>
                 <li>Space weather sonification</li>
               </ul>
             </div>
           </div>
           
           <div className="border-t border-border pt-8 mt-8 text-center text-sm text-muted-foreground">
-            © 2025 Heliosinger
+            © 2025 Heliosinger - The Sun Sings Space Weather
           </div>
         </div>
       </footer>
