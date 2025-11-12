@@ -5,6 +5,14 @@
  * space weather events
  */
 
+import {
+  playKpThresholdSound,
+  playConditionChangeSound,
+  playVelocitySpikeSound,
+  playBzEventSound,
+  ensureSoundEffectsReady
+} from './sound-effects';
+
 export interface NotificationSettings {
   enabled: boolean;
   kpThresholds: boolean; // Notify on Kp threshold crossings
@@ -203,12 +211,67 @@ export function sendNotification(
 export interface SpaceWeatherChange {
   previousKp?: number;
   currentKp?: number;
-  previousCondition?: 'quiet' | 'moderate' | 'storm' | 'extreme';
-  currentCondition?: 'quiet' | 'moderate' | 'storm' | 'extreme';
+  previousCondition?: 'quiet' | 'moderate' | 'storm' | 'extreme' | 'super_extreme';
+  currentCondition?: 'quiet' | 'moderate' | 'storm' | 'extreme' | 'super_extreme';
   previousVelocity?: number;
   currentVelocity?: number;
   previousBz?: number;
   currentBz?: number;
+}
+
+/**
+ * Play sound effect for an event (if enabled)
+ */
+function playSoundEffectForEvent(
+  eventType: 'kp-threshold' | 'condition-change' | 'velocity-change' | 'bz-event',
+  change: SpaceWeatherChange,
+  threshold?: number
+): void {
+  const settings = getNotificationSettings();
+  if (!settings.soundEnabled) return;
+  
+  // Respect quiet hours
+  if (isQuietHours(settings)) {
+    console.log('🌙 Quiet hours - sound effect suppressed');
+    return;
+  }
+  
+  // Ensure audio context is ready
+  ensureSoundEffectsReady().catch(() => {
+    // Silently fail if audio can't be initialized
+  });
+  
+  try {
+    switch (eventType) {
+      case 'kp-threshold':
+        if (threshold !== undefined) {
+          playKpThresholdSound(threshold);
+        }
+        break;
+      
+      case 'condition-change':
+        if (change.previousCondition && change.currentCondition) {
+          playConditionChangeSound(change.previousCondition, change.currentCondition);
+        }
+        break;
+      
+      case 'velocity-change':
+        if (change.currentVelocity !== undefined && change.previousVelocity !== undefined) {
+          const velocityChange = change.currentVelocity - change.previousVelocity;
+          playVelocitySpikeSound(change.currentVelocity, velocityChange);
+        }
+        break;
+      
+      case 'bz-event':
+        if (change.currentBz !== undefined) {
+          playBzEventSound(change.currentBz);
+        }
+        break;
+    }
+  } catch (error) {
+    console.warn('Failed to play sound effect:', error);
+    // Don't throw - sound effects are non-critical
+  }
 }
 
 export function checkAndNotifyEvents(change: SpaceWeatherChange): void {
@@ -225,6 +288,8 @@ export function checkAndNotifyEvents(change: SpaceWeatherChange): void {
           `Kp index crossed ${threshold} - Current: ${change.currentKp.toFixed(1)}`,
           `kp-threshold-${threshold}`
         );
+        // Play sound effect
+        playSoundEffectForEvent('kp-threshold', change, threshold);
         return; // Only send one notification per check
       }
     }
@@ -239,7 +304,8 @@ export function checkAndNotifyEvents(change: SpaceWeatherChange): void {
       quiet: 'Quiet',
       moderate: 'Moderate',
       storm: 'Storm',
-      extreme: 'Extreme'
+      extreme: 'Extreme',
+      super_extreme: 'Super Extreme'
     };
     
     sendNotification(
@@ -247,6 +313,8 @@ export function checkAndNotifyEvents(change: SpaceWeatherChange): void {
       `Condition changed from ${conditionNames[change.previousCondition]} to ${conditionNames[change.currentCondition]}`,
       'condition-change'
     );
+    // Play sound effect
+    playSoundEffectForEvent('condition-change', change);
     return;
   }
   
@@ -261,6 +329,8 @@ export function checkAndNotifyEvents(change: SpaceWeatherChange): void {
         `Velocity changed by ${velocityChange.toFixed(1)} km/s (${change.previousVelocity.toFixed(1)} → ${change.currentVelocity.toFixed(1)} km/s)`,
         'velocity-change'
       );
+      // Play sound effect
+      playSoundEffectForEvent('velocity-change', change);
       return;
     }
   }
@@ -274,6 +344,8 @@ export function checkAndNotifyEvents(change: SpaceWeatherChange): void {
       `Bz magnetic field is strongly negative: ${change.currentBz.toFixed(1)} nT (potential for auroras)`,
       'bz-event'
     );
+    // Play sound effect
+    playSoundEffectForEvent('bz-event', change);
     return;
   }
 }
