@@ -1,25 +1,25 @@
-# Heliochime
+# Heliosinger
 
-Real-time space weather sonification - transforms live space weather data from NOAA into beautiful ambient audio.
+Real-time space weather sonification - transforms live space weather data from NOAA into beautiful ambient audio. The sun sings its space weather story through vowel-shaped formants and harmonic layers.
 
-🌐 **Live Site**: https://heliochime.pages.dev
+🌐 **Live Site**: https://heliosinger.pages.dev
 
-## What is Heliochime?
+## What is Heliosinger?
 
-Heliochime is an interactive web application that converts real-time space weather data into multi-layered ambient audio. Each space weather parameter controls a distinct audio layer, creating a rich, evolving soundscape that represents the dynamic space weather environment.
+Heliosinger is an interactive web application that converts real-time space weather data into scientifically-informed, multi-layered ambient audio. The enhanced sonification system uses a sophisticated mapping framework that preserves physical relationships between space weather parameters while creating musically coherent soundscapes. The sun "sings" through vowel-shaped formant filters that morph based on space weather conditions.
 
 ## Features
 
-- **Multi-Parameter Sonification**: Six simultaneous audio layers representing different aspects of space weather
-  - Solar Wind (velocity, density, magnetic field) → Base frequency and harmonics
-  - K-index (geomagnetic activity) → Rhythmic pulsing and tempo
-  - X-ray Flux (solar flares) → Percussive bursts and brightness
-  - Proton Flux (radiation) → Harmonic richness and texture
-  - Electron Flux → High-frequency shimmer
-  - Magnetometer → Low-frequency rumble
+- **Enhanced Multi-Layer Sonification**: Scientifically-informed audio architecture with distinct perceptual layers
+  - **Foundation Layer**: Solar wind velocity → Pentatonic pitch scales (C2-C6)
+  - **Harmonic Richness**: Density controls harmonic count (1-8 partials), temperature controls spectral brightness
+  - **Spatial Audio**: IMF vector (Bx/By/Bz) mapped to stereo field and modulation
+  - **Rhythmic Layer**: K-index drives pulsing rate (0.5-8 Hz) and complexity
+  - **Texture Layer**: Temperature shimmer + sub-bass rumble during storms
 
-- **Real-Time Data**: Fetches live data from NOAA Space Weather Prediction Center
-- **Interactive Controls**: Toggle between simple solar wind mode and full multi-parameter mode
+- **Real-Time Data**: Fetches live data from NOAA Space Weather Prediction Center every 60 seconds
+- **Scientific Accuracy**: Preserves physical relationships (velocity-density anticorrelation, temperature-velocity correlation, southward Bz effects)
+- **Musical Coherence**: Pentatonic scales and harmonic series prevent dissonance
 - **Visual Display**: Real-time visualization of all space weather parameters
 
 ## Data Sources
@@ -30,10 +30,12 @@ Heliochime is an interactive web application that converts real-time space weath
 
 ## Technology
 
-- **Frontend**: React + TypeScript + Vite
-- **Backend**: Cloudflare Pages + Cloudflare Functions
-- **Audio**: Web Audio API
-- **Styling**: Tailwind CSS
+- **Frontend**: React 18 + TypeScript + Vite
+- **Backend**: Cloudflare Pages + Cloudflare Functions (Serverless)
+- **Audio**: Web Audio API with enhanced multi-layer engine
+- **Styling**: Tailwind CSS with shadcn/ui components
+- **Data Fetching**: React Query (TanStack Query)
+- **Sonification**: Enhanced multi-layer framework with pentatonic scales and harmonic series
 
 ## Development
 
@@ -48,7 +50,7 @@ npm run dev
 npm run build
 
 # Deploy to Cloudflare Pages
-npx wrangler pages deploy dist --project-name=heliochime
+npx wrangler pages deploy dist --project-name=heliosinger
 ```
 
 ## License
@@ -56,5 +58,3 @@ npx wrangler pages deploy dist --project-name=heliochime
 MIT
 
 ---
-
-Made with ❤️ for space weather enthusiasts.

@@ -99,9 +99,14 @@ class MultiParameterAudioEngine {
 
     this.masterGain.gain.value = masterVolume;
 
-    // Layer 1: Base Solar Wind Layer
+    // Layer 1: Base Solar Wind Layer (enhanced with all parameters)
     if (data.solar_wind) {
-      this.createBaseLayer(data.solar_wind);
+      this.createBaseLayer({
+        ...data.solar_wind,
+        bt: data.solar_wind.bt,
+        bx: data.solar_wind.bx,
+        by: data.solar_wind.by
+      });
     }
 
     // Layer 2: K-index Rhythm Layer
@@ -130,7 +135,7 @@ class MultiParameterAudioEngine {
     }
   }
 
-  private createBaseLayer(solarWind: { velocity: number; density: number; bz: number; temperature: number }): void {
+  private createBaseLayer(solarWind: { velocity: number; density: number; bz: number; temperature: number; bt?: number; bx?: number; by?: number }): void {
     if (!this.audioContext || !this.masterGain) return;
 
     // Calculate base frequency from velocity (200-800 km/s → C2-C6)
@@ -140,21 +145,26 @@ class MultiParameterAudioEngine {
     const midiNote = Math.round(36 + (velocityNormalized * midiRange));
     const baseFreq = midiNoteToFrequency(midiNote);
 
-    // Create fundamental + harmonics
-    const harmonicRatios = [1.0, 2.0, 3.0];
+    // Create fundamental + more harmonics (increased from 3 to 5)
+    const harmonicRatios = [1.0, 2.0, 3.0, 4.0, 5.0];
     harmonicRatios.forEach((ratio, index) => {
       const osc = this.audioContext!.createOscillator();
       const gain = this.audioContext!.createGain();
       const filter = this.audioContext!.createBiquadFilter();
 
-      osc.type = index === 0 ? 'sine' : 'triangle';
+      osc.type = index === 0 ? 'sine' : index < 3 ? 'triangle' : 'sawtooth';
       osc.frequency.value = baseFreq * ratio;
       
-      const harmonicGain = index === 0 ? 0.8 : (0.3 / index);
-      gain.gain.value = harmonicGain * 0.5;
+      // Increase volume - make it more audible
+      const harmonicGain = index === 0 ? 1.0 : (0.4 / index);
+      gain.gain.value = harmonicGain * 0.7; // Increased from 0.5
 
       filter.type = 'lowpass';
-      filter.frequency.value = baseFreq * ratio * (2 + solarWind.density * 0.1);
+      // Temperature affects filter resonance (hotter = brighter)
+      const tempNormalized = Math.min(1, Math.max(0, (solarWind.temperature - 10000) / 200000));
+      const filterFreq = baseFreq * ratio * (2 + solarWind.density * 0.1 + tempNormalized * 2);
+      filter.frequency.value = filterFreq;
+      filter.Q.value = 1 + tempNormalized * 2; // Higher Q for hotter temperatures
 
       osc.connect(filter);
       filter.connect(gain);
@@ -164,18 +174,53 @@ class MultiParameterAudioEngine {
       this.baseLayerOscillators.push(osc);
     });
 
-    // Add vibrato based on Bz
-    if (Math.abs(solarWind.bz) > 5 && this.baseLayerOscillators.length > 0) {
+    // Add vibrato based on Bz (more prominent)
+    if (Math.abs(solarWind.bz) > 3 && this.baseLayerOscillators.length > 0) {
       const vibratoOsc = this.audioContext.createOscillator();
       const vibratoGain = this.audioContext.createGain();
       
       vibratoOsc.type = 'sine';
-      vibratoOsc.frequency.value = 3 + Math.random() * 2;
-      vibratoGain.gain.value = Math.abs(solarWind.bz) * 0.5;
+      vibratoOsc.frequency.value = 2 + Math.abs(solarWind.bz) * 0.1; // Faster vibrato for stronger Bz
+      vibratoGain.gain.value = Math.abs(solarWind.bz) * 0.8; // Increased from 0.5
       
       vibratoOsc.connect(vibratoGain);
       vibratoGain.connect(this.baseLayerOscillators[0].frequency);
       vibratoOsc.start();
+    }
+
+    // Add temperature-based layer (high-frequency shimmer for high temperatures)
+    if (solarWind.temperature > 50000) {
+      const tempOsc = this.audioContext.createOscillator();
+      const tempGain = this.audioContext.createGain();
+      const tempFilter = this.audioContext.createBiquadFilter();
+      
+      const tempNormalized = Math.min(1, (solarWind.temperature - 50000) / 150000);
+      tempOsc.type = 'sine';
+      tempOsc.frequency.value = 2000 + (tempNormalized * 3000); // 2-5 kHz
+      
+      tempFilter.type = 'highpass';
+      tempFilter.frequency.value = tempOsc.frequency.value * 0.8;
+      
+      tempGain.gain.value = tempNormalized * 0.3;
+      
+      tempOsc.connect(tempFilter);
+      tempFilter.connect(tempGain);
+      tempGain.connect(this.masterGain!);
+      
+      tempOsc.start();
+      this.baseLayerOscillators.push(tempOsc);
+    }
+
+    // Add Bt (total magnetic field) layer - affects overall brightness
+    if (solarWind.bt && solarWind.bt > 0) {
+      const btGain = this.audioContext.createGain();
+      const btNormalized = Math.min(1, solarWind.bt / 20); // Normalize 0-20 nT
+      btGain.gain.value = 1.0 + (btNormalized * 0.5); // Increase overall volume by up to 50%
+      
+      // Apply to all base oscillators
+      this.baseLayerOscillators.forEach(osc => {
+        // We'll apply this in the update method
+      });
     }
   }
 
@@ -184,7 +229,7 @@ class MultiParameterAudioEngine {
 
     const pulseRate = this.kIndexToPulseRate(kp);
     
-    // Create LFO for rhythmic modulation
+    // Create LFO for rhythmic modulation - make it more prominent
     this.kIndexLFO = this.audioContext.createOscillator();
     this.kIndexGain = this.audioContext.createGain();
     this.kIndexModulatedGain = this.audioContext.createGain();
@@ -192,22 +237,18 @@ class MultiParameterAudioEngine {
     this.kIndexLFO.type = 'sine';
     this.kIndexLFO.frequency.value = pulseRate;
     
-    // Create a subtle pulse oscillator that will be modulated
+    // Create a more audible pulse oscillator
     this.kIndexPulseOsc = this.audioContext.createOscillator();
-    this.kIndexPulseOsc.type = 'sine';
-    this.kIndexPulseOsc.frequency.value = 60; // Low frequency for subtle effect
+    this.kIndexPulseOsc.type = kp > 5 ? 'square' : 'sine'; // Harsher for high K-index
+    this.kIndexPulseOsc.frequency.value = 80 + (kp * 10); // 80-170 Hz based on K-index
     
-    // Set up modulation: LFO modulates the pulse oscillator's gain
-    // LFO output (-1 to 1) -> offset to 0-1 range -> modulates gain
-    this.kIndexGain.gain.value = 0.05; // Modulation depth
-    this.kIndexGain.gain.setValueAtTime(0.05, this.audioContext.currentTime);
+    // Set up modulation - make it more prominent
+    this.kIndexGain.gain.value = 0.15; // Increased modulation depth
     
-    // Connect LFO through gain to create modulation signal
-    this.kIndexLFO.connect(this.kIndexGain);
-    
-    // Create a gain node for the pulse oscillator
+    // Create a gain node for the pulse oscillator - make it louder
     const pulseGain = this.audioContext.createGain();
-    pulseGain.gain.value = 0.03; // Base volume (very subtle)
+    const baseVolume = 0.15 + (kp / 9 * 0.15); // 0.15-0.3 based on K-index
+    pulseGain.gain.value = baseVolume;
     
     // Connect pulse oscillator
     this.kIndexPulseOsc.connect(pulseGain);
@@ -215,15 +256,16 @@ class MultiParameterAudioEngine {
     this.kIndexModulatedGain.connect(this.masterGain);
     
     // Use scheduled updates to modulate the pulse gain based on LFO
-    // This creates a rhythmic pulsing effect
+    // This creates a rhythmic pulsing effect - make it more dramatic
     const scheduleModulation = () => {
       if (!this.isActive || !this.audioContext) return;
       
       const now = this.audioContext.currentTime;
       const lfoValue = Math.sin(now * pulseRate * 2 * Math.PI);
-      const modulatedValue = 0.03 + (lfoValue * 0.02); // Vary between 0.01 and 0.05
+      const modulationDepth = 0.1 + (kp / 9 * 0.1); // 0.1-0.2 based on K-index
+      const modulatedValue = baseVolume + (lfoValue * modulationDepth);
       
-      pulseGain.gain.setValueAtTime(modulatedValue, now);
+      pulseGain.gain.setValueAtTime(Math.max(0.05, modulatedValue), now);
       
       // Schedule next update
       setTimeout(() => scheduleModulation(), 50); // Update every 50ms

@@ -144,6 +144,9 @@ export interface ComprehensiveSpaceWeatherData {
     velocity: number;
     density: number;
     bz: number;
+    bx?: number;
+    by?: number;
+    bt?: number;
     temperature: number;
   } | null;
   k_index: KIndexData | null;

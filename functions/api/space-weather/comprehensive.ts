@@ -11,7 +11,7 @@ export async function onRequestOptions(): Promise<Response> {
 export async function onRequestGet(): Promise<Response> {
   try {
     // Fetch all data sources in parallel
-    const baseUrl = 'https://heliochime.pages.dev'; // Use relative paths in production
+    const baseUrl = 'https://heliosinger.pages.dev'; // Use relative paths in production
     const [solarWind, kIndex, xrayFlux, protonFlux, electronFlux, magnetometer] = await Promise.allSettled([
       fetch('https://services.swpc.noaa.gov/products/solar-wind/plasma-2-hour.json').then(r => r.json()),
       fetch('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json').then(r => r.json()),
@@ -34,20 +34,34 @@ export async function onRequestGet(): Promise<Response> {
       };
     }
 
-    // Get Bz from magnetometer data
+    // Get Bz, Bx, By, Bt from magnetometer data
     let bz = 0;
+    let bx = 0;
+    let by = 0;
+    let bt = 0;
     try {
       const magResponse = await fetch('https://services.swpc.noaa.gov/products/solar-wind/mag-2-hour.json');
       if (magResponse.ok) {
         const magData = await magResponse.json();
         const magRows = magData.slice(1);
         const latestMag = magRows[magRows.length - 1];
-        if (latestMag && latestMag.length >= 4) {
+        if (latestMag && latestMag.length >= 5) {
+          bx = parseFloat(latestMag[1]) || 0;
+          by = parseFloat(latestMag[2]) || 0;
           bz = parseFloat(latestMag[3]) || 0;
+          bt = parseFloat(latestMag[4]) || 0;
         }
       }
     } catch (e) {
-      // Continue without Bz
+      // Continue without magnetic field data
+    }
+    
+    // Add magnetic field data to solar wind
+    if (solarWindData) {
+      solarWindData.bz = bz;
+      solarWindData.bx = bx;
+      solarWindData.by = by;
+      solarWindData.bt = bt || Math.sqrt(bx * bx + by * by + bz * bz);
     }
 
     // Process K-index

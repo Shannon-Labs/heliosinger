@@ -5,7 +5,7 @@
 @tailwind utilities;
 
 :root {
-  /* Heliochime Dark Theme Colors */
+  /* Heliosinger Dark Theme Colors */
   --background: hsl(210, 30%, 8%);
   --foreground: hsl(210, 40%, 98%);
   --card: hsl(210, 30%, 12%);
