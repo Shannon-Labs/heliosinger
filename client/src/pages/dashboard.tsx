@@ -23,6 +23,12 @@ export default function Dashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
+  // Local state for ambient controls (must be declared before use)
+  const [isAmbientEnabled, setIsAmbientEnabled] = useState(false);
+  const [ambientVolume, setAmbientVolume] = useState(0.3);
+  const [respectNight, setRespectNight] = useState(true);
+  const [dayOnly, setDayOnly] = useState(false);
+  
   // Enhanced audio hook - primary sonification system
   const enhancedAudio = useEnhancedAudio({
     enabled: isAmbientEnabled, // Enabled when ambient mode is on
@@ -61,12 +67,6 @@ export default function Dashboard() {
     queryKey: ["/api/settings/ambient"],
     refetchInterval: 60000
   });
-
-  // Local state for ambient controls
-  const [isAmbientEnabled, setIsAmbientEnabled] = useState(false);
-  const [ambientVolume, setAmbientVolume] = useState(0.3);
-  const [respectNight, setRespectNight] = useState(true);
-  const [dayOnly, setDayOnly] = useState(false);
 
   // Update ambient settings mutation (saves to localStorage for static site)
   const updateAmbientMutation = useMutation({
