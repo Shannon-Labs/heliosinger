@@ -144,9 +144,11 @@ export default function Dashboard() {
 
   // Heliosinger toggle
   const handleHeliosingerToggle = async (enabled: boolean) => {
+    console.log(`[DEBUG] Heliosinger toggle called with enabled: ${enabled}`);
     setIsHeliosingerEnabled(enabled);
     
     if (enabled) {
+      console.log('[DEBUG] Starting Heliosinger');
       try {
         // Heliosinger hook handles starting automatically
         console.log("🌞 Heliosinger mode enabled - the sun will sing");
@@ -161,10 +163,12 @@ export default function Dashboard() {
         return;
       }
     } else {
+      console.log('[DEBUG] Stopping Heliosinger');
       // Heliosinger hook handles stopping automatically
       console.log("🌞 Heliosinger mode disabled");
     }
-
+    
+    console.log('[DEBUG] Updating ambient settings');
     updateAmbientMutation.mutate({
       enabled: enabled ? "true" : "false",
       volume: ambientVolume,
