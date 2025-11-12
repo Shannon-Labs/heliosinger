@@ -177,7 +177,7 @@ export default function Dashboard() {
     if (enabled) {
       try {
         // Heliosinger hook handles starting automatically
-        console.log("🌞 Heliosinger mode enabled - the sun will sing");
+        console.log("Heliosinger mode enabled - the sun will sing");
       } catch (error) {
         console.error("Failed to start Heliosinger:", error);
         toast({
@@ -190,7 +190,7 @@ export default function Dashboard() {
       }
     } else {
       // Heliosinger hook handles stopping automatically
-      console.log("🌞 Heliosinger mode disabled");
+      console.log("Heliosinger mode disabled");
     }
 
     updateAmbientMutation.mutate({
@@ -275,21 +275,9 @@ export default function Dashboard() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <img 
-                src="/preview.webp" 
-                alt="Heliosinger Logo" 
-                className="w-12 h-12 rounded-xl object-contain"
-                aria-hidden="true"
-              />
-              <div className="flex items-center gap-2">
-                <img 
-                  src="/name.webp" 
-                  alt="Heliosinger" 
-                  className="h-8 object-contain"
-                  data-testid="text-app-title"
-                />
-                <p className="text-xs text-muted-foreground font-medium hidden sm:block">The Sun Sings Space Weather</p>
-              </div>
+              <h1 className="text-xl font-bold text-foreground" data-testid="text-app-title">
+                Heliosinger: Listen to the Sun
+              </h1>
             </div>
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2 bg-gradient-to-r from-accent/20 to-primary/20 px-4 py-2 rounded-full border border-accent/30">
@@ -316,22 +304,15 @@ export default function Dashboard() {
       <main className="container mx-auto px-4 py-8">
         {/* Hero Section */}
         <section className="mb-12 text-center">
-          <div className="inline-block mb-4">
-            <img 
-              src="/preview.webp" 
-              alt="Heliosinger Logo" 
-              className="w-20 h-20 rounded-2xl object-contain mx-auto shadow-lg"
-            />
-          </div>
-          <div className="flex justify-center mb-3">
+          <div className="flex justify-center mb-6">
             <img 
               src="/name.webp" 
               alt="Heliosinger" 
-              className="h-16 object-contain"
+              className="h-20 object-contain"
             />
           </div>
           <p className="text-xl text-muted-foreground mb-2">
-            The Sun Sings Space Weather
+            Real-Time Space Weather Sonification
           </p>
           <p className="text-sm text-muted-foreground max-w-2xl mx-auto">
             Experience space weather as the sun literally sings its story in real-time. 
@@ -339,29 +320,7 @@ export default function Dashboard() {
           </p>
         </section>
 
-        {/* Comprehensive Space Weather Display */}
-        <div className="mb-8">
-          <ComprehensiveSpaceWeather />
-        </div>
-
-        {/* Enhanced Visualizations with Change Tracking */}
-        <div className="mb-8">
-          <EnhancedSpaceWeatherViz data={comprehensiveData} />
-        </div>
-
-        {/* Change Tracker */}
-        {comprehensiveData && (
-          <div className="mb-8">
-            <ChangeTracker data={comprehensiveData} enabled={true} />
-          </div>
-        )}
-
-        {/* Data Source Attribution */}
-        <div className="mb-8">
-          <DataSourceAttribution />
-        </div>
-
-        {/* Heliosinger Mode Controls */}
+        {/* Heliosinger Mode Controls - Moved to Top */}
         <section className="mb-8">
           <Card className="bg-gradient-to-br from-background via-primary/5 to-accent/5 border-primary/20 shadow-lg">
             <CardHeader>
@@ -378,7 +337,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label htmlFor="heliosinger-toggle" className="text-base font-medium">
-                    🌞 Let the Sun Sing
+                    Let the Sun Sing
                   </Label>
                   <p id="heliosinger-description" className="text-sm text-muted-foreground">
                     The sun literally sings space weather using vowel sounds and harmonic synthesis
@@ -425,7 +384,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label htmlFor="background-mode-toggle" className="text-sm font-medium">
-                    🌙 Background Mode
+                    Background Mode
                   </Label>
                   <p className="text-xs text-muted-foreground">
                     Continue playing when tab is hidden (like background music)
@@ -467,7 +426,7 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Audio Status:</span>
                   <span className={`font-medium ${isHeliosingerEnabled ? 'text-accent' : 'text-muted-foreground'}`} data-testid="text-audio-status">
-                    {isHeliosingerEnabled ? '🌞 Singing' : 'Silent'}
+                    {isHeliosingerEnabled ? 'Singing' : 'Silent'}
                   </span>
                 </div>
                 
@@ -475,7 +434,7 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Background Mode:</span>
                     <Badge variant="default" className="text-xs">
-                      🌙 Active
+                      Active
                     </Badge>
                   </div>
                 )}
@@ -572,6 +531,28 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </section>
+
+        {/* Comprehensive Space Weather Display */}
+        <div className="mb-8">
+          <ComprehensiveSpaceWeather />
+        </div>
+
+        {/* Enhanced Visualizations with Change Tracking */}
+        <div className="mb-8">
+          <EnhancedSpaceWeatherViz data={comprehensiveData} />
+        </div>
+
+        {/* Change Tracker */}
+        {comprehensiveData && (
+          <div className="mb-8">
+            <ChangeTracker data={comprehensiveData} enabled={true} />
+          </div>
+        )}
+
+        {/* Data Source Attribution */}
+        <div className="mb-8">
+          <DataSourceAttribution />
+        </div>
 
         {/* Notification Settings */}
         {isNotificationSupported() && (
