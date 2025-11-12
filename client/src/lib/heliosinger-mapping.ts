@@ -55,8 +55,7 @@ export interface HeliosingerData extends ChordData {
 // ============================================================================
 
 export function mapSpaceWeatherToHeliosinger(
-  data: ComprehensiveSpaceWeatherData,
-  gentleMode: boolean = false
+  data: ComprehensiveSpaceWeatherData
 ): HeliosingerData {
   const solarWind = data.solar_wind;
   const kIndex = data.k_index;
@@ -113,7 +112,7 @@ export function mapSpaceWeatherToHeliosinger(
     currentVowel,
     vowelName: currentVowel.name,
     vowelDescription: currentVowel.description,
-    solarMood: getSolarMoodDescription(currentVowel, condition, gentleMode),
+    solarMood: getSolarMoodDescription(currentVowel, condition),
     formantFilters,
     
     // Enhanced spatial parameters
@@ -404,7 +403,7 @@ function determineSpaceWeatherCondition(
 // ============================================================================
 
 export function createDefaultHeliosingerMapping(): HeliosingerData {
-  const defaultVowel = VOWEL_FORMANTS['ah'];
+  const defaultVowel = VOWEL_FORMANTS['A'];
   
   return {
     baseNote: 'C2',
@@ -416,7 +415,7 @@ export function createDefaultHeliosingerMapping(): HeliosingerData {
     density: 5,
     kIndex: 1,
     currentVowel: defaultVowel,
-    vowelName: 'ah',
+    vowelName: 'A',
     vowelDescription: defaultVowel.description,
     solarMood: 'The sun breathes a calm, open tone',
     formantFilters: getFormantFiltersForVowel(defaultVowel, 65.41),

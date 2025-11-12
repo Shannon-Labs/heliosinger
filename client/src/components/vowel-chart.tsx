@@ -123,15 +123,24 @@ export function VowelChart({ currentVowel, currentVowelData }: VowelChartProps) 
                     {/* Vowel label */}
                     <text
                       x={pos.x}
-                      y={pos.y + (isCurrent ? -18 : -12)}
+                      y={pos.y + (isCurrent ? -20 : -14)}
                       textAnchor="middle"
                       className={`text-xs font-bold ${isCurrent ? "fill-foreground" : "fill-muted-foreground"}`}
                     >
                       {vowel.displayName}
                     </text>
+                    {/* IPA symbol */}
+                    <text
+                      x={pos.x}
+                      y={pos.y + (isCurrent ? -6 : -2)}
+                      textAnchor="middle"
+                      className={`text-[10px] ${isCurrent ? "fill-foreground/80" : "fill-muted-foreground/70"}`}
+                    >
+                      {vowel.ipaSymbol}
+                    </text>
                     {/* Formant info on hover */}
                     <title>
-                      {vowel.displayName}: F1={vowel.formants[0]}Hz, F2={vowel.formants[1]}Hz
+                      {vowel.displayName} {vowel.ipaSymbol}: F1={vowel.formants[0]}Hz, F2={vowel.formants[1]}Hz
                       {"\n"}
                       Openness: {Math.round(vowel.openness * 100)}%, Frontness: {Math.round(vowel.frontness * 100)}%
                     </title>
@@ -170,16 +179,19 @@ export function VowelChart({ currentVowel, currentVowelData }: VowelChartProps) 
               <div className="font-semibold mb-2">Brightness Scale</div>
               <div className="flex gap-1 items-center">
                 <div className="w-4 h-4 rounded" style={{ backgroundColor: getBrightnessColor(0) }} />
-                <span className="text-muted-foreground">Dark (oo)</span>
+                <span className="text-muted-foreground">Dark (U)</span>
                 <div className="flex-1" />
                 <div className="w-4 h-4 rounded" style={{ backgroundColor: getBrightnessColor(1) }} />
-                <span className="text-muted-foreground">Bright (ee)</span>
+                <span className="text-muted-foreground">Bright (I)</span>
               </div>
             </div>
             <div>
               <div className="font-semibold mb-2">Current Vowel Info</div>
               {currentVowelData ? (
                 <div className="space-y-1 text-muted-foreground">
+                  <div className="font-semibold text-foreground">
+                    {currentVowelData.displayName} {VOWEL_FORMANTS[currentVowelData.name].ipaSymbol}
+                  </div>
                   <div>Openness: {Math.round(currentVowelData.openness * 100)}%</div>
                   <div>Frontness: {Math.round(currentVowelData.frontness * 100)}%</div>
                   <div>Brightness: {Math.round(currentVowelData.brightness * 100)}%</div>

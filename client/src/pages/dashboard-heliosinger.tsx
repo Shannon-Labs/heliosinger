@@ -68,7 +68,6 @@ export default function Dashboard() {
   });
 
   // Local state for controls
-  const [gentleMode, setGentleMode] = useState(false);
 
   // Update ambient settings mutation (saves to localStorage for static site)
   const updateAmbientMutation = useMutation({
@@ -107,7 +106,6 @@ export default function Dashboard() {
     
     if (settings && typeof settings === 'object') {
       setAmbientVolume((settings as any).volume || 0.3);
-      setGentleMode((settings as any).gentle_mode === "true");
     }
   }, [ambientSettings]);
 
@@ -335,33 +333,6 @@ export default function Dashboard() {
                   className="w-full"
                   disabled={!isHeliosingerEnabled}
                   data-testid="slider-ambient-volume"
-                />
-              </div>
-
-              {/* Gentle Mode Toggle */}
-              <div className="flex items-center justify-between">
-                <div className="space-y-1">
-                  <Label htmlFor="gentle-mode-toggle" className="text-sm font-medium">
-                    🌸 Gentle Mode
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Use gentler, less intense descriptions (less "terrifying")
-                  </p>
-                </div>
-                <Switch
-                  id="gentle-mode-toggle"
-                  checked={gentleMode}
-                  onCheckedChange={(checked) => {
-                    setGentleMode(checked);
-                    updateAmbientMutation.mutate({
-                      gentle_mode: checked ? "true" : "false"
-                    });
-                    // Force update Heliosinger if it's active
-                    if (isHeliosingerEnabled && heliosinger.currentData) {
-                      queryClient.invalidateQueries({ queryKey: ['/api/space-weather/comprehensive'] });
-                    }
-                  }}
-                  data-testid="switch-gentle-mode"
                 />
               </div>
 

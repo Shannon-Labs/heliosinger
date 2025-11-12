@@ -8,93 +8,81 @@
  * their formant frequencies (peaks in the frequency spectrum).
  */
 
-export type VowelName = 'ee' | 'i' | 'eh' | 'ah' | 'oh' | 'oo' | 'uh';
+export type VowelName = 'I' | 'E' | 'A' | 'O' | 'U';
 
 export interface VowelFormants {
   name: VowelName;
   displayName: string;
+  ipaSymbol: string;
   description: string;
-  formants: number[]; // Frequencies in Hz (F1, F2, F3, optionally F4)
+  formants: number[]; // Frequencies in Hz (F1, F2, F3, F4) - IPA standard values
   bandwidths: number[]; // Bandwidths for each formant
-  openness: number; // 0-1, how open the vowel is (ah=1.0, ee=0.0)
+  openness: number; // 0-1, how open the vowel is (A=1.0, I=0.0)
   brightness: number; // 0-1, spectral brightness
-  frontness: number; // 0-1, how front the vowel is (ee=1.0, oo=0.0)
+  frontness: number; // 0-1, how front the vowel is (I=1.0, U=0.0)
 }
 
 /**
- * Vowel formant database (approximate values for adult male voice)
- * Based on speech synthesis research
+ * Vowel formant database - IPA standard vowels
+ * Formant frequencies based on IPA standards for adult male voice
+ * F1 (height): Low F1 = high tongue, High F1 = low tongue
+ * F2 (frontness): High F2 = front tongue, Low F2 = back tongue
  */
 export const VOWEL_FORMANTS: Record<VowelName, VowelFormants> = {
-  'ee': {
-    name: 'ee',
-    displayName: 'ee',
-    description: 'Bright, closed vowel (as in "see")',
-    formants: [270, 2300, 3000, 3400],
+  'I': {
+    name: 'I',
+    displayName: 'I',
+    ipaSymbol: '/i/',
+    description: 'Close front unrounded (as in "see")',
+    formants: [270, 2290, 3010, 3400], // IPA standard: low F1, high F2
     bandwidths: [60, 100, 120, 150],
     openness: 0.0,
     brightness: 1.0,
     frontness: 1.0
   },
-  'i': {
-    name: 'i',
-    displayName: 'i',
-    description: 'Bright, closed vowel (as in "sit")',
-    formants: [390, 2000, 2600, 3100],
-    bandwidths: [60, 90, 100, 120],
-    openness: 0.1,
-    brightness: 0.9,
-    frontness: 0.9
-  },
-  'eh': {
-    name: 'eh',
-    displayName: 'eh',
-    description: 'Mid vowel (as in "bed")',
-    formants: [530, 1850, 2500, 3000],
+  'E': {
+    name: 'E',
+    displayName: 'E',
+    ipaSymbol: '/e/',
+    description: 'Close-mid front unrounded (as in "bed")',
+    formants: [530, 1840, 2480, 3000], // IPA standard: mid F1, high F2
     bandwidths: [70, 100, 120, 140],
     openness: 0.4,
-    brightness: 0.6,
-    frontness: 0.7
+    brightness: 0.7,
+    frontness: 0.8
   },
-  'ah': {
-    name: 'ah',
-    displayName: 'ah',
-    description: 'Open vowel (as in "father")',
-    formants: [730, 1100, 2700, 3300],
+  'A': {
+    name: 'A',
+    displayName: 'A',
+    ipaSymbol: '/a/',
+    description: 'Open front unrounded (as in "father")',
+    formants: [730, 1090, 2440, 3300], // IPA standard: high F1, mid F2
     bandwidths: [80, 90, 130, 150],
     openness: 1.0,
-    brightness: 0.4,
+    brightness: 0.5,
     frontness: 0.5
   },
-  'oh': {
-    name: 'oh',
-    displayName: 'oh',
-    description: 'Rounded mid vowel (as in "go")',
-    formants: [500, 900, 2700, 3300],
+  'O': {
+    name: 'O',
+    displayName: 'O',
+    ipaSymbol: '/o/',
+    description: 'Close-mid back rounded (as in "go")',
+    formants: [570, 840, 2410, 3300], // IPA standard: mid F1, low F2
     bandwidths: [70, 80, 120, 150],
     openness: 0.6,
-    brightness: 0.5,
-    frontness: 0.3
+    brightness: 0.4,
+    frontness: 0.2
   },
-  'oo': {
-    name: 'oo',
-    displayName: 'oo',
-    description: 'Dark, rounded vowel (as in "boot")',
-    formants: [300, 900, 2300, 3100],
+  'U': {
+    name: 'U',
+    displayName: 'U',
+    ipaSymbol: '/u/',
+    description: 'Close back rounded (as in "boot")',
+    formants: [300, 870, 2240, 3100], // IPA standard: low F1, low F2
     bandwidths: [60, 80, 100, 130],
     openness: 0.2,
     brightness: 0.2,
     frontness: 0.0
-  },
-  'uh': {
-    name: 'uh',
-    displayName: 'uh',
-    description: 'Neutral vowel (as in "but")',
-    formants: [600, 1200, 2600, 3200],
-    bandwidths: [75, 95, 120, 140],
-    openness: 0.5,
-    brightness: 0.5,
-    frontness: 0.5
   }
 };
 
@@ -118,17 +106,17 @@ export function getVowelFromSpaceWeather(
   // Density → openness (inverse: high density = closed vowel)
   const targetOpenness = 1 - normalizedDensity;
   
-  // Temperature → brightness (hot = bright vowel like 'ee')
+  // Temperature → brightness (hot = bright vowel like 'I')
   const targetBrightness = normalizedTemp;
   
-  // Bz → frontness (southward = front vowel like 'ee', northward = back like 'oo')
+  // Bz → frontness (southward = front vowel like 'I', northward = back like 'U')
   const targetFrontness = (normalizedBz < 0) ? 1 - Math.abs(normalizedBz) : 0.5 - (normalizedBz * 0.5);
   
   // Kp → vowel stability (high activity = more vowel movement)
   const vowelStability = 1 - (normalizedKp * 0.5);
 
   // Find the vowel that best matches these characteristics
-  let bestVowel: VowelFormants = VOWEL_FORMANTS['ah']; // default
+  let bestVowel: VowelFormants = VOWEL_FORMANTS['A']; // default
   let bestScore = -1;
 
   Object.values(VOWEL_FORMANTS).forEach(vowel => {
@@ -149,7 +137,7 @@ export function getVowelFromSpaceWeather(
   // During high activity, add some randomness to vowel for "animated" effect
   if (normalizedKp > 0.7 && Math.random() < 0.1) {
     // Occasionally shift vowel during storms for dramatic effect
-    const vowelNames: VowelName[] = ['ee', 'i', 'eh', 'ah', 'oh', 'oo', 'uh'];
+    const vowelNames: VowelName[] = ['I', 'E', 'A', 'O', 'U'];
     const randomVowel = vowelNames[Math.floor(Math.random() * vowelNames.length)];
     return VOWEL_FORMANTS[randomVowel];
   }
@@ -159,86 +147,40 @@ export function getVowelFromSpaceWeather(
 
 /**
  * Get a poetic description of what the sun is "saying"
- * @param gentleMode - If true, uses gentler, less intense descriptions
+ * Balanced descriptions that are engaging but not terrifying
  */
 export function getSolarMoodDescription(
   vowel: VowelFormants,
-  condition: 'quiet' | 'moderate' | 'storm' | 'extreme',
-  gentleMode: boolean = false
+  condition: 'quiet' | 'moderate' | 'storm' | 'extreme'
 ): string {
-  const moodDescriptions = gentleMode ? {
+  const moodDescriptions = {
     'quiet': {
-      'ee': 'The sun softly sings a bright, clear note',
-      'i': 'The sun gently hums a light melody',
-      'eh': 'The sun peacefully resonates',
-      'ah': 'The sun breathes a calm, open tone',
-      'oh': 'The sun softly intones',
-      'oo': 'The sun quietly rumbles in the distance',
-      'uh': 'The sun murmurs steadily'
+      'I': 'The sun softly sings a bright, clear note',
+      'E': 'The sun peacefully resonates with gentle warmth',
+      'A': 'The sun breathes a calm, open tone',
+      'O': 'The sun softly intones with rounded warmth',
+      'U': 'The sun quietly rumbles in the distance'
     },
     'moderate': {
-      'ee': 'The sun sings brightly with growing energy',
-      'i': 'The sun\'s voice lifts with animation',
-      'eh': 'The sun resonates with moderate strength',
-      'ah': 'The sun calls out with open clarity',
-      'oh': 'The sun proclaims with rounded tones',
-      'oo': 'The sun intones with deep resonance',
-      'uh': 'The sun speaks with steady voice'
+      'I': 'The sun sings brightly with growing energy',
+      'E': 'The sun resonates with moderate strength',
+      'A': 'The sun calls out with open clarity',
+      'O': 'The sun proclaims with rounded tones',
+      'U': 'The sun intones with deep resonance'
     },
     'storm': {
-      'ee': 'The sun sings with brilliant intensity',
-      'i': 'The sun\'s voice rises with clarity',
-      'eh': 'The sun resonates with strong energy',
-      'ah': 'The sun sings with powerful resonance',
-      'oh': 'The sun intones with deep strength',
-      'oo': 'The sun resonates with deep authority',
-      'uh': 'The sun sings with vibrant energy'
+      'I': 'The sun sings with brilliant intensity',
+      'E': 'The sun resonates with strong energy',
+      'A': 'The sun sings with powerful resonance',
+      'O': 'The sun intones with deep strength',
+      'U': 'The sun resonates with deep authority'
     },
     'extreme': {
-      'ee': 'The sun sings with maximum brightness',
-      'i': 'The sun\'s voice reaches peak intensity',
-      'eh': 'The sun resonates with great power',
-      'ah': 'The sun sings with profound resonance',
-      'oh': 'The sun intones with cosmic strength',
-      'oo': 'The sun resonates with deep majesty',
-      'uh': 'The sun sings with intense energy'
-    }
-  } : {
-    'quiet': {
-      'ee': 'The sun softly sings a bright, clear note',
-      'i': 'The sun gently hums a light melody',
-      'eh': 'The sun peacefully resonates',
-      'ah': 'The sun breathes a calm, open tone',
-      'oh': 'The sun softly intones',
-      'oo': 'The sun quietly rumbles in the distance',
-      'uh': 'The sun murmurs steadily'
-    },
-    'moderate': {
-      'ee': 'The sun sings brightly with growing energy',
-      'i': 'The sun\'s voice lifts with animation',
-      'eh': 'The sun resonates with moderate strength',
-      'ah': 'The sun calls out with open clarity',
-      'oh': 'The sun proclaims with rounded tones',
-      'oo': 'The sun intones with deep resonance',
-      'uh': 'The sun speaks with steady voice'
-    },
-    'storm': {
-      'ee': 'The sun cries out in brilliant intensity',
-      'i': 'The sun shouts with piercing clarity',
-      'eh': 'The sun calls with urgent resonance',
-      'ah': 'The sun roars with open power',
-      'oh': 'The sun bellows with rounded force',
-      'oo': 'The sun thunders with deep authority',
-      'uh': 'The sun yells with raw energy'
-    },
-    'extreme': {
-      'ee': 'THE SUN SCREAMS WITH BLINDING FURY',
-      'i': 'THE SUN SHRIEKS WITH UNBRIDLED POWER',
-      'eh': 'THE SUN THUNDERS WITH TERRIBLE FORCE',
-      'ah': 'THE SUN ROARS WITH PRIMORDIAL MIGHT',
-      'oh': 'THE SUN BOOMS WITH COSMIC AUTHORITY',
-      'oo': 'THE SUN RUMBLES WITH DEEP CATASTROPHE',
-      'uh': 'THE SUN ERUPTS WITH CHAOTIC ENERGY'
+      'I': 'The sun sings with maximum brightness',
+      'E': 'The sun resonates with great power',
+      'A': 'The sun sings with profound resonance',
+      'O': 'The sun intones with cosmic strength',
+      'U': 'The sun resonates with deep majesty'
     }
   };
 
@@ -272,6 +214,7 @@ export function interpolateVowels(
   return {
     name: factor < 0.5 ? vowelA.name : vowelB.name, // Use whichever is closer
     displayName: `${vowelA.displayName}→${vowelB.displayName}`,
+    ipaSymbol: `${vowelA.ipaSymbol}→${vowelB.ipaSymbol}`,
     description: `Transitioning from ${vowelA.description} to ${vowelB.description}`,
     formants: interpolatedFormants,
     bandwidths: interpolatedBandwidths,

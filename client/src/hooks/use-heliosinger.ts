@@ -57,12 +57,8 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
       if (!enabled || !comprehensiveData) return;
       
       try {
-        // Get gentle mode setting from localStorage
-        const settings = getAmbientSettings();
-        const gentleMode = settings?.gentle_mode === 'true';
-        
         // Map space weather data to Heliosinger parameters
-        const heliosingerData = mapSpaceWeatherToHeliosinger(comprehensiveData, gentleMode);
+        const heliosingerData = mapSpaceWeatherToHeliosinger(comprehensiveData);
         currentDataRef.current = heliosingerData;
         
         // Start the Heliosinger engine
@@ -125,12 +121,8 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
     if (!enabled || !comprehensiveData || !isSinging) return;
     
     try {
-      // Get gentle mode setting from localStorage
-      const settings = getAmbientSettings();
-      const gentleMode = settings?.gentle_mode === 'true';
-      
       // Map new data to Heliosinger parameters
-      const heliosingerData = mapSpaceWeatherToHeliosinger(comprehensiveData, gentleMode);
+      const heliosingerData = mapSpaceWeatherToHeliosinger(comprehensiveData);
       const previousData = currentDataRef.current;
       currentDataRef.current = heliosingerData;
       
@@ -177,12 +169,8 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
       const response = await apiRequest('GET', '/api/space-weather/comprehensive');
       const data = (await response.json()) as ComprehensiveSpaceWeatherData;
       
-      // Get gentle mode setting from localStorage
-      const settings = getAmbientSettings();
-      const gentleMode = settings?.gentle_mode === 'true';
-      
       // Map to Heliosinger
-      const heliosingerData = mapSpaceWeatherToHeliosinger(data, gentleMode);
+      const heliosingerData = mapSpaceWeatherToHeliosinger(data);
       currentDataRef.current = heliosingerData;
       
       // Start audio
@@ -285,17 +273,13 @@ export function useHeliosingerPreview() {
     if (!comprehensiveData) {
       return createDefaultHeliosingerMapping();
     }
-    const settings = getAmbientSettings();
-    const gentleMode = settings?.gentle_mode === 'true';
-    return mapSpaceWeatherToHeliosinger(comprehensiveData, gentleMode);
+    return mapSpaceWeatherToHeliosinger(comprehensiveData);
   }, [comprehensiveData]);
 
   const previewMapping = useCallback(async () => {
     const response = await apiRequest('GET', '/api/space-weather/comprehensive');
     const data = (await response.json()) as ComprehensiveSpaceWeatherData;
-    const settings = getAmbientSettings();
-    const gentleMode = settings?.gentle_mode === 'true';
-    return mapSpaceWeatherToHeliosinger(data, gentleMode);
+    return mapSpaceWeatherToHeliosinger(data);
   }, []);
 
   return {
