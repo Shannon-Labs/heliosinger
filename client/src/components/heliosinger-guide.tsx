@@ -71,12 +71,14 @@ export function HeliosingerGuide() {
             <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
               <i className="fas fa-volume-up text-purple-500 text-sm" aria-hidden="true" />
             </div>
-            <h3 className="font-semibold text-lg">Stereo Spread (Bz Magnetic Field)</h3>
+            <h3 className="font-semibold text-lg">Stereo Spread (IMF Vector + Clock Angle)</h3>
           </div>
           <p className="text-sm text-muted-foreground ml-10">
             The sun's voice moves through space based on magnetic field direction. 
             <strong> Southward Bz</strong> creates wider stereo separation and audible beating, 
             while <strong>northward Bz</strong> keeps the voice centered and stable.
+            <strong> IMF clock angle</strong> (θc = atan2(By, Bz)) creates slow auto-pan rotation, 
+            with rotation speed proportional to the By component magnitude.
           </p>
         </div>
 
@@ -86,11 +88,12 @@ export function HeliosingerGuide() {
             <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center">
               <i className="fas fa-wave-square text-orange-500 text-sm" aria-hidden="true" />
             </div>
-            <h3 className="font-semibold text-lg">Rhythm (K-index)</h3>
+            <h3 className="font-semibold text-lg">Rhythm (K-index + Magnetometer)</h3>
           </div>
           <p className="text-sm text-muted-foreground ml-10">
             Geomagnetic activity adds rhythm to the sun's song. <strong>Higher Kp values</strong> create faster tremolo 
             and more animated vowel changes, while <strong>quiet conditions</strong> (Kp 0-2) produce steady, calm singing.
+            <strong> Magnetometer H-component</strong> adds slow pulses and occasional low-frequency "thuds" on sharp geomagnetic changes (dH/dt).
           </p>
           <div className="ml-10 flex gap-2 flex-wrap">
             <Badge variant="outline" className="bg-green-500/10">Kp 0-2: Slow, steady</Badge>
@@ -106,12 +109,106 @@ export function HeliosingerGuide() {
             <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
               <i className="fas fa-layer-group text-blue-500 text-sm" aria-hidden="true" />
             </div>
-            <h3 className="font-semibold text-lg">Harmonics (Density + Temperature)</h3>
+            <h3 className="font-semibold text-lg">Harmonics (Density + Temperature + Alfvén Mach Number)</h3>
           </div>
           <p className="text-sm text-muted-foreground ml-10">
             Rich harmonic content reflects plasma complexity. <strong>More particles</strong> and <strong>higher temperatures</strong> 
-            create richer harmonic series with more partials, giving the sun's voice depth and character.
+            create richer harmonic series with more partials (1-12), giving the sun's voice depth and character.
+            <strong> Alfvén Mach number</strong> (MA = Vsw/Va) enhances harmonic richness—super-Alfvénic flow creates more energetic texture with up to 12 harmonics.
           </p>
+        </div>
+
+        {/* Texture Layer Section */}
+        <div className="space-y-2 pt-4 border-t border-border/50">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-pink-500/20 flex items-center justify-center">
+              <i className="fas fa-sparkles text-pink-500 text-sm" aria-hidden="true" />
+            </div>
+            <h3 className="font-semibold text-lg">Texture Layer (Temperature + Electron Flux + Proton Flux)</h3>
+          </div>
+          <p className="text-sm text-muted-foreground ml-10">
+            Additional texture layers add atmospheric depth to the sun's voice:
+          </p>
+          <div className="ml-10 space-y-2 text-sm">
+            <div className="flex items-start gap-2">
+              <Badge variant="secondary" className="mt-0.5">Temperature</Badge>
+              <span className="text-muted-foreground">→ High-frequency shimmer (bandpass noise) when temperature exceeds 70% of range</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <Badge variant="secondary" className="mt-0.5">Electron Flux</Badge>
+              <span className="text-muted-foreground">→ Enhanced shimmer gain from high-energy electrons (2 MeV), creating airy high-frequency texture</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <Badge variant="secondary" className="mt-0.5">Proton Flux</Badge>
+              <span className="text-muted-foreground">→ Sub-bass rumble gain during radiation storms (10 MeV protons), plus enhanced reverb density for dense "air"</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Advanced Parameters Section */}
+        <div className="space-y-2 pt-4 border-t border-border/50">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-indigo-500/20 flex items-center justify-center">
+              <i className="fas fa-satellite text-indigo-500 text-sm" aria-hidden="true" />
+            </div>
+            <h3 className="font-semibold text-lg">Advanced Space Weather Parameters</h3>
+          </div>
+          <p className="text-sm text-muted-foreground ml-10">
+            Additional space weather data sources enhance the sonification:
+          </p>
+          <div className="ml-10 space-y-2 text-sm">
+            <div className="flex items-start gap-2">
+              <Badge variant="secondary" className="mt-0.5">X-ray Flux</Badge>
+              <span className="text-muted-foreground">→ Solar flare detection: spikes (&gt;70% of range) create transient brightness boosts and filter openings. 2x+ increases trigger additional bursts.</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <Badge variant="secondary" className="mt-0.5">Proton Flux</Badge>
+              <span className="text-muted-foreground">→ Radiation storms: drives sub-bass rumble gain and increases reverb room size for denser atmospheric effects</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <Badge variant="secondary" className="mt-0.5">Electron Flux</Badge>
+              <span className="text-muted-foreground">→ High-energy electrons: enhances shimmer gain for airy, high-frequency texture</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <Badge variant="secondary" className="mt-0.5">Magnetometer</Badge>
+              <span className="text-muted-foreground">→ Boulder H-component: adds slow pulses and LF "thuds" on sharp geomagnetic changes (dH/dt)</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Derived Metrics Section */}
+        <div className="space-y-2 pt-4 border-t border-border/50">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-teal-500/20 flex items-center justify-center">
+              <i className="fas fa-calculator text-teal-500 text-sm" aria-hidden="true" />
+            </div>
+            <h3 className="font-semibold text-lg">Derived Metrics</h3>
+          </div>
+          <p className="text-sm text-muted-foreground ml-10">
+            Computed physical parameters enhance the sonification with scientifically accurate relationships:
+          </p>
+          <div className="ml-10 space-y-2 text-sm">
+            <div className="flex items-start gap-2">
+              <Badge variant="secondary" className="mt-0.5">Dynamic Pressure (Pdyn)</Badge>
+              <span className="text-muted-foreground">→ Pdyn = 1.6726e-6 × n × v²: High pressure reduces delay feedback (transient "kick"). Shocks (1.5x+ increase) trigger percussive effects.</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <Badge variant="secondary" className="mt-0.5">IMF Clock Angle (θc)</Badge>
+              <span className="text-muted-foreground">→ θc = atan2(By, Bz): Controls stereo auto-pan rotation speed, proportional to |By| magnitude</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <Badge variant="secondary" className="mt-0.5">Electric Field (Ey)</Badge>
+              <span className="text-muted-foreground">→ Ey = -Vsw × Bz: Higher Ey increases vibrato rate (more "urgency" during reconnection events)</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <Badge variant="secondary" className="mt-0.5">Alfvén Mach Number (MA)</Badge>
+              <span className="text-muted-foreground">→ MA = Vsw/Va: Super-Alfvénic flow increases harmonic count cap, vibrato depth, and rate for more energetic texture</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <Badge variant="secondary" className="mt-0.5">Plasma Beta (β)</Badge>
+              <span className="text-muted-foreground">→ β ∝ n×T/BT²: High beta (pressure-dominated) brightens filter frequency and opens filter Q for breathier timbre</span>
+            </div>
+          </div>
         </div>
 
         {/* Chord Harmony Section */}
