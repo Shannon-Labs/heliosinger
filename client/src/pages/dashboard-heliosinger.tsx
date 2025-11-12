@@ -16,6 +16,8 @@ import { DataSourceAttribution } from "@/components/DataSourceAttribution";
 import { ChangeTracker } from "@/components/ChangeTracker";
 import { EnhancedSpaceWeatherViz } from "@/components/EnhancedSpaceWeatherViz";
 import { SpaceWeatherExamples } from "@/components/SpaceWeatherExamples";
+import { EventsTicker } from "@/components/EventsTicker";
+import { MobilePlayer } from "@/components/MobilePlayer";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getAmbientSettings, saveAmbientSettings } from "@/lib/localStorage";
@@ -251,20 +253,46 @@ export default function Dashboard() {
     );
   }
 
+  // Generate comprehensive song description for screen readers
+  const generateSongDescription = (): string => {
+    if (!heliosinger.currentData) {
+      return 'Heliosinger is currently silent. Enable it to hear the sun sing.';
+    }
+
+    const data = heliosinger.currentData;
+    const vowel = data.currentVowel;
+    const chordQuality = getChordQuality(
+      data.condition,
+      data.chordVoicing,
+      comprehensiveData?.solar_wind?.temperature,
+      data.density,
+      comprehensiveData?.solar_wind?.bz,
+      data.kIndex
+    );
+    
+    // Describe rhythm/tremolo
+    let rhythmDesc = 'steady';
+    if (data.kIndex >= 7) {
+      rhythmDesc = 'intense, chaotic tremolo';
+    } else if (data.kIndex >= 5) {
+      rhythmDesc = 'fast pulsing tremolo';
+    } else if (data.kIndex >= 3) {
+      rhythmDesc = 'moderate tremolo';
+    }
+
+    return `The Sun is singing an ${vowel.openness > 0.6 ? 'open' : vowel.openness < 0.4 ? 'closed' : 'mid'} '${vowel.displayName}' (${vowel.ipaSymbol}) at ${data.frequency.toFixed(0)} Hz (${data.baseNote}) with ${rhythmDesc}, in a ${chordQuality.name.toLowerCase()} chord, reflecting ${data.condition} solar conditions. ${data.vowelDescription}. ${data.solarMood}.`;
+  };
+
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground pb-20 md:pb-0">
       {/* ARIA Live Region for Dynamic Updates */}
       <div
         aria-live="polite"
         aria-atomic="true"
         className="sr-only"
+        key={heliosinger.currentData ? `${heliosinger.currentData.frequency}-${heliosinger.currentData.currentVowel.name}` : 'silent'}
       >
-        {comprehensiveData && (
-          <>
-            Space weather updated. Velocity: {comprehensiveData.solar_wind?.velocity.toFixed(1)} km/s.
-            K-index: {comprehensiveData.k_index?.kp.toFixed(1)}.
-          </>
-        )}
+        {generateSongDescription()}
       </div>
 
       {/* Navigation Header */}
@@ -329,6 +357,16 @@ export default function Dashboard() {
             Each moment creates a unique vowel sound, pitch, and rhythm based on solar wind conditions.
           </p>
         </section>
+
+        {/* Recent Events Ticker */}
+        {comprehensiveData && (
+          <div className="mb-6">
+            <EventsTicker 
+              currentData={comprehensiveData} 
+              previousData={previousComprehensiveDataRef.current}
+            />
+          </div>
+        )}
 
         {/* Heliosinger Mode Controls - Moved to Top */}
         <section className="mb-8">
@@ -475,21 +513,45 @@ export default function Dashboard() {
                         </div>
                       </div>
                       {(() => {
-                        const chordQuality = getChordQuality(heliosinger.currentData.condition);
+                        const chordQuality = getChordQuality(
+                          heliosinger.currentData.condition,
+                          heliosinger.currentData.chordVoicing,
+                          comprehensiveData?.solar_wind?.temperature,
+                          heliosinger.currentData.density,
+                          comprehensiveData?.solar_wind?.bz,
+                          heliosinger.currentData.kIndex
+                        );
                         return (
                           <div className="text-xs space-y-1 pl-2 border-l-2 border-primary/30">
                             <div className="flex items-center justify-between">
                               <span className="text-muted-foreground">Quality:</span>
                               <Badge variant="outline" className="text-xs font-semibold">
-                                {chordQuality.name}
+                                {chordQuality.name} ({chordQuality.symbol})
                               </Badge>
                             </div>
                             <p className="text-muted-foreground italic">
                               {chordQuality.description}
                             </p>
-                            <p className="text-muted-foreground/80 text-[10px]">
-                              {getChordSelectionExplanation(heliosinger.currentData.condition)}
-                            </p>
+                            <div className="text-xs space-y-2">
+                              <div>
+                                <strong className="text-primary">Construction:</strong>
+                                <p className="text-muted-foreground mt-1">
+                                  {chordQuality.construction}
+                                </p>
+                              </div>
+                              <div>
+                                <strong className="text-accent">Physics:</strong>
+                                <p className="text-muted-foreground mt-1">
+                                  {chordQuality.physicsMapping}
+                                </p>
+                              </div>
+                              <div>
+                                <strong className="text-destructive">Musical Mapping:</strong>
+                                <p className="text-muted-foreground mt-1 italic">
+                                  {chordQuality.aestheticMapping}
+                                </p>
+                              </div>
+                            </div>
                           </div>
                         );
                       })()}
@@ -766,10 +828,20 @@ export default function Dashboard() {
 
         {/* System Status */}
         <SystemStatus />
+
+        {/* Footer */}
+        <Footer />
       </main>
 
-      {/* Footer */}
-      <Footer />
+      {/* Mobile Player Widget */}
+      <MobilePlayer
+        isEnabled={isHeliosingerEnabled}
+        isPlaying={isHeliosingerEnabled && heliosinger.isSinging}
+        volume={ambientVolume}
+        currentData={heliosinger.currentData}
+        onToggle={handleHeliosingerToggle}
+        onVolumeChange={handleVolumeChange}
+      />
     </div>
   );
 }

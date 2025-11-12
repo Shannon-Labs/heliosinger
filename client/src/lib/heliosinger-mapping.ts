@@ -112,8 +112,17 @@ export function mapSpaceWeatherToHeliosinger(
   // Step 9: Calculate decay time from density
   const decayTime = calculateDecayTime(solarWind.density);
   
-  // Step 10: Calculate chord voicing (harmony)
-  const chordVoicing = calculateChordVoicing(frequency, midiNote, noteName, condition);
+  // Step 10: Calculate chord voicing (harmony) - using harmonic series and space weather parameters
+  const chordVoicing = calculateChordVoicing(
+    frequency, 
+    midiNote, 
+    noteName, 
+    condition,
+    solarWind.density,
+    solarWind.temperature,
+    solarWind.bz,
+    kIndex?.kp || 0
+  );
   
   // Step 11: Calculate reverb and delay parameters
   const reverbDelayData = calculateReverbDelay(solarWind.density, solarWind.temperature, condition);
@@ -403,18 +412,26 @@ function calculateDecayTime(density: number): number {
 }
 
 // ============================================================================
-// CHORD VOICING: HARMONY BASED ON CONDITION
+// CHORD VOICING: HARMONY BASED ON HARMONIC SERIES AND SPACE WEATHER
 // ============================================================================
 
 /**
- * Calculate chord voicing (multiple notes) based on space weather condition
- * Creates musical harmony that reflects the sun's mood
+ * Calculate chord voicing using harmonic series principles
+ * Maps space weather parameters directly to chord qualities:
+ * - Temperature → Major/minor quality (high temp = major, low temp = minor)
+ * - Density → Harmonic richness (low = triad, high = extended chords)
+ * - Bz → Extensions (southward = tensions, northward = simple)
+ * - K-index → Voicing complexity
  */
 function calculateChordVoicing(
   fundamentalFreq: number,
   fundamentalMidi: number,
   fundamentalNote: string,
-  condition: SpaceWeatherCondition
+  condition: SpaceWeatherCondition,
+  density: number,
+  temperature: number,
+  bz: number,
+  kp: number
 ): ChordTone[] {
   const chordTones: ChordTone[] = [
     {
@@ -424,61 +441,91 @@ function calculateChordVoicing(
       amplitude: 1.0 // Fundamental is always loudest
     }
   ];
+
+  // Normalize parameters
+  const TEMPERATURE_THRESHOLD = 100000; // Kelvin - determines major/minor
+  const DENSITY_RANGE = { min: 0.5, max: 50.0 };
+  const normalizedDensity = Math.max(0, Math.min(1, (density - DENSITY_RANGE.min) / (DENSITY_RANGE.max - DENSITY_RANGE.min)));
   
-  // Musical intervals in semitones
-  const MAJOR_THIRD = 4;
-  const MINOR_THIRD = 3;
-  const PERFECT_FIFTH = 7;
-  const MAJOR_SIXTH = 9;
-  const MINOR_SIXTH = 8;
-  const MAJOR_NINTH = 14;
-  const MINOR_SECOND = 1;
-  const TRITONE = 6;
+  // Determine chord quality from temperature
+  const isMajor = temperature >= TEMPERATURE_THRESHOLD;
   
-  switch (condition) {
-    case 'quiet':
-      // Major triad: root, major third, perfect fifth
+  // Determine harmonic richness from density
+  // Low density (0.5-5) → triad, Medium (5-20) → 6th/7th, High (20-50) → 9th/extended
+  const useTriad = normalizedDensity < 0.2;
+  const useExtended = normalizedDensity > 0.6;
+  
+  // Determine extensions from Bz (southward = tensions)
+  const useExtensions = bz < -5 && !useTriad;
+  
+  // Build chord from harmonic series
+  // Harmonic series: f, 2f (octave), 3f (fifth), 4f (octave), 5f (major third), 6f (fifth), 7f (minor 7th), 9f (major 9th)
+  
+  if (condition === 'extreme') {
+    // Extreme: Dissonant intervals from non-harmonic partials
+    // Use tritone and minor second for maximum tension
+    chordTones.push(
+      createChordToneFromInterval(fundamentalFreq, fundamentalMidi, fundamentalNote, 1, 0.3), // Minor 2nd
+      createChordToneFromInterval(fundamentalFreq, fundamentalMidi, fundamentalNote, 6, 0.25)  // Tritone
+    );
+    // Keep perfect fifth for some stability
+    if (normalizedDensity > 0.3) {
       chordTones.push(
-        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, MAJOR_THIRD, 0.4),
-        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, PERFECT_FIFTH, 0.35)
+        createChordToneFromInterval(fundamentalFreq, fundamentalMidi, fundamentalNote, 7, 0.2) // Perfect 5th
       );
-      break;
-      
-    case 'moderate':
-      // Major triad + sixth or ninth
-      chordTones.push(
-        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, MAJOR_THIRD, 0.4),
-        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, PERFECT_FIFTH, 0.35),
-        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, MAJOR_SIXTH, 0.25)
-      );
-      break;
-      
-    case 'storm':
-      // Minor or diminished intervals for tension
-      chordTones.push(
-        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, MINOR_THIRD, 0.4),
-        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, PERFECT_FIFTH, 0.35),
-        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, MINOR_SIXTH, 0.25)
-      );
-      break;
-      
-    case 'extreme':
-      // Dissonant intervals: minor second, tritone
-      chordTones.push(
-        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, MINOR_SECOND, 0.3),
-        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, TRITONE, 0.25),
-        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, PERFECT_FIFTH, 0.2)
-      );
-      break;
+    }
+  } else if (isMajor) {
+    // Major chords from harmonic series
+    // Major triad: Root (1f), Major 3rd (5f → 4 semitones), Perfect 5th (3f → 7 semitones)
+    chordTones.push(
+      createChordToneFromInterval(fundamentalFreq, fundamentalMidi, fundamentalNote, 4, 0.4), // Major 3rd
+      createChordToneFromInterval(fundamentalFreq, fundamentalMidi, fundamentalNote, 7, 0.35) // Perfect 5th
+    );
+    
+    // Add extensions based on density and Bz
+    if (useExtended || useExtensions) {
+      // Major 6th (9 semitones) or Major 9th (14 semitones)
+      if (normalizedDensity > 0.7) {
+        chordTones.push(
+          createChordToneFromInterval(fundamentalFreq, fundamentalMidi, fundamentalNote, 14, 0.25) // Major 9th
+        );
+      } else {
+        chordTones.push(
+          createChordToneFromInterval(fundamentalFreq, fundamentalMidi, fundamentalNote, 9, 0.25) // Major 6th
+        );
+      }
+    }
+  } else {
+    // Minor chords - adjust major third down by semitone
+    // Minor triad: Root (1f), Minor 3rd (3 semitones), Perfect 5th (7 semitones)
+    chordTones.push(
+      createChordToneFromInterval(fundamentalFreq, fundamentalMidi, fundamentalNote, 3, 0.4), // Minor 3rd
+      createChordToneFromInterval(fundamentalFreq, fundamentalMidi, fundamentalNote, 7, 0.35) // Perfect 5th
+    );
+    
+    // Add extensions for minor chords
+    if (useExtended || useExtensions) {
+      // Minor 6th (8 semitones) or Minor 7th (10 semitones)
+      if (normalizedDensity > 0.7 && bz < -10) {
+        chordTones.push(
+          createChordToneFromInterval(fundamentalFreq, fundamentalMidi, fundamentalNote, 10, 0.25) // Minor 7th
+        );
+      } else if (normalizedDensity > 0.5) {
+        chordTones.push(
+          createChordToneFromInterval(fundamentalFreq, fundamentalMidi, fundamentalNote, 8, 0.25) // Minor 6th
+        );
+      }
+    }
   }
   
-  return chordTones;
+  // Normalize octaves - keep all notes within 2 octaves of root
+  return normalizeChordOctaves(chordTones, fundamentalMidi);
 }
 
 /**
- * Helper to create a chord tone from fundamental
+ * Create a chord tone from an interval in semitones
  */
-function createChordTone(
+function createChordToneFromInterval(
   fundamentalFreq: number,
   fundamentalMidi: number,
   fundamentalNote: string,
@@ -501,6 +548,43 @@ function createChordTone(
     amplitude: Math.max(0.1, Math.min(1.0, amplitude))
   };
 }
+
+/**
+ * Normalize chord voicing to keep notes within reasonable octave range
+ * Prevents chords from spanning too many octaves
+ */
+function normalizeChordOctaves(chordTones: ChordTone[], rootMidi: number): ChordTone[] {
+  const rootOctave = Math.floor((rootMidi - 12) / 12);
+  const maxOctaveSpan = 2; // Keep within 2 octaves
+  
+  return chordTones.map(tone => {
+    const toneOctave = Math.floor((tone.midiNote - 12) / 12);
+    const octaveDiff = toneOctave - rootOctave;
+    
+    // If note is more than maxOctaveSpan octaves away, bring it closer
+    if (Math.abs(octaveDiff) > maxOctaveSpan) {
+      const adjustment = octaveDiff > 0 ? -12 * (octaveDiff - maxOctaveSpan) : 12 * (Math.abs(octaveDiff) - maxOctaveSpan);
+      const newMidiNote = tone.midiNote + adjustment;
+      const newFreq = midiNoteToFrequency(newMidiNote);
+      
+      // Get note name
+      const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      const newOctave = Math.floor((newMidiNote - 12) / 12);
+      const noteNameIndex = (newMidiNote - 12) % 12;
+      const newNoteName = `${noteNames[noteNameIndex]}${newOctave}`;
+      
+      return {
+        ...tone,
+        midiNote: newMidiNote,
+        frequency: newFreq,
+        noteName: newNoteName
+      };
+    }
+    
+    return tone;
+  });
+}
+
 
 // ============================================================================
 // REVERB & DELAY: ATMOSPHERIC EFFECTS

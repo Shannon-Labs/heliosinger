@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { VOWEL_FORMANTS, type VowelName, type VowelFormants } from "@/lib/vowel-filters";
+import { VocalTractDiagram } from "@/components/VocalTractDiagram";
 
 interface VowelChartProps {
   currentVowel?: VowelName;
@@ -172,6 +173,16 @@ export function VowelChart({ currentVowel, currentVowelData }: VowelChartProps) 
             </svg>
             </div>
           </div>
+
+          {/* Vocal Tract Diagram */}
+          {currentVowelData && VOWEL_FORMANTS[currentVowelData.name] && (
+            <div className="pt-4 border-t border-border/50">
+              <VocalTractDiagram
+                vowel={VOWEL_FORMANTS[currentVowelData.name]}
+                frequency={undefined}
+              />
+            </div>
+          )}
 
           {/* Legend */}
           <div className="grid grid-cols-2 gap-4 text-xs">
