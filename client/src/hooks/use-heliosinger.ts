@@ -4,11 +4,14 @@ import { mapSpaceWeatherToHeliosinger, createDefaultHeliosingerMapping } from '@
 import { startSinging, updateSinging, stopSinging, setSingingVolume } from '@/lib/heliosinger-engine';
 import { apiRequest } from '@/lib/queryClient';
 import { getAmbientSettings } from '@/lib/localStorage';
+import { checkAndNotifyEvents, requestNotificationPermission, canSendNotifications } from '@/lib/notifications';
+import { calculateRefetchInterval } from '@/lib/adaptive-refetch';
 import type { ComprehensiveSpaceWeatherData } from '@shared/schema';
 
 interface UseHeliosingerOptions {
   enabled: boolean;
   volume?: number;
+  backgroundMode?: boolean;
   onError?: (error: Error) => void;
 }
 
@@ -18,6 +21,7 @@ interface UseHeliosingerReturn {
   start: () => Promise<void>;
   stop: () => void;
   setVolume: (volume: number) => void;
+  backgroundMode: boolean;
 }
 
 /**
@@ -25,20 +29,70 @@ interface UseHeliosingerReturn {
  * Integrates with React Query for automatic data fetching and audio updates
  */
 export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerReturn {
-  const { enabled, volume = 0.3, onError } = options;
+  const { enabled, volume = 0.3, backgroundMode: backgroundModeProp = false, onError } = options;
   const queryClient = useQueryClient();
   const [isSinging, setIsSinging] = useState(false);
+  const [backgroundMode, setBackgroundMode] = useState(backgroundModeProp);
   const currentDataRef = useRef<ReturnType<typeof mapSpaceWeatherToHeliosinger> | null>(null);
+  const previousDataRef = useRef<ComprehensiveSpaceWeatherData | null>(null);
+  
+  // Request notification permission on first use
+  useEffect(() => {
+    if (enabled && !canSendNotifications()) {
+      requestNotificationPermission().then(permission => {
+        if (permission === 'granted') {
+          console.log('🔔 Notification permission granted');
+        }
+      });
+    }
+  }, [enabled]);
+  
+  // Sync background mode from localStorage
+  useEffect(() => {
+    const settings = getAmbientSettings();
+    if (settings?.background_mode === 'true') {
+      setBackgroundMode(true);
+    }
+  }, []);
+  
+  // Handle visibility changes - keep audio running in background mode
+  useEffect(() => {
+    if (!backgroundMode || !enabled) return;
+    
+    const handleVisibilityChange = () => {
+      // When tab becomes hidden, ensure audio context stays active
+      if (document.hidden && isSinging) {
+        // Audio should continue playing - browsers allow this if audio is already playing
+        console.log('🌞 Tab hidden - audio continues in background mode');
+      } else if (!document.hidden && isSinging) {
+        // Tab visible again - ensure audio context is resumed
+        console.log('🌞 Tab visible - audio continues');
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [backgroundMode, enabled, isSinging]);
   
   // Fetch comprehensive space weather data
   // Always fetch data (not just when enabled) so UI can display it
+  // Uses adaptive refetch interval based on space weather conditions
   const { data: comprehensiveData, error: dataError } = useQuery<ComprehensiveSpaceWeatherData>({
     queryKey: ['/api/space-weather/comprehensive'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/space-weather/comprehensive');
       return (await response.json()) as ComprehensiveSpaceWeatherData;
     },
-    refetchInterval: 60000, // Update every minute
+    refetchInterval: (query) => {
+      // Calculate adaptive interval based on current and previous data
+      const currentData = query.state.data;
+      const interval = calculateRefetchInterval(currentData, previousDataRef.current);
+      // Update previous data ref for next calculation
+      if (currentData) {
+        previousDataRef.current = currentData;
+      }
+      return interval;
+    },
     enabled: true, // Always fetch for UI display
   });
 
@@ -124,7 +178,32 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
       // Map new data to Heliosinger parameters
       const heliosingerData = mapSpaceWeatherToHeliosinger(comprehensiveData);
       const previousData = currentDataRef.current;
+      const previousComprehensiveData = previousDataRef.current;
       currentDataRef.current = heliosingerData;
+      
+      // Check for significant changes and send notifications
+      if (previousComprehensiveData && comprehensiveData) {
+        const previousKp = previousComprehensiveData.k_index?.kp;
+        const currentKp = comprehensiveData.k_index?.kp;
+        const previousCondition = previousData?.condition;
+        const currentCondition = heliosingerData.condition;
+        const previousVelocity = previousComprehensiveData.solar_wind?.velocity;
+        const currentVelocity = comprehensiveData.solar_wind?.velocity;
+        const previousBz = previousComprehensiveData.solar_wind?.bz;
+        const currentBz = comprehensiveData.solar_wind?.bz;
+        
+        // Check for events and send notifications
+        checkAndNotifyEvents({
+          previousKp,
+          currentKp,
+          previousCondition,
+          currentCondition,
+          previousVelocity,
+          currentVelocity,
+          previousBz,
+          currentBz,
+        });
+      }
       
       // Only log significant changes
       if (!previousData || 
@@ -145,6 +224,9 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
       
       // Update the Heliosinger engine with new parameters
       updateSinging(heliosingerData);
+      
+      // Store previous data for next comparison
+      previousDataRef.current = comprehensiveData;
     } catch (error) {
       console.error('Failed to update Heliosinger:', error);
       if (onError) {
@@ -208,6 +290,7 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
     start,
     stop,
     setVolume,
+    backgroundMode,
   };
 }
 

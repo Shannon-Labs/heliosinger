@@ -20,6 +20,13 @@ import {
 // HELIOSINGER AUDIO DATA INTERFACE
 // ============================================================================
 
+export interface ChordTone {
+  frequency: number;
+  midiNote: number;
+  noteName: string;
+  amplitude: number; // Relative amplitude (0-1), fundamental is always 1.0
+}
+
 export interface HeliosingerData extends ChordData {
   // Vowel singing parameters
   currentVowel: VowelFormants;
@@ -33,6 +40,9 @@ export interface HeliosingerData extends ChordData {
     bandwidth: number;
     gain: number;
   }>;
+  
+  // Chord voicing (multiple notes for harmony)
+  chordVoicing: ChordTone[];
   
   // Enhanced spatial and harmonic parameters (from previous enhanced system)
   stereoSpread: number;
@@ -48,6 +58,12 @@ export interface HeliosingerData extends ChordData {
   filterQ: number;
   shimmerGain: number;
   rumbleGain: number;
+  
+  // Reverb and delay parameters
+  reverbRoomSize: number;
+  delayTime: number;
+  delayFeedback: number;
+  delayGain: number;
 }
 
 // ============================================================================
@@ -96,7 +112,13 @@ export function mapSpaceWeatherToHeliosinger(
   // Step 9: Calculate decay time from density
   const decayTime = calculateDecayTime(solarWind.density);
   
-  // Step 10: Combine all parameters into Heliosinger data
+  // Step 10: Calculate chord voicing (harmony)
+  const chordVoicing = calculateChordVoicing(frequency, midiNote, noteName, condition);
+  
+  // Step 11: Calculate reverb and delay parameters
+  const reverbDelayData = calculateReverbDelay(solarWind.density, solarWind.temperature, condition);
+  
+  // Step 12: Combine all parameters into Heliosinger data
   const heliosingerData: HeliosingerData = {
     // Original ChordData fields
     baseNote: noteName,
@@ -136,7 +158,16 @@ export function mapSpaceWeatherToHeliosinger(
     
     // Texture parameters
     shimmerGain: filterData.shimmerGain,
-    rumbleGain: condition === 'extreme' ? 0.4 : condition === 'storm' ? 0.2 : 0
+    rumbleGain: condition === 'extreme' ? 0.4 : condition === 'storm' ? 0.2 : 0,
+    
+    // Chord voicing
+    chordVoicing,
+    
+    // Reverb and delay
+    reverbRoomSize: reverbDelayData.reverbRoomSize,
+    delayTime: reverbDelayData.delayTime,
+    delayFeedback: reverbDelayData.delayFeedback,
+    delayGain: reverbDelayData.delayGain
   };
   
   return heliosingerData;
@@ -372,6 +403,165 @@ function calculateDecayTime(density: number): number {
 }
 
 // ============================================================================
+// CHORD VOICING: HARMONY BASED ON CONDITION
+// ============================================================================
+
+/**
+ * Calculate chord voicing (multiple notes) based on space weather condition
+ * Creates musical harmony that reflects the sun's mood
+ */
+function calculateChordVoicing(
+  fundamentalFreq: number,
+  fundamentalMidi: number,
+  fundamentalNote: string,
+  condition: SpaceWeatherCondition
+): ChordTone[] {
+  const chordTones: ChordTone[] = [
+    {
+      frequency: fundamentalFreq,
+      midiNote: fundamentalMidi,
+      noteName: fundamentalNote,
+      amplitude: 1.0 // Fundamental is always loudest
+    }
+  ];
+  
+  // Musical intervals in semitones
+  const MAJOR_THIRD = 4;
+  const MINOR_THIRD = 3;
+  const PERFECT_FIFTH = 7;
+  const MAJOR_SIXTH = 9;
+  const MINOR_SIXTH = 8;
+  const MAJOR_NINTH = 14;
+  const MINOR_SECOND = 1;
+  const TRITONE = 6;
+  
+  switch (condition) {
+    case 'quiet':
+      // Major triad: root, major third, perfect fifth
+      chordTones.push(
+        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, MAJOR_THIRD, 0.4),
+        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, PERFECT_FIFTH, 0.35)
+      );
+      break;
+      
+    case 'moderate':
+      // Major triad + sixth or ninth
+      chordTones.push(
+        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, MAJOR_THIRD, 0.4),
+        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, PERFECT_FIFTH, 0.35),
+        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, MAJOR_SIXTH, 0.25)
+      );
+      break;
+      
+    case 'storm':
+      // Minor or diminished intervals for tension
+      chordTones.push(
+        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, MINOR_THIRD, 0.4),
+        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, PERFECT_FIFTH, 0.35),
+        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, MINOR_SIXTH, 0.25)
+      );
+      break;
+      
+    case 'extreme':
+      // Dissonant intervals: minor second, tritone
+      chordTones.push(
+        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, MINOR_SECOND, 0.3),
+        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, TRITONE, 0.25),
+        createChordTone(fundamentalFreq, fundamentalMidi, fundamentalNote, PERFECT_FIFTH, 0.2)
+      );
+      break;
+  }
+  
+  return chordTones;
+}
+
+/**
+ * Helper to create a chord tone from fundamental
+ */
+function createChordTone(
+  fundamentalFreq: number,
+  fundamentalMidi: number,
+  fundamentalNote: string,
+  intervalSemitones: number,
+  amplitude: number
+): ChordTone {
+  const midiNote = fundamentalMidi + intervalSemitones;
+  const frequency = midiNoteToFrequency(midiNote);
+  
+  // Get note name
+  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const octave = Math.floor((midiNote - 12) / 12);
+  const noteNameIndex = (midiNote - 12) % 12;
+  const noteName = `${noteNames[noteNameIndex]}${octave}`;
+  
+  return {
+    frequency,
+    midiNote,
+    noteName,
+    amplitude: Math.max(0.1, Math.min(1.0, amplitude))
+  };
+}
+
+// ============================================================================
+// REVERB & DELAY: ATMOSPHERIC EFFECTS
+// ============================================================================
+
+interface ReverbDelayData {
+  reverbRoomSize: number;
+  delayTime: number;
+  delayFeedback: number;
+  delayGain: number;
+}
+
+/**
+ * Calculate reverb and delay parameters based on density and temperature
+ */
+function calculateReverbDelay(
+  density: number,
+  temperature: number,
+  condition: SpaceWeatherCondition
+): ReverbDelayData {
+  const DENSITY_RANGE = { min: 0.5, max: 50.0 };
+  const TEMPERATURE_RANGE = { min: 10000, max: 200000 };
+  
+  // Density → reverb size (high density = smaller room, low = cathedral)
+  const normalizedDensity = Math.max(0, Math.min(1, (density - DENSITY_RANGE.min) / (DENSITY_RANGE.max - DENSITY_RANGE.min)));
+  // Invert: low density = large room (high reverb), high density = small room (low reverb)
+  const reverbRoomSize = 0.2 + ((1 - normalizedDensity) * 0.6); // 0.2 (small) to 0.8 (large)
+  
+  // Temperature → delay feedback (high temp = more echoes)
+  const normalizedTemp = Math.max(0, Math.min(1, (temperature - TEMPERATURE_RANGE.min) / (TEMPERATURE_RANGE.max - TEMPERATURE_RANGE.min)));
+  const delayFeedback = normalizedTemp * 0.4; // 0 to 0.4 feedback
+  
+  // Delay time: base on condition
+  let delayTime: number;
+  switch (condition) {
+    case 'quiet':
+      delayTime = 0.15; // Short delay
+      break;
+    case 'moderate':
+      delayTime = 0.25;
+      break;
+    case 'storm':
+      delayTime = 0.35;
+      break;
+    case 'extreme':
+      delayTime = 0.5; // Longer delay for dramatic effect
+      break;
+  }
+  
+  // Delay gain: subtle (20-30% wet/dry mix)
+  const delayGain = condition === 'extreme' ? 0.3 : condition === 'storm' ? 0.25 : 0.2;
+  
+  return {
+    reverbRoomSize: Math.max(0.1, Math.min(1.0, reverbRoomSize)),
+    delayTime: Math.max(0.1, Math.min(1.0, delayTime)),
+    delayFeedback: Math.max(0, Math.min(0.5, delayFeedback)),
+    delayGain: Math.max(0.1, Math.min(0.4, delayGain))
+  };
+}
+
+// ============================================================================
 // CONDITION DETERMINATION
 // ============================================================================
 
@@ -431,6 +621,16 @@ export function createDefaultHeliosingerMapping(): HeliosingerData {
     filterFrequency: 800,
     filterQ: 1,
     shimmerGain: 0,
-    rumbleGain: 0
+    rumbleGain: 0,
+    chordVoicing: [{
+      frequency: 65.41,
+      midiNote: 36,
+      noteName: 'C2',
+      amplitude: 1.0
+    }],
+    reverbRoomSize: 0.3,
+    delayTime: 0.15,
+    delayFeedback: 0.1,
+    delayGain: 0.2
   };
 }

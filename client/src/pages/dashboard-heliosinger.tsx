@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,14 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getAmbientSettings, saveAmbientSettings } from "@/lib/localStorage";
 import { useHeliosinger } from "@/hooks/use-heliosinger";
+import { 
+  getNotificationSettings, 
+  saveNotificationSettings, 
+  requestNotificationPermission,
+  isNotificationSupported,
+  canSendNotifications
+} from "@/lib/notifications";
+import { calculateRefetchInterval, getUpdateFrequencyDescription } from "@/lib/adaptive-refetch";
 import type { AmbientSettings, ComprehensiveSpaceWeatherData } from "@shared/schema";
 
 export default function Dashboard() {
@@ -24,10 +32,12 @@ export default function Dashboard() {
   // Heliosinger hook - primary sonification system
   const [isHeliosingerEnabled, setIsHeliosingerEnabled] = useState(false);
   const [ambientVolume, setAmbientVolume] = useState(0.3);
+  const [backgroundMode, setBackgroundMode] = useState(false);
   
   const heliosinger = useHeliosinger({
     enabled: isHeliosingerEnabled,
     volume: ambientVolume,
+    backgroundMode: backgroundMode,
     onError: (error) => {
       toast({
         title: "Heliosinger Error",
@@ -38,36 +48,49 @@ export default function Dashboard() {
     }
   });
 
-  // Fetch current solar wind data
-  const { data: currentData, isLoading: currentLoading, error: currentError } = useQuery<any>({
-    queryKey: ["/api/solar-wind/current"],
-    refetchInterval: 60000, // Refetch every minute
-    retry: false
-  });
-
-  // Fetch comprehensive space weather data
+  // Fetch comprehensive space weather data (used for adaptive interval calculation)
   const { data: comprehensiveData, isLoading: comprehensiveLoading } = useQuery<ComprehensiveSpaceWeatherData>({
     queryKey: ["/api/space-weather/comprehensive"],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/space-weather/comprehensive");
       return (await response.json()) as ComprehensiveSpaceWeatherData;
     },
-    refetchInterval: 60000, // Refetch every minute
+    refetchInterval: (query) => {
+      // Calculate adaptive interval based on current and previous data
+      const currentData = query.state.data;
+      const interval = calculateRefetchInterval(currentData, previousComprehensiveDataRef.current);
+      setUpdateFrequency(interval);
+      // Update previous data ref for next calculation
+      if (currentData) {
+        previousComprehensiveDataRef.current = currentData;
+      }
+      return interval;
+    },
   });
 
-  // Fetch system status
+  // Fetch current solar wind data (uses adaptive interval)
+  const { data: currentData, isLoading: currentLoading, error: currentError } = useQuery<any>({
+    queryKey: ["/api/solar-wind/current"],
+    refetchInterval: updateFrequency,
+    retry: false
+  });
+
+  // Fetch system status (always 30 seconds)
   const { data: systemStatus } = useQuery({
     queryKey: ["/api/system/status"],
     refetchInterval: 30000
   });
 
-  // Fetch ambient settings
+  // Fetch ambient settings (uses adaptive interval)
   const { data: ambientSettings, isLoading: ambientLoading } = useQuery({
     queryKey: ["/api/settings/ambient"],
-    refetchInterval: 60000
+    refetchInterval: updateFrequency
   });
 
   // Local state for controls
+  const [notificationSettings, setNotificationSettings] = useState(() => getNotificationSettings());
+  const [updateFrequency, setUpdateFrequency] = useState(60000);
+  const previousComprehensiveDataRef = useRef<ComprehensiveSpaceWeatherData | undefined>(undefined);
 
   // Update ambient settings mutation (saves to localStorage for static site)
   const updateAmbientMutation = useMutation({
@@ -106,6 +129,7 @@ export default function Dashboard() {
     
     if (settings && typeof settings === 'object') {
       setAmbientVolume((settings as any).volume || 0.3);
+      setBackgroundMode((settings as any).background_mode === "true");
     }
   }, [ambientSettings]);
 
@@ -131,12 +155,13 @@ export default function Dashboard() {
   // Auto-fetch data on component mount and periodically
   useEffect(() => {
     fetchDataMutation.mutate();
+    // Use adaptive interval for data fetching
     const interval = setInterval(() => {
       fetchDataMutation.mutate();
-    }, 60000); // Every minute
+    }, updateFrequency);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [updateFrequency]);
 
   // Heliosinger toggle
   const handleHeliosingerToggle = async (enabled: boolean) => {
@@ -336,6 +361,30 @@ export default function Dashboard() {
                 />
               </div>
 
+              {/* Background Mode Toggle */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label htmlFor="background-mode-toggle" className="text-sm font-medium">
+                    🌙 Background Mode
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Continue playing when tab is hidden (like background music)
+                  </p>
+                </div>
+                <Switch
+                  id="background-mode-toggle"
+                  checked={backgroundMode}
+                  onCheckedChange={(checked) => {
+                    setBackgroundMode(checked);
+                    updateAmbientMutation.mutate({
+                      background_mode: checked ? "true" : "false"
+                    });
+                  }}
+                  disabled={!isHeliosingerEnabled}
+                  data-testid="switch-background-mode"
+                />
+              </div>
+
               {/* Current Vowel Display */}
               {heliosinger.currentData && (
                 <div className="bg-gradient-to-br from-primary/20 via-accent/10 to-primary/20 rounded-xl p-6 border-2 border-primary/30 shadow-lg">
@@ -362,8 +411,39 @@ export default function Dashboard() {
                   </span>
                 </div>
                 
+                {backgroundMode && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Background Mode:</span>
+                    <Badge variant="default" className="text-xs">
+                      🌙 Active
+                    </Badge>
+                  </div>
+                )}
+                
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Update Frequency:</span>
+                  <span className="font-mono text-xs" data-testid="text-update-frequency">
+                    {getUpdateFrequencyDescription(updateFrequency)}
+                  </span>
+                </div>
+                
                 {heliosinger.currentData && (
                   <>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Chord:</span>
+                      <div className="flex gap-1 flex-wrap justify-end max-w-[60%]">
+                        {heliosinger.currentData.chordVoicing.map((tone, i) => (
+                          <Badge 
+                            key={i} 
+                            variant={i === 0 ? "default" : "outline"} 
+                            className="text-xs font-mono"
+                            title={`${tone.noteName} (${tone.frequency.toFixed(1)} Hz)`}
+                          >
+                            {tone.noteName}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Note:</span>
                       <span className="font-mono" data-testid="text-current-note">
@@ -374,6 +454,18 @@ export default function Dashboard() {
                       <span className="text-muted-foreground">Harmonics:</span>
                       <span className="font-mono" data-testid="text-harmonic-count">
                         {heliosinger.currentData.harmonicCount} partials
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Reverb:</span>
+                      <span className="text-xs">
+                        {Math.round(heliosinger.currentData.reverbRoomSize * 100)}% room
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Delay:</span>
+                      <span className="text-xs">
+                        {(heliosinger.currentData.delayTime * 1000).toFixed(0)}ms ({Math.round(heliosinger.currentData.delayGain * 100)}%)
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
@@ -420,6 +512,158 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </section>
+
+        {/* Notification Settings */}
+        {isNotificationSupported() && (
+          <section className="mb-8">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <i className="fas fa-bell text-primary" />
+                  Notifications
+                  {!canSendNotifications() && (
+                    <Badge variant="secondary" className="ml-auto">
+                      Permission Required
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!canSendNotifications() && (
+                  <div className="bg-accent/10 border border-accent/30 rounded-lg p-4 mb-4">
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Enable browser notifications to receive alerts about significant space weather events.
+                    </p>
+                    <Button
+                      onClick={async () => {
+                        const permission = await requestNotificationPermission();
+                        if (permission === 'granted') {
+                          toast({
+                            title: "Notifications Enabled",
+                            description: "You'll now receive alerts for significant space weather events.",
+                          });
+                          setNotificationSettings(getNotificationSettings());
+                        } else {
+                          toast({
+                            title: "Permission Denied",
+                            description: "Please enable notifications in your browser settings.",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                      size="sm"
+                    >
+                      Enable Notifications
+                    </Button>
+                  </div>
+                )}
+
+                {canSendNotifications() && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <Label htmlFor="notifications-enabled" className="text-sm font-medium">
+                          Enable Notifications
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          Receive alerts for significant space weather events
+                        </p>
+                      </div>
+                      <Switch
+                        id="notifications-enabled"
+                        checked={notificationSettings.enabled}
+                        onCheckedChange={(checked) => {
+                          const updated = { ...notificationSettings, enabled: checked };
+                          setNotificationSettings(updated);
+                          saveNotificationSettings(updated);
+                        }}
+                      />
+                    </div>
+
+                    {notificationSettings.enabled && (
+                      <div className="space-y-3 pl-4 border-l-2 border-primary/20">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="notify-kp" className="text-sm">
+                            Kp Threshold Crossings
+                          </Label>
+                          <Switch
+                            id="notify-kp"
+                            checked={notificationSettings.kpThresholds}
+                            onCheckedChange={(checked) => {
+                              const updated = { ...notificationSettings, kpThresholds: checked };
+                              setNotificationSettings(updated);
+                              saveNotificationSettings(updated);
+                            }}
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="notify-condition" className="text-sm">
+                            Condition Changes
+                          </Label>
+                          <Switch
+                            id="notify-condition"
+                            checked={notificationSettings.conditionChanges}
+                            onCheckedChange={(checked) => {
+                              const updated = { ...notificationSettings, conditionChanges: checked };
+                              setNotificationSettings(updated);
+                              saveNotificationSettings(updated);
+                            }}
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="notify-velocity" className="text-sm">
+                            Large Velocity Changes
+                          </Label>
+                          <Switch
+                            id="notify-velocity"
+                            checked={notificationSettings.velocityChanges}
+                            onCheckedChange={(checked) => {
+                              const updated = { ...notificationSettings, velocityChanges: checked };
+                              setNotificationSettings(updated);
+                              saveNotificationSettings(updated);
+                            }}
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="notify-bz" className="text-sm">
+                            Strong Bz Events
+                          </Label>
+                          <Switch
+                            id="notify-bz"
+                            checked={notificationSettings.bzEvents}
+                            onCheckedChange={(checked) => {
+                              const updated = { ...notificationSettings, bzEvents: checked };
+                              setNotificationSettings(updated);
+                              saveNotificationSettings(updated);
+                            }}
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-border">
+                          <Label htmlFor="notify-sound" className="text-sm">
+                            Sound Notifications
+                          </Label>
+                          <Switch
+                            id="notify-sound"
+                            checked={notificationSettings.soundEnabled}
+                            onCheckedChange={(checked) => {
+                              const updated = { ...notificationSettings, soundEnabled: checked };
+                              setNotificationSettings(updated);
+                              saveNotificationSettings(updated);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </section>
+        )}
 
         {/* Educational Guide */}
         <section className="mb-8">

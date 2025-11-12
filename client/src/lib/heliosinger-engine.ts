@@ -8,21 +8,29 @@
 
 import type { HeliosingerData } from "./heliosinger-mapping";
 
-interface HeliosingerLayer {
-  // Fundamental oscillator (the sun's "voice box")
-  fundamentalOsc: OscillatorNode;
-  fundamentalGain: GainNode;
+interface ChordToneLayer {
+  // Oscillator for this chord tone
+  osc: OscillatorNode;
+  oscGain: GainNode;
   
-  // Formant filters (create vowel sounds)
+  // Formant filters (create vowel sounds) - one set per chord tone
   formantFilters: BiquadFilterNode[];
   formantGains: GainNode[];
+  
+  // Individual panner for stereo spread
+  panner: StereoPannerNode;
+}
+
+interface HeliosingerLayer {
+  // Chord tone layers (multiple notes for harmony)
+  chordToneLayers: ChordToneLayer[];
   
   // Harmonic oscillators (add richness to the voice)
   harmonicOscs: OscillatorNode[];
   harmonicGains: GainNode[];
   
-  // Stereo panning
-  panner: StereoPannerNode;
+  // Master panner (for overall stereo positioning)
+  masterPanner: StereoPannerNode;
 }
 
 interface ModulationLayer {
@@ -51,6 +59,11 @@ class HeliosingerEngine {
   private masterGain: GainNode | null = null;
   private compressor: DynamicsCompressorNode | null = null;
   private limiter: DynamicsCompressorNode | null = null;
+  private delayNode: DelayNode | null = null;
+  private delayGain: GainNode | null = null;
+  private delayFeedbackGain: GainNode | null = null;
+  private reverbConvolver: ConvolverNode | null = null;
+  private reverbGain: GainNode | null = null;
   
   // Audio layers
   private heliosingerLayer: HeliosingerLayer | null = null;
@@ -88,16 +101,37 @@ class HeliosingerEngine {
       this.limiter.attack.value = 0.001;
       this.limiter.release.value = 0.1;
       
-      // Connect chain: masterGain -> compressor -> limiter -> destination
-      this.masterGain.connect(this.compressor);
+      // Create delay node (will be configured when starting)
+      this.delayNode = this.audioContext.createDelay(1.0);
+      this.delayGain = this.audioContext.createGain();
+      this.delayFeedbackGain = this.audioContext.createGain();
+      
+      // Create reverb convolver (will be configured when starting)
+      this.reverbConvolver = this.audioContext.createConvolver();
+      this.reverbGain = this.audioContext.createGain();
+      
+      // Connect chain: masterGain -> delay -> reverb -> compressor -> limiter -> destination
+      // Delay feedback loop: delay -> delayFeedbackGain -> delay (input)
+      this.masterGain.connect(this.delayNode);
+      this.delayNode.connect(this.delayGain);
+      this.delayGain.connect(this.reverbConvolver);
+      this.reverbConvolver.connect(this.reverbGain);
+      this.reverbGain.connect(this.compressor);
       this.compressor.connect(this.limiter);
       this.limiter.connect(this.audioContext.destination);
+      
+      // Delay feedback
+      this.delayNode.connect(this.delayFeedbackGain);
+      this.delayFeedbackGain.connect(this.delayNode);
       
       // Set master volume
       this.masterGain.gain.value = this.targetVolume;
       
       // Create noise buffer for texture layer
       this.createNoiseBuffer();
+      
+      // Create reverb impulse response
+      this.createReverbImpulse();
     }
 
     // Resume audio context if suspended
@@ -120,6 +154,29 @@ class HeliosingerEngine {
   }
   
   /**
+   * Create a simple reverb impulse response
+   * Generates a decaying noise burst for natural reverb
+   */
+  private createReverbImpulse(): void {
+    if (!this.audioContext || !this.reverbConvolver) return;
+    
+    // Create 2 second impulse response
+    const length = this.audioContext.sampleRate * 2.0;
+    const impulse = this.audioContext.createBuffer(2, length, this.audioContext.sampleRate);
+    
+    // Generate decaying noise for both channels
+    for (let channel = 0; channel < 2; channel++) {
+      const channelData = impulse.getChannelData(channel);
+      for (let i = 0; i < length; i++) {
+        const decay = Math.pow(1 - (i / length), 2); // Exponential decay
+        channelData[i] = (Math.random() * 2 - 1) * decay * 0.1;
+      }
+    }
+    
+    this.reverbConvolver.buffer = impulse;
+  }
+  
+  /**
    * Start the sun singing!
    */
   public async startSinging(heliosingerData: HeliosingerData): Promise<void> {
@@ -137,7 +194,10 @@ class HeliosingerEngine {
     this.isSinging = true;
     this.currentData = heliosingerData;
     
-    // Create the main Heliosinger layer (the sun's voice)
+    // Configure reverb and delay
+    this.configureReverbDelay(heliosingerData);
+    
+    // Create the main Heliosinger layer (the sun's voice with chord voicing)
     this.heliosingerLayer = this.createHeliosingerLayer(heliosingerData);
     
     // Create modulation layer (vibrato, tremolo)
@@ -156,7 +216,24 @@ class HeliosingerEngine {
   }
   
   /**
-   * Create the main Heliosinger layer - the sun's singing voice
+   * Configure reverb and delay effects
+   */
+  private configureReverbDelay(data: HeliosingerData): void {
+    if (!this.audioContext || !this.delayNode || !this.delayGain || !this.delayFeedbackGain || !this.reverbGain) return;
+    
+    const now = this.audioContext.currentTime;
+    
+    // Configure delay
+    this.delayNode.delayTime.value = data.delayTime;
+    this.delayGain.gain.value = data.delayGain; // Wet signal
+    this.delayFeedbackGain.gain.value = data.delayFeedback; // Feedback amount
+    
+    // Configure reverb (room size affects gain)
+    this.reverbGain.gain.value = data.reverbRoomSize * 0.3; // Subtle reverb (wet/dry mix)
+  }
+  
+  /**
+   * Create the main Heliosinger layer - the sun's singing voice with chord voicing
    */
   private createHeliosingerLayer(data: HeliosingerData): HeliosingerLayer {
     if (!this.audioContext || !this.masterGain) {
@@ -164,42 +241,69 @@ class HeliosingerEngine {
     }
     
     const layer: HeliosingerLayer = {
-      fundamentalOsc: this.audioContext.createOscillator(),
-      fundamentalGain: this.audioContext.createGain(),
-      formantFilters: [],
-      formantGains: [],
+      chordToneLayers: [],
       harmonicOscs: [],
       harmonicGains: [],
-      panner: this.audioContext.createStereoPanner()
+      masterPanner: this.audioContext.createStereoPanner()
     };
     
-    // Configure fundamental oscillator (the sun's vocal cords)
-    layer.fundamentalOsc.type = 'sawtooth'; // Rich in harmonics, like a voice
-    layer.fundamentalOsc.frequency.value = data.frequency;
-    
-    // Fundamental gain (overall volume before formants)
-    layer.fundamentalGain.gain.value = 0.4;
-    
-    // Create formant filters (the sun's vocal tract shaping the vowel)
-    data.formantFilters.forEach((formant, i) => {
-      const filter = this.audioContext!.createBiquadFilter();
-      filter.type = 'bandpass';
-      filter.frequency.value = formant.frequency;
-      filter.Q.value = formant.frequency / formant.bandwidth; // Convert bandwidth to Q
+    // Create a chord tone layer for each note in the chord voicing
+    data.chordVoicing.forEach((chordTone, toneIndex) => {
+      const toneLayer: ChordToneLayer = {
+        osc: this.audioContext!.createOscillator(),
+        oscGain: this.audioContext!.createGain(),
+        formantFilters: [],
+        formantGains: [],
+        panner: this.audioContext!.createStereoPanner()
+      };
       
-      const gain = this.audioContext!.createGain();
-      gain.gain.value = formant.gain;
+      // Configure oscillator (the sun's vocal cords for this chord tone)
+      toneLayer.osc.type = 'sawtooth'; // Rich in harmonics, like a voice
+      toneLayer.osc.frequency.value = chordTone.frequency;
       
-      layer.formantFilters.push(filter);
-      layer.formantGains.push(gain);
+      // Set gain based on amplitude (fundamental is loudest)
+      toneLayer.oscGain.gain.value = chordTone.amplitude * 0.4;
       
-      // Connect: filter -> gain (will connect to fundamental later)
-      filter.connect(gain);
+      // Create formant filters for this chord tone (apply vowel shape to each note)
+      data.formantFilters.forEach((formant, i) => {
+        const filter = this.audioContext!.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = formant.frequency;
+        filter.Q.value = formant.frequency / formant.bandwidth;
+        
+        const gain = this.audioContext!.createGain();
+        gain.gain.value = formant.gain;
+        
+        toneLayer.formantFilters.push(filter);
+        toneLayer.formantGains.push(gain);
+        
+        // Connect: filter -> gain
+        filter.connect(gain);
+      });
+      
+      // Configure stereo panning for this chord tone
+      // Spread chord tones slightly across stereo field
+      const panSpread = (data.stereoSpread - 0.5) * 2;
+      const tonePanOffset = (toneIndex - (data.chordVoicing.length - 1) / 2) * 0.2;
+      toneLayer.panner.pan.value = Math.max(-1, Math.min(1, panSpread * 0.7 + tonePanOffset));
+      
+      // Connect: osc -> oscGain -> [Formant Filters in parallel] -> tonePanner -> masterPanner -> master
+      toneLayer.osc.connect(toneLayer.oscGain);
+      toneLayer.formantFilters.forEach((filter, i) => {
+        toneLayer.oscGain.connect(filter);
+        toneLayer.formantGains[i].connect(toneLayer.panner);
+      });
+      toneLayer.panner.connect(layer.masterPanner);
+      
+      // Start oscillator
+      toneLayer.osc.start();
+      
+      layer.chordToneLayers.push(toneLayer);
     });
     
     // Create harmonic oscillators (adds richness to the voice)
     data.harmonicAmplitudes.forEach((amplitude, i) => {
-      if (i === 0) return; // Skip fundamental, we already have it
+      if (i === 0) return; // Skip fundamental, we already have it in chord voicing
       
       const harmonicNumber = i + 1;
       const harmonicFreq = data.frequency * harmonicNumber;
@@ -214,30 +318,19 @@ class HeliosingerEngine {
       layer.harmonicOscs.push(osc);
       layer.harmonicGains.push(gain);
       
-      // Connect: osc -> gain -> panner -> master
+      // Connect: osc -> gain -> masterPanner
       osc.connect(gain);
-      gain.connect(layer.panner);
+      gain.connect(layer.masterPanner);
     });
     
-    // Configure stereo panning
+    // Configure master stereo panning
     const panSpread = (data.stereoSpread - 0.5) * 2;
-    layer.panner.pan.value = panSpread * 0.7; // Slightly reduced for vocals
+    layer.masterPanner.pan.value = panSpread * 0.3; // Subtle overall pan
     
-    // Connect the formant filter bank
-    // Fundamental -> [Formant Filters in parallel] -> Panner -> Master
-    layer.formantFilters.forEach((filter, i) => {
-      layer.fundamentalOsc.connect(filter);
-      layer.formantGains[i].connect(layer.panner);
-    });
+    // Connect master panner to master gain
+    layer.masterPanner.connect(this.masterGain);
     
-    // Connect harmonics to panner
-    // (Already connected above)
-    
-    // Connect panner to master
-    layer.panner.connect(this.masterGain);
-    
-    // Start oscillators
-    layer.fundamentalOsc.start();
+    // Start harmonic oscillators
     layer.harmonicOscs.forEach(osc => osc.start());
     
     return layer;
@@ -258,9 +351,11 @@ class HeliosingerEngine {
       this.modulationLayer.vibratoLfo.frequency.value = data.vibratoRate;
       this.modulationLayer.vibratoGain.gain.value = data.vibratoDepth;
       
-      // Connect vibrato to fundamental frequency
+      // Connect vibrato to all chord tone frequencies
       this.modulationLayer.vibratoLfo.connect(this.modulationLayer.vibratoGain);
-      this.modulationLayer.vibratoGain.connect(this.heliosingerLayer.fundamentalOsc.frequency);
+      this.heliosingerLayer.chordToneLayers.forEach(toneLayer => {
+        this.modulationLayer.vibratoGain!.connect(toneLayer.osc.frequency);
+      });
       
       // Also connect to harmonic frequencies
       this.heliosingerLayer.harmonicOscs.forEach(osc => {
@@ -281,8 +376,10 @@ class HeliosingerEngine {
       
       // Connect tremolo to formant gains (creates rhythmic vowel effect)
       this.modulationLayer.tremoloLfo.connect(this.modulationLayer.tremoloGain);
-      this.heliosingerLayer.formantGains.forEach(gain => {
-        this.modulationLayer.tremoloGain!.connect(gain.gain);
+      this.heliosingerLayer.chordToneLayers.forEach(toneLayer => {
+        toneLayer.formantGains.forEach(gain => {
+          this.modulationLayer.tremoloGain!.connect(gain.gain);
+        });
       });
       
       this.modulationLayer.tremoloLfo.start();
@@ -345,31 +442,52 @@ class HeliosingerEngine {
     const now = this.audioContext.currentTime;
     const smoothingTime = 0.1; // 100ms smooth transitions
     
-    // Update fundamental frequency (pitch)
-    this.heliosingerLayer.fundamentalOsc.frequency.exponentialRampToValueAtTime(
-      Math.max(20, heliosingerData.frequency),
-      now + smoothingTime
-    );
-    
-    // Update formant filters (vowel shaping)
-    heliosingerData.formantFilters.forEach((formant, i) => {
-      if (i >= this.heliosingerLayer!.formantFilters.length) return;
+    // Update chord tone frequencies and formant filters
+    heliosingerData.chordVoicing.forEach((chordTone, toneIndex) => {
+      if (toneIndex >= this.heliosingerLayer!.chordToneLayers.length) return;
       
-      const filter = this.heliosingerLayer!.formantFilters[i];
-      const gain = this.heliosingerLayer!.formantGains[i];
+      const toneLayer = this.heliosingerLayer!.chordToneLayers[toneIndex];
       
-      filter.frequency.exponentialRampToValueAtTime(
-        Math.max(100, Math.min(20000, formant.frequency)),
+      // Update chord tone frequency
+      toneLayer.osc.frequency.exponentialRampToValueAtTime(
+        Math.max(20, chordTone.frequency),
         now + smoothingTime
       );
       
-      filter.Q.exponentialRampToValueAtTime(
-        Math.max(0.1, formant.frequency / formant.bandwidth),
+      // Update chord tone gain
+      toneLayer.oscGain.gain.exponentialRampToValueAtTime(
+        Math.max(0.001, chordTone.amplitude * 0.4),
         now + smoothingTime
       );
       
-      gain.gain.exponentialRampToValueAtTime(
-        Math.max(0.001, formant.gain),
+      // Update formant filters for this chord tone
+      heliosingerData.formantFilters.forEach((formant, i) => {
+        if (i >= toneLayer.formantFilters.length) return;
+        
+        const filter = toneLayer.formantFilters[i];
+        const gain = toneLayer.formantGains[i];
+        
+        filter.frequency.exponentialRampToValueAtTime(
+          Math.max(100, Math.min(20000, formant.frequency)),
+          now + smoothingTime
+        );
+        
+        filter.Q.exponentialRampToValueAtTime(
+          Math.max(0.1, formant.frequency / formant.bandwidth),
+          now + smoothingTime
+        );
+        
+        gain.gain.exponentialRampToValueAtTime(
+          Math.max(0.001, formant.gain),
+          now + smoothingTime
+        );
+      });
+      
+      // Update stereo panning for this chord tone
+      const panSpread = (heliosingerData.stereoSpread - 0.5) * 2;
+      const tonePanOffset = (toneIndex - (heliosingerData.chordVoicing.length - 1) / 2) * 0.2;
+      toneLayer.panner.pan.linearRampToValueAtTime(
+        Math.max(-1, Math.min(1, panSpread * 0.7 + tonePanOffset)),
         now + smoothingTime
       );
     });
@@ -395,12 +513,32 @@ class HeliosingerEngine {
       );
     });
     
-    // Update stereo panning
+    // Update master stereo panning
     const panSpread = (heliosingerData.stereoSpread - 0.5) * 2;
-    this.heliosingerLayer.panner.pan.linearRampToValueAtTime(
-      Math.max(-1, Math.min(1, panSpread * 0.7)),
+    this.heliosingerLayer.masterPanner.pan.linearRampToValueAtTime(
+      Math.max(-1, Math.min(1, panSpread * 0.3)),
       now + smoothingTime
     );
+    
+    // Update reverb and delay
+    if (this.delayNode && this.delayGain && this.delayFeedbackGain && this.reverbGain) {
+      this.delayNode.delayTime.exponentialRampToValueAtTime(
+        Math.max(0.1, Math.min(1.0, heliosingerData.delayTime)),
+        now + smoothingTime
+      );
+      this.delayGain.gain.exponentialRampToValueAtTime(
+        Math.max(0.1, Math.min(0.4, heliosingerData.delayGain)),
+        now + smoothingTime
+      );
+      this.delayFeedbackGain.gain.exponentialRampToValueAtTime(
+        Math.max(0, Math.min(0.5, heliosingerData.delayFeedback)),
+        now + smoothingTime
+      );
+      this.reverbGain.gain.exponentialRampToValueAtTime(
+        Math.max(0.05, Math.min(0.5, heliosingerData.reverbRoomSize * 0.3)),
+        now + smoothingTime
+      );
+    }
     
     // Update modulation (vibrato, tremolo)
     if (this.modulationLayer.vibratoLfo && this.modulationLayer.vibratoGain) {
@@ -470,7 +608,11 @@ class HeliosingerEngine {
     
     // Stop Heliosinger layer
     if (this.heliosingerLayer) {
-      try { this.heliosingerLayer.fundamentalOsc.stop(); } catch (e) {}
+      // Stop all chord tone oscillators
+      this.heliosingerLayer.chordToneLayers.forEach(toneLayer => {
+        try { toneLayer.osc.stop(); } catch (e) {}
+      });
+      // Stop harmonic oscillators
       this.heliosingerLayer.harmonicOscs.forEach(osc => {
         try { osc.stop(); } catch (e) {}
       });

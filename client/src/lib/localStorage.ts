@@ -11,6 +11,7 @@ export interface AmbientSettingsStorage {
   max_rate: number;
   battery_min: number;
   gentle_mode?: string; // "true" or "false" for gentler descriptions
+  background_mode?: string; // "true" or "false" for background ambient mode
 }
 
 export function getAmbientSettings(): AmbientSettingsStorage | null {
