@@ -86,61 +86,108 @@ export const VOWEL_FORMANTS: Record<VowelName, VowelFormants> = {
   }
 };
 
+// Track previous vowel for hysteresis
+let previousVowel: VowelFormants | null = null;
+let previousScore = 0;
+
 /**
  * Get vowel from space weather parameters
- * This is where the poetic magic happens - the sun's "mood" determines the vowel
+ * Improved algorithm with better variability and hysteresis
  */
 export function getVowelFromSpaceWeather(
   density: number,
   temperature: number,
   bz: number,
-  kp: number
+  kp: number,
+  velocity?: number
 ): VowelFormants {
-  // Normalize parameters to 0-1 range
+  // Normalize parameters to 0-1 range with wider ranges for more distinct zones
   const normalizedDensity = Math.max(0, Math.min(1, (density - 0.5) / 49.5));
   const normalizedTemp = Math.max(0, Math.min(1, (temperature - 10000) / 190000));
   const normalizedBz = Math.max(-1, Math.min(1, bz / 20)); // -1 (south) to +1 (north)
   const normalizedKp = Math.max(0, Math.min(1, kp / 9));
+  
+  // Include velocity in brightness calculation (fast = brighter)
+  const normalizedVelocity = velocity !== undefined 
+    ? Math.max(0, Math.min(1, (velocity - 200) / 600)) // 200-800 km/s range
+    : 0.5; // Default to middle if not provided
 
-  // Calculate target vowel characteristics
+  // Calculate target vowel characteristics with improved mapping
   // Density → openness (inverse: high density = closed vowel)
   const targetOpenness = 1 - normalizedDensity;
   
-  // Temperature → brightness (hot = bright vowel like 'I')
-  const targetBrightness = normalizedTemp;
+  // Temperature + Velocity → brightness (hot + fast = bright vowel like 'I')
+  const targetBrightness = Math.min(1, normalizedTemp * 0.7 + normalizedVelocity * 0.3);
   
-  // Bz → frontness (southward = front vowel like 'I', northward = back like 'U')
-  const targetFrontness = (normalizedBz < 0) ? 1 - Math.abs(normalizedBz) : 0.5 - (normalizedBz * 0.5);
+  // Bz → frontness (improved mapping using full range)
+  // Southward Bz (< 0) → front vowels (I, E)
+  // Northward Bz (> 0) → back vowels (O, U)
+  // Near zero → central vowels (A)
+  let targetFrontness: number;
+  if (normalizedBz < -0.3) {
+    // Strong southward → very front
+    targetFrontness = 0.8 + (Math.abs(normalizedBz) - 0.3) * 0.2;
+  } else if (normalizedBz > 0.3) {
+    // Strong northward → very back
+    targetFrontness = 0.2 - (normalizedBz - 0.3) * 0.2;
+  } else {
+    // Near zero → central
+    targetFrontness = 0.3 + (0.3 + normalizedBz) * 0.4;
+  }
+  targetFrontness = Math.max(0, Math.min(1, targetFrontness));
   
-  // Kp → vowel stability (high activity = more vowel movement)
-  const vowelStability = 1 - (normalizedKp * 0.5);
+  // Add time-based micro-variation for subtle movement even in stable conditions
+  const timeVariation = Math.sin(Date.now() / 15000) * 0.08; // ±8% variation over 15 seconds
+  const targetBrightnessWithVariation = Math.max(0, Math.min(1, targetBrightness + timeVariation * 0.3));
+  const targetFrontnessWithVariation = Math.max(0, Math.min(1, targetFrontness + timeVariation * 0.2));
 
-  // Find the vowel that best matches these characteristics
+  // Find the vowel that best matches these characteristics using squared distance for sharper distinctions
   let bestVowel: VowelFormants = VOWEL_FORMANTS['A']; // default
-  let bestScore = -1;
+  let bestScore = Infinity; // Lower is better with squared distance
 
   Object.values(VOWEL_FORMANTS).forEach(vowel => {
-    // Calculate how well this vowel matches our target characteristics
-    const opennessScore = 1 - Math.abs(vowel.openness - targetOpenness);
-    const brightnessScore = 1 - Math.abs(vowel.brightness - targetBrightness);
-    const frontnessScore = 1 - Math.abs(vowel.frontness - targetFrontness);
+    // Calculate squared distance (sharper distinctions)
+    const opennessDiff = vowel.openness - targetOpenness;
+    const brightnessDiff = vowel.brightness - targetBrightnessWithVariation;
+    const frontnessDiff = vowel.frontness - targetFrontnessWithVariation;
     
-    // Weighted combination (frontness is most important for intelligibility)
-    const totalScore = (opennessScore * 0.3) + (brightnessScore * 0.3) + (frontnessScore * 0.4);
+    // Squared distance with weights (frontness most important)
+    const squaredDistance = 
+      Math.pow(opennessDiff, 2) * 0.25 +
+      Math.pow(brightnessDiff, 2) * 0.35 +
+      Math.pow(frontnessDiff, 2) * 0.40;
     
-    if (totalScore > bestScore) {
-      bestScore = totalScore;
+    if (squaredDistance < bestScore) {
+      bestScore = squaredDistance;
       bestVowel = vowel;
     }
   });
 
-  // During high activity, add some randomness to vowel for "animated" effect
-  if (normalizedKp > 0.7 && Math.random() < 0.1) {
-    // Occasionally shift vowel during storms for dramatic effect
+  // Hysteresis: require significant change to switch vowels (prevents jitter)
+  if (previousVowel) {
+    const scoreDifference = Math.abs(bestScore - previousScore);
+    const vowelChanged = bestVowel.name !== previousVowel.name;
+    
+    // If vowel changed but score difference is small, keep previous vowel
+    if (vowelChanged && scoreDifference < 0.15) {
+      return previousVowel;
+    }
+  }
+
+  // Add randomness for variability (lower threshold, higher frequency)
+  if (normalizedKp > 0.3 && Math.random() < 0.3) {
+    // Randomly shift vowel during moderate+ activity
     const vowelNames: VowelName[] = ['I', 'E', 'A', 'O', 'U'];
     const randomVowel = vowelNames[Math.floor(Math.random() * vowelNames.length)];
-    return VOWEL_FORMANTS[randomVowel];
+    const selectedVowel = VOWEL_FORMANTS[randomVowel];
+    previousVowel = selectedVowel;
+    previousScore = bestScore;
+    return selectedVowel;
   }
+
+  // Update tracking
+  previousVowel = bestVowel;
+  previousScore = bestScore;
 
   return bestVowel;
 }

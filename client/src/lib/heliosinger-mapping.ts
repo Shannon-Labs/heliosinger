@@ -86,12 +86,13 @@ export function mapSpaceWeatherToHeliosinger(
   // Step 2: Determine space weather condition
   const condition = determineSpaceWeatherCondition(solarWind, kIndex);
   
-  // Step 3: Get the vowel the sun is singing based on parameters
+  // Step 3: Get the vowel the sun is singing based on parameters (including velocity)
   const currentVowel = getVowelFromSpaceWeather(
     solarWind.density,
     solarWind.temperature,
     solarWind.bz,
-    kIndex?.kp || 0
+    kIndex?.kp || 0,
+    solarWind.velocity
   );
   
   // Step 4: Calculate formant filters for the vowel

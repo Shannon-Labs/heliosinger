@@ -18,6 +18,7 @@ import { EnhancedSpaceWeatherViz } from "@/components/EnhancedSpaceWeatherViz";
 import { SpaceWeatherExamples } from "@/components/SpaceWeatherExamples";
 import { EventsTicker } from "@/components/EventsTicker";
 import { MobilePlayer } from "@/components/MobilePlayer";
+import { MusicStaff } from "@/components/MusicStaff";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getAmbientSettings, saveAmbientSettings } from "@/lib/localStorage";
@@ -556,6 +557,15 @@ export default function Dashboard() {
                         );
                       })()}
                     </div>
+                    
+                    {/* Music Staff Visualization */}
+                    <div className="mt-4">
+                      <MusicStaff 
+                        chordVoicing={heliosinger.currentData.chordVoicing}
+                        clef="treble"
+                      />
+                    </div>
+                    
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Note:</span>
                       <span className="font-mono" data-testid="text-current-note">
