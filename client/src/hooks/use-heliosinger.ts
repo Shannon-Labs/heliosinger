@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { mapSpaceWeatherToHeliosinger, createDefaultHeliosingerMapping } from '@/lib/heliosinger-mapping';
 import { startSinging, updateSinging, stopSinging, setSingingVolume } from '@/lib/heliosinger-engine';
 import { apiRequest } from '@/lib/queryClient';
+import { getAmbientSettings } from '@/lib/localStorage';
 import type { ComprehensiveSpaceWeatherData } from '@shared/schema';
 
 interface UseHeliosingerOptions {
@@ -26,15 +27,19 @@ interface UseHeliosingerReturn {
 export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerReturn {
   const { enabled, volume = 0.3, onError } = options;
   const queryClient = useQueryClient();
-  const isSingingRef = useRef(false);
+  const [isSinging, setIsSinging] = useState(false);
   const currentDataRef = useRef<ReturnType<typeof mapSpaceWeatherToHeliosinger> | null>(null);
   
   // Fetch comprehensive space weather data
+  // Always fetch data (not just when enabled) so UI can display it
   const { data: comprehensiveData, error: dataError } = useQuery<ComprehensiveSpaceWeatherData>({
     queryKey: ['/api/space-weather/comprehensive'],
-    queryFn: () => apiRequest('GET', '/api/space-weather/comprehensive'),
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/space-weather/comprehensive');
+      return (await response.json()) as ComprehensiveSpaceWeatherData;
+    },
     refetchInterval: 60000, // Update every minute
-    enabled: enabled, // Only fetch when audio is enabled
+    enabled: true, // Always fetch for UI display
   });
 
   // Handle data errors
@@ -44,7 +49,7 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
     }
   }, [dataError, onError]);
 
-  // Start singing when enabled
+  // Start singing when enabled and data is available
   useEffect(() => {
     let isMounted = true;
     
@@ -52,13 +57,19 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
       if (!enabled || !comprehensiveData) return;
       
       try {
+        // Get gentle mode setting from localStorage
+        const settings = getAmbientSettings();
+        const gentleMode = settings?.gentle_mode === 'true';
+        
         // Map space weather data to Heliosinger parameters
-        const heliosingerData = mapSpaceWeatherToHeliosinger(comprehensiveData);
+        const heliosingerData = mapSpaceWeatherToHeliosinger(comprehensiveData, gentleMode);
         currentDataRef.current = heliosingerData;
         
         // Start the Heliosinger engine
         await startSinging(heliosingerData);
-        isSingingRef.current = true;
+        if (isMounted) {
+          setIsSinging(true);
+        }
         
         // Set initial volume
         setSingingVolume(volume);
@@ -74,33 +85,52 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
         });
       } catch (error) {
         console.error('Failed to start Heliosinger:', error);
+        if (isMounted) {
+          setIsSinging(false);
+        }
         if (onError) {
           onError(error instanceof Error ? error : new Error('Failed to start audio'));
         }
-        isSingingRef.current = false;
       }
     };
 
-    if (enabled) {
-      startAudio();
+    // Only start/stop based on enabled and data availability
+    // Volume changes are handled by a separate effect
+    if (enabled && comprehensiveData) {
+      // Only start if not already singing (to avoid restarting on volume changes)
+      if (!isSinging) {
+        startAudio();
+      } else {
+        // If already singing, just update volume
+        setSingingVolume(volume);
+      }
+    } else if (!enabled && isSinging) {
+      // Stop if disabled
+      stopSinging();
+      setIsSinging(false);
     }
     
     return () => {
       isMounted = false;
-      if (enabled) {
+      // Only cleanup if we're actually stopping (enabled changed to false)
+      if (!enabled && isSinging) {
         stopSinging();
-        isSingingRef.current = false;
+        setIsSinging(false);
       }
     };
-  }, [enabled]); // Only restart when enabled changes
+  }, [enabled, comprehensiveData, volume, isSinging, onError]); // Include volume for initial setting
 
   // Update singing when data changes
   useEffect(() => {
-    if (!enabled || !comprehensiveData || !isSingingRef.current) return;
+    if (!enabled || !comprehensiveData || !isSinging) return;
     
     try {
+      // Get gentle mode setting from localStorage
+      const settings = getAmbientSettings();
+      const gentleMode = settings?.gentle_mode === 'true';
+      
       // Map new data to Heliosinger parameters
-      const heliosingerData = mapSpaceWeatherToHeliosinger(comprehensiveData);
+      const heliosingerData = mapSpaceWeatherToHeliosinger(comprehensiveData, gentleMode);
       const previousData = currentDataRef.current;
       currentDataRef.current = heliosingerData;
       
@@ -129,57 +159,63 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
         onError(error instanceof Error ? error : new Error('Failed to update audio'));
       }
     }
-  }, [comprehensiveData, enabled]);
+  }, [comprehensiveData, enabled, isSinging, onError]);
 
   // Update volume when it changes
   useEffect(() => {
-    if (enabled && isSingingRef.current) {
+    if (enabled && isSinging) {
       setSingingVolume(volume);
     }
-  }, [volume, enabled]);
+  }, [volume, enabled, isSinging]);
 
   // Manual control functions
   const start = useCallback(async () => {
-    if (isSingingRef.current) return;
+    if (isSinging) return;
     
     try {
       // Fetch latest data
-      const data = await apiRequest('GET', '/api/space-weather/comprehensive');
+      const response = await apiRequest('GET', '/api/space-weather/comprehensive');
+      const data = (await response.json()) as ComprehensiveSpaceWeatherData;
+      
+      // Get gentle mode setting from localStorage
+      const settings = getAmbientSettings();
+      const gentleMode = settings?.gentle_mode === 'true';
       
       // Map to Heliosinger
-      const heliosingerData = mapSpaceWeatherToHeliosinger(data);
+      const heliosingerData = mapSpaceWeatherToHeliosinger(data, gentleMode);
       currentDataRef.current = heliosingerData;
       
       // Start audio
       await startSinging(heliosingerData);
       setSingingVolume(volume);
-      isSingingRef.current = true;
+      setIsSinging(true);
       
       // Invalidate query to ensure we have fresh data
       queryClient.invalidateQueries({ queryKey: ['/api/space-weather/comprehensive'] });
     } catch (error) {
       console.error('Failed to start Heliosinger:', error);
+      setIsSinging(false);
       if (onError) {
         onError(error instanceof Error ? error : new Error('Failed to start audio'));
       }
       throw error;
     }
-  }, [volume, onError, queryClient]);
+  }, [volume, onError, queryClient, isSinging]);
 
   const stop = useCallback(() => {
-    if (!isSingingRef.current) return;
+    if (!isSinging) return;
     
     stopSinging();
-    isSingingRef.current = false;
+    setIsSinging(false);
     currentDataRef.current = null;
-  }, []);
+  }, [isSinging]);
 
   const setVolume = useCallback((newVolume: number) => {
     setSingingVolume(newVolume);
   }, []);
 
   return {
-    isSinging: isSingingRef.current,
+    isSinging,
     currentData: currentDataRef.current,
     start,
     stop,
@@ -238,7 +274,10 @@ export function useDashboardHeliosinger() {
 export function useHeliosingerPreview() {
   const { data: comprehensiveData } = useQuery<ComprehensiveSpaceWeatherData>({
     queryKey: ['/api/space-weather/comprehensive-preview'],
-    queryFn: () => apiRequest('GET', '/api/space-weather/comprehensive'),
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/space-weather/comprehensive');
+      return (await response.json()) as ComprehensiveSpaceWeatherData;
+    },
     enabled: false, // Don't auto-fetch
   });
 
@@ -246,12 +285,17 @@ export function useHeliosingerPreview() {
     if (!comprehensiveData) {
       return createDefaultHeliosingerMapping();
     }
-    return mapSpaceWeatherToHeliosinger(comprehensiveData);
+    const settings = getAmbientSettings();
+    const gentleMode = settings?.gentle_mode === 'true';
+    return mapSpaceWeatherToHeliosinger(comprehensiveData, gentleMode);
   }, [comprehensiveData]);
 
   const previewMapping = useCallback(async () => {
-    const data = await apiRequest('GET', '/api/space-weather/comprehensive');
-    return mapSpaceWeatherToHeliosinger(data);
+    const response = await apiRequest('GET', '/api/space-weather/comprehensive');
+    const data = (await response.json()) as ComprehensiveSpaceWeatherData;
+    const settings = getAmbientSettings();
+    const gentleMode = settings?.gentle_mode === 'true';
+    return mapSpaceWeatherToHeliosinger(data, gentleMode);
   }, []);
 
   return {

@@ -8,7 +8,10 @@ import { apiRequest } from "@/lib/queryClient";
 export function ComprehensiveSpaceWeather() {
   const { data: spaceWeather, isLoading } = useQuery<ComprehensiveSpaceWeatherData>({
     queryKey: ["/api/space-weather/comprehensive"],
-    queryFn: () => apiRequest("GET", "/api/space-weather/comprehensive"),
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/space-weather/comprehensive");
+      return (await response.json()) as ComprehensiveSpaceWeatherData;
+    },
     refetchInterval: 60000, // Refresh every minute
   });
 
@@ -214,7 +217,17 @@ export function ComprehensiveSpaceWeather() {
         )}
 
         <div className="text-xs text-muted-foreground pt-4 border-t">
-          Last updated: {new Date(spaceWeather.timestamp).toLocaleString()}
+          Last updated: {(() => {
+            try {
+              const date = new Date(spaceWeather.timestamp);
+              if (isNaN(date.getTime())) {
+                return 'Unknown';
+              }
+              return date.toLocaleString();
+            } catch {
+              return 'Unknown';
+            }
+          })()}
         </div>
       </CardContent>
     </Card>

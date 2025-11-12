@@ -43,7 +43,7 @@ export default function Dashboard() {
   });
 
   // Fetch current solar wind data
-  const { data: currentData, isLoading: currentLoading, error: currentError } = useQuery({
+  const { data: currentData, isLoading: currentLoading, error: currentError } = useQuery<any>({
     queryKey: ["/api/solar-wind/current"],
     refetchInterval: 60000, // Refetch every minute
     retry: false
@@ -52,7 +52,10 @@ export default function Dashboard() {
   // Fetch comprehensive space weather data
   const { data: comprehensiveData, isLoading: comprehensiveLoading } = useQuery<ComprehensiveSpaceWeatherData>({
     queryKey: ["/api/space-weather/comprehensive"],
-    queryFn: () => apiRequest("GET", "/api/space-weather/comprehensive"),
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/space-weather/comprehensive");
+      return (await response.json()) as ComprehensiveSpaceWeatherData;
+    },
     refetchInterval: 60000, // Refetch every minute
   });
 
@@ -72,6 +75,7 @@ export default function Dashboard() {
   const [isLegacyAmbientEnabled, setIsLegacyAmbientEnabled] = useState(false);
   const [respectNight, setRespectNight] = useState(true);
   const [dayOnly, setDayOnly] = useState(false);
+  const [gentleMode, setGentleMode] = useState(false);
 
   // Update ambient settings mutation (saves to localStorage for static site)
   const updateAmbientMutation = useMutation({
@@ -108,10 +112,11 @@ export default function Dashboard() {
     const stored = getAmbientSettings();
     const settings = ambientSettings || stored;
     
-    if (settings) {
-      setAmbientVolume(settings.volume || 0.3);
-      setRespectNight(settings.respect_night === "true");
-      setDayOnly(settings.day_only === "true");
+    if (settings && typeof settings === 'object') {
+      setAmbientVolume((settings as any).volume || 0.3);
+      setRespectNight((settings as any).respect_night === "true");
+      setDayOnly((settings as any).day_only === "true");
+      setGentleMode((settings as any).gentle_mode === "true");
     }
   }, [ambientSettings]);
 
@@ -182,14 +187,14 @@ export default function Dashboard() {
   const handleLegacyAmbientToggle = async (enabled: boolean) => {
     setIsLegacyAmbientEnabled(enabled);
     
-    if (enabled && currentData) {
+    if (enabled && currentData && typeof currentData === 'object' && 'velocity' in currentData) {
       try {
         // Stop Heliosinger if it's active
         if (isHeliosingerEnabled) {
           setIsHeliosingerEnabled(false);
         }
         
-        const chordData = generateChordDataFromSolarWind(currentData);
+        const chordData = generateChordDataFromSolarWind(currentData as { velocity: number; density: number; bz: number });
         await startAmbient(chordData, ambientVolume, 0.8);
         console.log("Started legacy ambient mode with current solar wind data");
       } catch (error) {
@@ -233,13 +238,13 @@ export default function Dashboard() {
 
   // Update legacy ambient audio when solar wind data changes
   useEffect(() => {
-    if (isLegacyAmbientEnabled && !isHeliosingerEnabled && currentData) {
-      const chordData = generateChordDataFromSolarWind(currentData);
+    if (isLegacyAmbientEnabled && !isHeliosingerEnabled && currentData && typeof currentData === 'object' && 'velocity' in currentData) {
+      const chordData = generateChordDataFromSolarWind(currentData as { velocity: number; density: number; bz: number });
       updateAmbient(chordData);
     }
   }, [currentData, isLegacyAmbientEnabled, isHeliosingerEnabled]);
 
-  const isDataStreamActive = systemStatus?.find(s => s.component === 'data_stream')?.status === 'active';
+  const isDataStreamActive = Array.isArray(systemStatus) && systemStatus.find((s: any) => s.component === 'data_stream')?.status === 'active';
 
   if (currentError && !currentData) {
     return (
@@ -311,18 +316,18 @@ export default function Dashboard() {
 
         {/* Solar Wind Data Display */}
         <SolarWindDisplay 
-          data={currentData} 
+          data={(currentData && typeof currentData === 'object' && 'velocity' in currentData) ? (currentData as any) : undefined} 
           loading={currentLoading}
           onRefresh={() => fetchDataMutation.mutate()}
           refreshing={fetchDataMutation.isPending}
         />
 
         {/* Current Chord Visualization */}
-        {currentData && (
+        {currentData && typeof currentData === 'object' && 'velocity' in currentData && (
           <ChordVisualization 
-            velocity={currentData.velocity}
-            density={currentData.density}
-            bz={currentData.bz}
+            velocity={(currentData as any).velocity}
+            density={(currentData as any).density}
+            bz={(currentData as any).bz}
           />
         )}
 
@@ -380,6 +385,33 @@ export default function Dashboard() {
                 />
               </div>
 
+              {/* Gentle Mode Toggle */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label htmlFor="gentle-mode-toggle" className="text-sm font-medium">
+                    🌸 Gentle Mode
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Use gentler, less intense descriptions (less "terrifying")
+                  </p>
+                </div>
+                <Switch
+                  id="gentle-mode-toggle"
+                  checked={gentleMode}
+                  onCheckedChange={(checked) => {
+                    setGentleMode(checked);
+                    updateAmbientMutation.mutate({
+                      gentle_mode: checked ? "true" : "false"
+                    });
+                    // Force update Heliosinger if it's active
+                    if (isHeliosingerEnabled && heliosinger.currentData) {
+                      queryClient.invalidateQueries({ queryKey: ['/api/space-weather/comprehensive'] });
+                    }
+                  }}
+                  data-testid="switch-gentle-mode"
+                />
+              </div>
+
               {/* Current Vowel Display */}
               {heliosinger.currentData && (
                 <div className="bg-gradient-to-r from-primary/10 to-accent/10 rounded-lg p-4 border border-primary/20">
@@ -429,36 +461,36 @@ export default function Dashboard() {
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Condition:</span>
                       <Badge variant={heliosinger.currentData.condition === 'extreme' ? 'destructive' : 
-                                     heliosinger.currentData.condition === 'storm' ? 'warning' : 'default'}
+                                     heliosinger.currentData.condition === 'storm' ? 'secondary' : 'default'}
                              className="text-xs">
-                        {heliosinger.currentData.condition}
+                        {String(heliosinger.currentData.condition)}
                       </Badge>
                     </div>
                   </>
                 )}
                 
-                {!heliosinger.currentData && currentData && (
+                {!heliosinger.currentData && currentData && typeof currentData === 'object' && 'velocity' in currentData ? (
                   <>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Velocity:</span>
                       <span className="font-mono" data-testid="text-velocity">
-                        {currentData.velocity.toFixed(1)} km/s
+                        {(currentData as any).velocity.toFixed(1)} km/s
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Density:</span>
                       <span className="font-mono" data-testid="text-density">
-                        {currentData.density.toFixed(1)} p/cm³
+                        {(currentData as any).density.toFixed(1)} p/cm³
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Bz:</span>
                       <span className="font-mono" data-testid="text-bz">
-                        {currentData.bz.toFixed(1)} nT
+                        {(currentData as any).bz.toFixed(1)} nT
                       </span>
                     </div>
                   </>
-                )}
+                ) : null}
               </div>
 
               {/* Help Text */}

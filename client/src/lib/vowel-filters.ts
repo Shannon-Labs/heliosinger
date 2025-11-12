@@ -159,12 +159,51 @@ export function getVowelFromSpaceWeather(
 
 /**
  * Get a poetic description of what the sun is "saying"
+ * @param gentleMode - If true, uses gentler, less intense descriptions
  */
 export function getSolarMoodDescription(
   vowel: VowelFormants,
-  condition: 'quiet' | 'moderate' | 'storm' | 'extreme'
+  condition: 'quiet' | 'moderate' | 'storm' | 'extreme',
+  gentleMode: boolean = false
 ): string {
-  const moodDescriptions = {
+  const moodDescriptions = gentleMode ? {
+    'quiet': {
+      'ee': 'The sun softly sings a bright, clear note',
+      'i': 'The sun gently hums a light melody',
+      'eh': 'The sun peacefully resonates',
+      'ah': 'The sun breathes a calm, open tone',
+      'oh': 'The sun softly intones',
+      'oo': 'The sun quietly rumbles in the distance',
+      'uh': 'The sun murmurs steadily'
+    },
+    'moderate': {
+      'ee': 'The sun sings brightly with growing energy',
+      'i': 'The sun\'s voice lifts with animation',
+      'eh': 'The sun resonates with moderate strength',
+      'ah': 'The sun calls out with open clarity',
+      'oh': 'The sun proclaims with rounded tones',
+      'oo': 'The sun intones with deep resonance',
+      'uh': 'The sun speaks with steady voice'
+    },
+    'storm': {
+      'ee': 'The sun sings with brilliant intensity',
+      'i': 'The sun\'s voice rises with clarity',
+      'eh': 'The sun resonates with strong energy',
+      'ah': 'The sun sings with powerful resonance',
+      'oh': 'The sun intones with deep strength',
+      'oo': 'The sun resonates with deep authority',
+      'uh': 'The sun sings with vibrant energy'
+    },
+    'extreme': {
+      'ee': 'The sun sings with maximum brightness',
+      'i': 'The sun\'s voice reaches peak intensity',
+      'eh': 'The sun resonates with great power',
+      'ah': 'The sun sings with profound resonance',
+      'oh': 'The sun intones with cosmic strength',
+      'oo': 'The sun resonates with deep majesty',
+      'uh': 'The sun sings with intense energy'
+    }
+  } : {
     'quiet': {
       'ee': 'The sun softly sings a bright, clear note',
       'i': 'The sun gently hums a light melody',
