@@ -180,17 +180,29 @@ export default function Dashboard() {
     
     if (enabled) {
       try {
-        // Explicitly start audio on user interaction (required for mobile)
-        // This ensures audio context resumes properly on mobile devices
+        // Explicitly start audio on user interaction (required for mobile/iOS)
+        // iOS requires audio to start synchronously during user interaction
         if (!heliosinger.isSinging && comprehensiveData) {
+          console.log("Starting Heliosinger on user interaction...");
           await heliosinger.start();
+          console.log("Heliosinger started successfully");
+          
+          // Verify audio is actually playing
+          setTimeout(() => {
+            if (heliosinger.isSinging) {
+              console.log("✅ Heliosinger is singing");
+            } else {
+              console.warn("⚠️ Heliosinger state says singing but may not be audible");
+            }
+          }, 500);
         }
         console.log("Heliosinger mode enabled - the sun will sing");
       } catch (error) {
         console.error("Failed to start Heliosinger:", error);
+        const errorMessage = error instanceof Error ? error.message : "Could not start Heliosinger audio.";
         toast({
           title: "Heliosinger Failed",
-          description: error instanceof Error ? error.message : "Could not start Heliosinger audio. Check browser audio permissions.",
+          description: `${errorMessage} On iOS, make sure your device is not on silent mode and volume is up.`,
           variant: "destructive",
         });
         setIsHeliosingerEnabled(false);

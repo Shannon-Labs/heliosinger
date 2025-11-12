@@ -141,18 +141,53 @@ class HeliosingerEngine {
       }
 
       // Resume audio context if suspended (browser autoplay policy)
+      // iOS requires this to happen synchronously during user interaction
       if (this.audioContext.state === 'suspended') {
         try {
-          await this.audioContext.resume();
+          // On iOS, resume() must be called synchronously during user interaction
+          const resumePromise = this.audioContext.resume();
+          await resumePromise;
+          
+          // Double-check state after resume
+          if (this.audioContext.state === 'suspended') {
+            console.warn('Audio context still suspended after resume attempt');
+            // Try one more time
+            await this.audioContext.resume();
+          }
+          
+          console.log(`Audio context state: ${this.audioContext.state}`);
+          
+          // iOS unlock: Play a very short silent buffer to unlock audio
+          // This is sometimes needed on iOS Safari
+          try {
+            const buffer = this.audioContext.createBuffer(1, 1, 22050);
+            const source = this.audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(this.audioContext.destination);
+            source.start(0);
+            source.stop(0.001);
+            console.log('Played iOS unlock buffer');
+          } catch (unlockError) {
+            // Ignore unlock errors, not critical
+            console.warn('iOS unlock buffer failed (non-critical):', unlockError);
+          }
         } catch (resumeError) {
-          console.warn('Failed to resume audio context:', resumeError);
-          throw new Error('Audio requires user interaction. Please click to enable audio.');
+          console.error('Failed to resume audio context:', resumeError);
+          throw new Error('Audio requires user interaction. Please tap the play button to enable audio.');
         }
       }
 
       // Check if audio context is in a valid state
       if (this.audioContext.state === 'closed') {
         throw new Error('Audio context has been closed');
+      }
+      
+      // Log audio context state for debugging
+      console.log(`Audio context initialized: state=${this.audioContext.state}, sampleRate=${this.audioContext.sampleRate}Hz`);
+      
+      // Verify master gain is connected and has correct volume
+      if (this.masterGain) {
+        console.log(`Master gain: value=${this.masterGain.gain.value}, connected=${this.masterGain.numberOfOutputs > 0}`);
       }
     } catch (error) {
       console.error('Failed to initialize audio:', error);
@@ -214,9 +249,13 @@ class HeliosingerEngine {
     this.isSinging = true;
     this.currentData = heliosingerData;
     
-    // Ensure volume is set before starting (important for mobile)
+    // Ensure volume is set before starting (critical for mobile/iOS/Android)
     if (this.masterGain) {
-      this.masterGain.gain.value = Math.max(0.001, this.targetVolume);
+      const targetVol = Math.max(0.001, this.targetVolume);
+      const now = this.audioContext.currentTime;
+      this.masterGain.gain.cancelScheduledValues(now);
+      this.masterGain.gain.setValueAtTime(targetVol, now);
+      console.log(`Set master gain to ${(targetVol * 100).toFixed(0)}% before starting audio`);
     }
     
     // Configure reverb and delay
@@ -321,8 +360,14 @@ class HeliosingerEngine {
       });
       toneLayer.panner.connect(layer.masterPanner);
       
-      // Start oscillator
-      toneLayer.osc.start();
+      // Start oscillator (must happen synchronously on iOS)
+      try {
+        toneLayer.osc.start();
+        console.log(`Started chord tone oscillator: ${chordTone.frequency}Hz, gain=${toneLayer.oscGain.gain.value}`);
+      } catch (error) {
+        console.error(`Failed to start oscillator:`, error);
+        throw error;
+      }
       
       layer.chordToneLayers.push(toneLayer);
     });
@@ -388,7 +433,12 @@ class HeliosingerEngine {
         this.modulationLayer.vibratoGain!.connect(osc.frequency);
       });
       
-      this.modulationLayer.vibratoLfo.start();
+      try {
+        this.modulationLayer.vibratoLfo.start();
+        console.log(`Started vibrato LFO at ${this.modulationLayer.vibratoLfo.frequency.value.toFixed(2)}Hz`);
+      } catch (error) {
+        console.error(`Failed to start vibrato LFO:`, error);
+      }
     }
     
     // Create tremolo LFO (amplitude modulation from K-index)
@@ -408,7 +458,12 @@ class HeliosingerEngine {
         });
       });
       
-      this.modulationLayer.tremoloLfo.start();
+      try {
+        this.modulationLayer.tremoloLfo.start();
+        console.log(`Started tremolo LFO at ${this.modulationLayer.tremoloLfo.frequency.value.toFixed(2)}Hz`);
+      } catch (error) {
+        console.error(`Failed to start tremolo LFO:`, error);
+      }
     }
   }
   
@@ -438,7 +493,12 @@ class HeliosingerEngine {
       this.textureLayer.noiseFilter.connect(this.textureLayer.noiseGain);
       this.textureLayer.noiseGain.connect(this.masterGain);
       
-      this.textureLayer.noiseSource.start();
+      try {
+        this.textureLayer.noiseSource.start();
+        console.log(`Started noise source for shimmer`);
+      } catch (error) {
+        console.error(`Failed to start noise source:`, error);
+      }
     }
     
     // Low-frequency rumble for extreme conditions
@@ -455,7 +515,12 @@ class HeliosingerEngine {
       this.textureLayer.rumbleOsc.connect(this.textureLayer.rumbleGain);
       this.textureLayer.rumbleGain.connect(this.masterGain);
       
-      this.textureLayer.rumbleOsc.start();
+      try {
+        this.textureLayer.rumbleOsc.start();
+        console.log(`Started rumble oscillator at ${this.textureLayer.rumbleOsc.frequency.value}Hz`);
+      } catch (error) {
+        console.error(`Failed to start rumble oscillator:`, error);
+      }
     }
   }
   
