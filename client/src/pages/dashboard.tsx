@@ -17,8 +17,6 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getAmbientSettings, saveAmbientSettings } from "@/lib/localStorage";
 import { useHeliosinger } from "@/hooks/use-heliosinger";
-import { startAmbient, updateAmbient, stopAmbient, setAmbientVolume } from "@/lib/audio-engine";
-import { generateChordDataFromSolarWind } from "@/lib/midi-mapping";
 import type { AmbientSettings, ComprehensiveSpaceWeatherData } from "@shared/schema";
 
 export default function Dashboard() {
@@ -178,34 +176,11 @@ export default function Dashboard() {
     });
   };
 
-  // Legacy ambient toggle (for backwards compatibility)
+  // Ambient toggle (now uses Heliosinger engine)
   const handleLegacyAmbientToggle = async (enabled: boolean) => {
     setIsLegacyAmbientEnabled(enabled);
-    
-    if (enabled && currentData) {
-      try {
-        // Stop Heliosinger if it's active
-        if (isHeliosingerEnabled) {
-          setIsHeliosingerEnabled(false);
-        }
-        
-        const chordData = generateChordDataFromSolarWind(currentData);
-        await startAmbient(chordData, ambientVolume, 0.8);
-        console.log("Started legacy ambient mode with current solar wind data");
-      } catch (error) {
-        console.error("Failed to start ambient mode:", error);
-        toast({
-          title: "Ambient Mode Failed",
-          description: "Could not start ambient audio. Check browser audio permissions.",
-          variant: "destructive",
-        });
-        setIsLegacyAmbientEnabled(false);
-        return;
-      }
-    } else {
-      stopAmbient();
-      console.log("Stopped ambient mode");
-    }
+    setIsHeliosingerEnabled(enabled);
+    // Heliosinger hook handles starting/stopping automatically
   };
 
   // Volume change handler
@@ -213,11 +188,8 @@ export default function Dashboard() {
     const newVolume = value[0];
     setAmbientVolume(newVolume);
     
-    if (isHeliosingerEnabled) {
-      heliosinger.setVolume(newVolume);
-    } else if (isLegacyAmbientEnabled) {
-      setAmbientVolume(newVolume);
-    }
+    // Always route volume to Heliosinger engine
+    heliosinger.setVolume(newVolume);
     
     if (isHeliosingerEnabled || isLegacyAmbientEnabled) {
       setTimeout(() => {
@@ -231,13 +203,7 @@ export default function Dashboard() {
     }
   };
 
-  // Update legacy ambient audio when solar wind data changes
-  useEffect(() => {
-    if (isLegacyAmbientEnabled && !isHeliosingerEnabled && currentData) {
-      const chordData = generateChordDataFromSolarWind(currentData);
-      updateAmbient(chordData);
-    }
-  }, [currentData, isLegacyAmbientEnabled, isHeliosingerEnabled]);
+  // Legacy ambient update no longer needed; Heliosinger handles updates
 
   const isDataStreamActive = systemStatus?.find(s => s.component === 'data_stream')?.status === 'active';
 
@@ -474,13 +440,13 @@ export default function Dashboard() {
           </Card>
         </section>
 
-        {/* Legacy Ambient Mode (Hidden by default, can be toggled for backwards compatibility) */}
+        {/* Ambient Mode (Alias for Heliosinger for backwards compatibility) */}
         <section className="mb-8">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
                 <div className={`w-3 h-3 rounded-full mr-3 ${isLegacyAmbientEnabled ? 'bg-accent animate-pulse' : 'bg-muted'}`} />
-                Legacy Audio Modes
+                Ambient Mode (Heliosinger)
                 <Badge variant={isLegacyAmbientEnabled ? "default" : "secondary"} className="ml-auto">
                   {isLegacyAmbientEnabled ? "Active" : "Inactive"}
                 </Badge>
@@ -490,17 +456,17 @@ export default function Dashboard() {
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label htmlFor="legacy-ambient-toggle" className="text-base font-medium">
-                    Simple Ambient Mode (Legacy)
+                    Use as Ambient Background
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                    Original ambient mode - continuous web audio reflecting solar wind conditions
+                    Same Heliosinger engine, optimized for continuous background listening
                   </p>
                 </div>
                 <Switch
                   id="legacy-ambient-toggle"
                   checked={isLegacyAmbientEnabled}
                   onCheckedChange={handleLegacyAmbientToggle}
-                  disabled={!currentData || ambientLoading || isHeliosingerEnabled}
+                  disabled={ambientLoading || !comprehensiveData}
                   data-testid="switch-legacy-ambient-toggle"
                 />
               </div>
