@@ -116,7 +116,7 @@ export function HeliosingerGuide() {
 
         <div className="pt-4 border-t border-border/50">
           <p className="text-xs text-muted-foreground italic">
-            🌞 Each moment in space weather creates a unique sung note. The sun literally sings its story in real-time.
+            Each moment in space weather creates a unique sung note. The sun literally sings its story in real-time.
           </p>
         </div>
       </CardContent>

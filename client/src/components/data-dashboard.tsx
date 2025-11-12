@@ -95,14 +95,14 @@ export function DataDashboard() {
   
   return (
     <section className="mb-8">
-      <h2 className="text-2xl font-bold mb-6">Real-time Data Dashboard</h2>
+      <h2 className="text-2xl font-bold mb-6 tracking-tight">Real-time Data Dashboard</h2>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* NOAA DSCOVR Data Stream */}
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">NOAA DSCOVR Data Stream</h3>
+              <h3 className="text-lg font-semibold tracking-tight">NOAA DSCOVR Data Stream</h3>
               <div className="flex items-center space-x-2">
                 <div className={`w-2 h-2 rounded-full ${dataStreamStatus?.status === 'active' ? 'bg-accent pulse-animation' : 'bg-destructive'}`} />
                 <span className="text-sm" data-testid="text-data-connection-status">
@@ -173,7 +173,7 @@ export function DataDashboard() {
         {/* Parameter History Charts */}
         <Card>
           <CardContent className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Parameter History (24h)</h3>
+            <h3 className="text-lg font-semibold mb-4 tracking-tight">Parameter History (24h)</h3>
             <div className="space-y-6">
               
               {/* Velocity Trend */}
@@ -203,7 +203,7 @@ export function DataDashboard() {
                     <div className="text-xs text-muted-foreground">No data available</div>
                   )}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground font-mono">
                   Range: {historyData && historyData.length > 0 ? 
                     `${Math.min(...historyData.map(d => d.velocity)).toFixed(0)} - ${Math.max(...historyData.map(d => d.velocity)).toFixed(0)} km/s` 
                     : 'N/A'}
@@ -237,7 +237,7 @@ export function DataDashboard() {
                     <div className="text-xs text-muted-foreground">No data available</div>
                   )}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground font-mono">
                   Range: {historyData && historyData.length > 0 ? 
                     `${Math.min(...historyData.map(d => d.density)).toFixed(1)} - ${Math.max(...historyData.map(d => d.density)).toFixed(1)} p/cm³` 
                     : 'N/A'}
@@ -283,7 +283,7 @@ export function DataDashboard() {
                     <div className="text-xs text-muted-foreground">No data available</div>
                   )}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground font-mono">
                   Range: {historyData && historyData.length > 0 ? 
                     `${Math.min(...historyData.map(d => d.bz)).toFixed(1)} - ${Math.max(...historyData.map(d => d.bz)).toFixed(1)} nT` 
                     : 'N/A'}
@@ -291,8 +291,8 @@ export function DataDashboard() {
               </div>
             </div>
             
-            <div className="mt-4 pt-4 border-t border-border text-sm text-muted-foreground">
-              Historical trends help identify space weather patterns and forecast upcoming chord changes
+            <div className="mt-4 pt-4 border-t border-border text-xs text-muted-foreground leading-relaxed">
+              Historical trends help identify space weather patterns and forecast upcoming chord changes.
             </div>
           </CardContent>
         </Card>

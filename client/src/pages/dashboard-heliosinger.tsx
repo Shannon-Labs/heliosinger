@@ -28,6 +28,7 @@ import {
   canSendNotifications
 } from "@/lib/notifications";
 import { calculateRefetchInterval, getUpdateFrequencyDescription } from "@/lib/adaptive-refetch";
+import { getChordQuality, getChordSelectionExplanation } from "@/lib/chord-utils";
 import type { AmbientSettings, ComprehensiveSpaceWeatherData } from "@shared/schema";
 
 export default function Dashboard() {
@@ -275,6 +276,12 @@ export default function Dashboard() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
+              <img 
+                src="/preview.webp" 
+                alt="Heliosinger Logo" 
+                className="w-10 h-10 rounded-lg object-contain"
+                aria-hidden="true"
+              />
               <h1 className="text-xl font-bold text-foreground" data-testid="text-app-title">
                 Heliosinger: Listen to the Sun
               </h1>
@@ -306,11 +313,14 @@ export default function Dashboard() {
         <section className="mb-12 text-center">
           <div className="flex justify-center mb-6">
             <img 
-              src="/name.webp" 
-              alt="Heliosinger" 
-              className="h-20 object-contain"
+              src="/preview.webp" 
+              alt="Heliosinger Logo" 
+              className="h-24 w-24 rounded-2xl object-contain shadow-lg"
             />
           </div>
+          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
+            Heliosinger
+          </h1>
           <p className="text-xl text-muted-foreground mb-2">
             Real-Time Space Weather Sonification
           </p>
@@ -448,20 +458,41 @@ export default function Dashboard() {
                 
                 {heliosinger.currentData && (
                   <>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Chord:</span>
-                      <div className="flex gap-1 flex-wrap justify-end max-w-[60%]">
-                        {heliosinger.currentData.chordVoicing.map((tone, i) => (
-                          <Badge 
-                            key={i} 
-                            variant={i === 0 ? "default" : "outline"} 
-                            className="text-xs font-mono"
-                            title={`${tone.noteName} (${tone.frequency.toFixed(1)} Hz)`}
-                          >
-                            {tone.noteName}
-                          </Badge>
-                        ))}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Chord:</span>
+                        <div className="flex gap-1 flex-wrap justify-end max-w-[60%]">
+                          {heliosinger.currentData.chordVoicing.map((tone, i) => (
+                            <Badge 
+                              key={i} 
+                              variant={i === 0 ? "default" : "outline"} 
+                              className="text-xs font-mono"
+                              title={`${tone.noteName} (${tone.frequency.toFixed(1)} Hz)`}
+                            >
+                              {tone.noteName}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
+                      {(() => {
+                        const chordQuality = getChordQuality(heliosinger.currentData.condition);
+                        return (
+                          <div className="text-xs space-y-1 pl-2 border-l-2 border-primary/30">
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Quality:</span>
+                              <Badge variant="outline" className="text-xs font-semibold">
+                                {chordQuality.name}
+                              </Badge>
+                            </div>
+                            <p className="text-muted-foreground italic">
+                              {chordQuality.description}
+                            </p>
+                            <p className="text-muted-foreground/80 text-[10px]">
+                              {getChordSelectionExplanation(heliosinger.currentData.condition)}
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Note:</span>

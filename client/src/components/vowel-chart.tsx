@@ -87,7 +87,7 @@ export function VowelChart({ currentVowel, currentVowelData }: VowelChartProps) 
                 x={chartWidth / 2}
                 y={chartHeight - 10}
                 textAnchor="middle"
-                className="text-xs fill-muted-foreground"
+                className="text-xs fill-muted-foreground font-medium"
               >
                 Frontness (Front → Back)
               </text>
@@ -95,7 +95,7 @@ export function VowelChart({ currentVowel, currentVowelData }: VowelChartProps) 
                 x={15}
                 y={chartHeight / 2}
                 textAnchor="middle"
-                className="text-xs fill-muted-foreground"
+                className="text-xs fill-muted-foreground font-medium"
                 transform={`rotate(-90, 15, ${chartHeight / 2})`}
               >
                 Openness (Open → Closed)
@@ -189,24 +189,42 @@ export function VowelChart({ currentVowel, currentVowelData }: VowelChartProps) 
               <div className="font-semibold mb-2">Current Vowel Info</div>
               {currentVowelData ? (
                 <div className="space-y-1 text-muted-foreground">
-                  <div className="font-semibold text-foreground">
-                    {currentVowelData.displayName} {VOWEL_FORMANTS[currentVowelData.name].ipaSymbol}
+                  <div className="font-semibold text-foreground text-sm">
+                    {currentVowelData.displayName} /{VOWEL_FORMANTS[currentVowelData.name].ipaSymbol}/
                   </div>
-                  <div>Openness: {Math.round(currentVowelData.openness * 100)}%</div>
-                  <div>Frontness: {Math.round(currentVowelData.frontness * 100)}%</div>
-                  <div>Brightness: {Math.round(currentVowelData.brightness * 100)}%</div>
+                  <div className="text-xs">
+                    <div>Openness: {Math.round(currentVowelData.openness * 100)}%</div>
+                    <div>Frontness: {Math.round(currentVowelData.frontness * 100)}%</div>
+                    <div>Brightness: {Math.round(currentVowelData.brightness * 100)}%</div>
+                  </div>
+                  {VOWEL_FORMANTS[currentVowelData.name] && (
+                    <div className="text-[10px] mt-1 pt-1 border-t border-border/30">
+                      <div>F1: {VOWEL_FORMANTS[currentVowelData.name].formants[0]} Hz</div>
+                      <div>F2: {VOWEL_FORMANTS[currentVowelData.name].formants[1]} Hz</div>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="text-muted-foreground">Enable Heliosinger to see current vowel</div>
+                <div className="text-muted-foreground text-xs">Enable Heliosinger to see current vowel</div>
               )}
             </div>
           </div>
 
           {/* Vowel descriptions */}
           <div className="pt-4 border-t border-border/50">
-            <div className="text-xs text-muted-foreground space-y-1">
-              <p><strong>Frontness</strong> (left to right): Front vowels like "ee" are produced with the tongue forward, back vowels like "oo" with the tongue back.</p>
-              <p><strong>Openness</strong> (bottom to top): Open vowels like "ah" have a wide mouth opening, closed vowels like "ee" have a narrow opening.</p>
+            <div className="text-xs text-muted-foreground space-y-2">
+              <div>
+                <p className="font-semibold text-foreground mb-1">Frontness (left to right)</p>
+                <p>Front vowels like "ee" (/i/) are produced with the tongue positioned forward in the mouth. Back vowels like "oo" (/u/) are produced with the tongue retracted. This affects the second formant (F2) frequency.</p>
+              </div>
+              <div>
+                <p className="font-semibold text-foreground mb-1">Openness (bottom to top)</p>
+                <p>Open vowels like "ah" (/a/) have a wide mouth opening with the jaw lowered. Closed vowels like "ee" (/i/) have a narrow opening with the jaw raised. This primarily affects the first formant (F1) frequency.</p>
+              </div>
+              <div>
+                <p className="font-semibold text-foreground mb-1">Brightness Scale</p>
+                <p>Brightness reflects the spectral energy distribution. Bright vowels like "ee" (/i/) have energy concentrated in higher frequencies, creating a brighter timbre. Dark vowels like "oo" (/u/) have energy in lower frequencies, creating a darker, more resonant timbre. Space weather conditions map to brightness: high temperature and density create brighter vowels, while low values create darker vowels.</p>
+              </div>
             </div>
           </div>
         </div>
