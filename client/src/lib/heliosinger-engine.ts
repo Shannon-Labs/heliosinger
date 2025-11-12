@@ -74,10 +74,61 @@ class HeliosingerEngine {
   private isSinging: boolean = false;
   private currentData: HeliosingerData | null = null;
   private targetVolume: number = 0.3;
+  private hasSetupStateHandler: boolean = false;
+  private hasTriedUnlock: boolean = false;
   
   // Noise buffer for texture
   private noiseBuffer: AudioBuffer | null = null;
   
+  /**
+   * Ensure the AudioContext exists and is resumed. Lightweight and safe to call
+   * directly inside a user gesture (pointerdown/touchstart) before any async work.
+   */
+  public async ensureUnlocked(): Promise<void> {
+    try {
+      if (!this.audioContext) {
+        if (!window.AudioContext && !(window as any).webkitAudioContext) {
+          throw new Error('Web Audio API is not supported in this browser');
+        }
+        this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+
+      if (this.audioContext && !this.hasSetupStateHandler) {
+        this.audioContext.onstatechange = () => {
+          console.log('AudioContext state:', this.audioContext?.state);
+        };
+        this.hasSetupStateHandler = true;
+      }
+
+      if (!this.audioContext) return;
+      if (this.audioContext.state === 'suspended') {
+        try {
+          await this.audioContext.resume();
+        } catch (e) {
+          console.warn('AudioContext resume() during unlock failed:', e);
+        }
+      }
+
+      // iOS unlock: 1-frame silent buffer
+      try {
+        const buffer = this.audioContext.createBuffer(1, 1, 22050);
+        const source = this.audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(this.audioContext.destination);
+        const now = this.audioContext.currentTime;
+        source.start(now);
+        source.stop(now + 0.001);
+        this.hasTriedUnlock = true;
+        console.log('Played iOS unlock buffer (ensureUnlocked)');
+      } catch (unlockError) {
+        console.warn('Unlock buffer failed (non-critical):', unlockError);
+      }
+    } catch (error) {
+      console.error('ensureUnlocked failed:', error);
+      throw error instanceof Error ? error : new Error('Failed to unlock audio');
+    }
+  }
+
   private async initializeAudio(): Promise<void> {
     try {
       if (!this.audioContext) {
@@ -87,6 +138,18 @@ class HeliosingerEngine {
         }
 
         this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+
+      // Attach state change logger once
+      if (this.audioContext && !this.hasSetupStateHandler) {
+        this.audioContext.onstatechange = () => {
+          console.log('AudioContext state:', this.audioContext?.state);
+        };
+        this.hasSetupStateHandler = true;
+      }
+
+      // Build master chain only once
+      if (!this.masterGain) {
         
         // Create master audio chain
         this.masterGain = this.audioContext.createGain();
@@ -821,6 +884,10 @@ export const getCurrentSingingData = (): HeliosingerData | null => {
 
 export const disposeHeliosinger = (): void => {
   heliosingerEngine.dispose();
+};
+
+export const ensureAudioUnlocked = (): Promise<void> => {
+  return heliosingerEngine.ensureUnlocked();
 };
 
 // Cleanup on page unload

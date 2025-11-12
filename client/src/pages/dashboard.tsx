@@ -145,9 +145,14 @@ export default function Dashboard() {
   // Heliosinger toggle
   const handleHeliosingerToggle = async (enabled: boolean) => {
     console.log(`[DEBUG] Heliosinger toggle called with enabled: ${enabled}`);
-    setIsHeliosingerEnabled(enabled);
-    
     if (enabled) {
+      // Unlock audio context immediately within the gesture (iOS)
+      try {
+        await heliosinger.unlock();
+      } catch (e) {
+        console.warn('Unlock failed (non-fatal):', e);
+      }
+      setIsHeliosingerEnabled(true);
       console.log('[DEBUG] Starting Heliosinger');
       try {
         // Heliosinger hook handles starting automatically
@@ -163,6 +168,7 @@ export default function Dashboard() {
         return;
       }
     } else {
+      setIsHeliosingerEnabled(false);
       console.log('[DEBUG] Stopping Heliosinger');
       // Heliosinger hook handles stopping automatically
       console.log("🌞 Heliosinger mode disabled");
@@ -322,6 +328,7 @@ export default function Dashboard() {
                 <Switch
                   id="heliosinger-toggle"
                   checked={isHeliosingerEnabled}
+                  onPointerDown={async () => { try { await heliosinger.unlock(); } catch (e) { console.warn('Pre-unlock failed:', e); } }}
                   onCheckedChange={handleHeliosingerToggle}
                   disabled={!comprehensiveData || ambientLoading}
                   data-testid="switch-heliosinger-toggle"

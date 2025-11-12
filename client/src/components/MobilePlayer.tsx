@@ -39,7 +39,7 @@ export function MobilePlayer({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => onToggle(!isPlaying)}
+                onPointerDown={(e) => { e.preventDefault(); onToggle(!isPlaying); }}
                 className="flex-shrink-0"
                 aria-label={isPlaying ? 'Pause' : 'Play'}
               >
@@ -115,7 +115,7 @@ export function MobilePlayer({
                   <Button
                     variant={isPlaying ? 'default' : 'outline'}
                     size="lg"
-                    onClick={() => onToggle(!isPlaying)}
+                    onPointerDown={(e) => { e.preventDefault(); onToggle(!isPlaying); }}
                     className="flex-1"
                   >
                     <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'} mr-2`} aria-hidden="true" />
@@ -164,4 +164,3 @@ export function MobilePlayer({
     </div>
   );
 }
-

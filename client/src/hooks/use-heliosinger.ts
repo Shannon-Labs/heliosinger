@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { mapSpaceWeatherToHeliosinger, createDefaultHeliosingerMapping } from '@/lib/heliosinger-mapping';
-import { startSinging, updateSinging, stopSinging, setSingingVolume } from '@/lib/heliosinger-engine';
+import { startSinging, updateSinging, stopSinging, setSingingVolume, ensureAudioUnlocked } from '@/lib/heliosinger-engine';
 import { apiRequest } from '@/lib/queryClient';
 import { getAmbientSettings } from '@/lib/localStorage';
 import { checkAndNotifyEvents, requestNotificationPermission, canSendNotifications } from '@/lib/notifications';
@@ -22,6 +22,7 @@ interface UseHeliosingerReturn {
   stop: () => void;
   setVolume: (volume: number) => void;
   backgroundMode: boolean;
+  unlock: () => Promise<void>;
 }
 
 /**
@@ -241,6 +242,9 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
     if (isSinging) return;
     
     try {
+      // Ensure audio is unlocked before any async work (iOS)
+      await ensureAudioUnlocked();
+      
       // Fetch latest data
       const response = await apiRequest('GET', '/api/space-weather/comprehensive');
       const data = (await response.json()) as ComprehensiveSpaceWeatherData;
@@ -278,6 +282,10 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
     setSingingVolume(newVolume);
   }, []);
 
+  const unlock = useCallback(async () => {
+    await ensureAudioUnlocked();
+  }, []);
+
   return {
     isSinging,
     currentData: currentDataRef.current,
@@ -285,6 +293,7 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
     stop,
     setVolume,
     backgroundMode,
+    unlock,
   };
 }
 
@@ -309,7 +318,8 @@ export function useDashboardHeliosinger() {
   // Toggle Heliosinger mode
   const toggleHeliosingerMode = useCallback((enabled: boolean) => {
     if (enabled && !heliosinger.isSinging) {
-      heliosinger.start().catch(console.error);
+      // Unlock first to satisfy iOS gesture requirements
+      heliosinger.unlock().then(() => heliosinger.start()).catch(console.error);
     } else if (!enabled && heliosinger.isSinging) {
       heliosinger.stop();
     }
