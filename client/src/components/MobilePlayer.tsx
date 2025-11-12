@@ -10,7 +10,7 @@ interface MobilePlayerProps {
   isPlaying: boolean;
   volume: number;
   currentData: HeliosingerData | null;
-  onToggle: () => void;
+  onToggle: (enabled: boolean) => void;
   onVolumeChange: (volume: number) => void;
 }
 
@@ -39,7 +39,7 @@ export function MobilePlayer({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={onToggle}
+                onClick={() => onToggle(!isPlaying)}
                 className="flex-shrink-0"
                 aria-label={isPlaying ? 'Pause' : 'Play'}
               >
@@ -115,7 +115,7 @@ export function MobilePlayer({
                   <Button
                     variant={isPlaying ? 'default' : 'outline'}
                     size="lg"
-                    onClick={onToggle}
+                    onClick={() => onToggle(!isPlaying)}
                     className="flex-1"
                   >
                     <i className={`fas ${isPlaying ? 'fa-pause' : 'fa-play'} mr-2`} aria-hidden="true" />

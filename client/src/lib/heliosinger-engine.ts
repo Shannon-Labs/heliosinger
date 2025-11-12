@@ -598,16 +598,8 @@ class HeliosingerEngine {
       );
     }
     
-    // Update master volume based on condition
-    const targetVolume = heliosingerData.condition === 'extreme' ? 0.5 : 
-                        heliosingerData.condition === 'storm' ? 0.4 : 0.3;
-    
-    if (this.masterGain) {
-      this.masterGain.gain.exponentialRampToValueAtTime(
-        Math.max(0.001, targetVolume),
-        now + smoothingTime
-      );
-    }
+    // Don't override user volume - volume is controlled by setVolume()
+    // The masterGain volume is set by setVolume() and should not be changed here
     
     // Log vowel changes
     if (this.currentData && this.currentData.vowelName !== heliosingerData.vowelName) {

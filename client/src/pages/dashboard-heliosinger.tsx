@@ -180,20 +180,27 @@ export default function Dashboard() {
     
     if (enabled) {
       try {
-        // Heliosinger hook handles starting automatically
+        // Explicitly start audio on user interaction (required for mobile)
+        // This ensures audio context resumes properly on mobile devices
+        if (!heliosinger.isSinging && comprehensiveData) {
+          await heliosinger.start();
+        }
         console.log("Heliosinger mode enabled - the sun will sing");
       } catch (error) {
         console.error("Failed to start Heliosinger:", error);
         toast({
           title: "Heliosinger Failed",
-          description: "Could not start Heliosinger audio. Check browser audio permissions.",
+          description: error instanceof Error ? error.message : "Could not start Heliosinger audio. Check browser audio permissions.",
           variant: "destructive",
         });
         setIsHeliosingerEnabled(false);
         return;
       }
     } else {
-      // Heliosinger hook handles stopping automatically
+      // Explicitly stop audio
+      if (heliosinger.isSinging) {
+        heliosinger.stop();
+      }
       console.log("Heliosinger mode disabled");
     }
 

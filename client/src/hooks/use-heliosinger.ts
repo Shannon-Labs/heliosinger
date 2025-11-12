@@ -121,7 +121,7 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
           setIsSinging(true);
         }
         
-        // Set initial volume
+        // Set initial volume after starting
         setSingingVolume(volume);
         
         console.log('🌞 Heliosinger started:', {
@@ -145,15 +145,9 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
     };
 
     // Only start/stop based on enabled and data availability
-    // Volume changes are handled by a separate effect
-    if (enabled && comprehensiveData) {
-      // Only start if not already singing (to avoid restarting on volume changes)
-      if (!isSinging) {
-        startAudio();
-      } else {
-        // If already singing, just update volume
-        setSingingVolume(volume);
-      }
+    // Don't restart on volume changes - volume is handled separately
+    if (enabled && comprehensiveData && !isSinging) {
+      startAudio();
     } else if (!enabled && isSinging) {
       // Stop if disabled
       stopSinging();
@@ -168,7 +162,7 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
         setIsSinging(false);
       }
     };
-  }, [enabled, comprehensiveData, volume, isSinging, onError]); // Include volume for initial setting
+  }, [enabled, comprehensiveData, isSinging, onError]); // Removed volume from dependencies to prevent restarts
 
   // Update singing when data changes
   useEffect(() => {
