@@ -70,6 +70,10 @@ export interface HeliosingerData extends ChordData {
 // MAIN HELIOSINGER MAPPING FUNCTION
 // ============================================================================
 
+// Module-level state for tracking previous values (for spike detection)
+let previousData: ComprehensiveSpaceWeatherData | null = null;
+let previousDerivedMetrics: DerivedMetrics | null = null;
+
 export function mapSpaceWeatherToHeliosinger(
   data: ComprehensiveSpaceWeatherData
 ): HeliosingerData {
@@ -86,7 +90,17 @@ export function mapSpaceWeatherToHeliosinger(
   // Step 2: Determine space weather condition
   const condition = determineSpaceWeatherCondition(solarWind, kIndex);
   
-  // Step 3: Get the vowel the sun is singing based on parameters (including velocity)
+  // Step 3: Calculate derived metrics from solar wind parameters
+  const derivedMetrics = calculateDerivedMetrics(
+    solarWind.density,
+    solarWind.velocity,
+    solarWind.bx || 0,
+    solarWind.by || 0,
+    solarWind.bz,
+    solarWind.temperature
+  );
+  
+  // Step 4: Get the vowel the sun is singing based on parameters (including velocity)
   const currentVowel = getVowelFromSpaceWeather(
     solarWind.density,
     solarWind.temperature,
@@ -95,25 +109,51 @@ export function mapSpaceWeatherToHeliosinger(
     solarWind.velocity
   );
   
-  // Step 4: Calculate formant filters for the vowel
+  // Step 5: Calculate formant filters for the vowel
   const formantFilters = getFormantFiltersForVowel(currentVowel, frequency);
   
-  // Step 5: Calculate harmonic content (density + temperature)
-  const harmonicData = calculateHarmonicContent(solarWind.density, solarWind.temperature, condition);
+  // Step 6: Calculate harmonic content (density + temperature + Mach number)
+  const harmonicData = calculateHarmonicContent(
+    solarWind.density, 
+    solarWind.temperature, 
+    condition,
+    derivedMetrics.machNumber
+  );
   
-  // Step 6: Calculate spatial parameters (IMF vector)
-  const spatialData = calculateSpatialParameters(solarWind.bz, solarWind.bx || 0, solarWind.by || 0);
+  // Step 7: Calculate spatial parameters (IMF vector + clock angle + derived metrics)
+  const spatialData = calculateSpatialParameters(
+    solarWind.bz, 
+    solarWind.bx || 0, 
+    solarWind.by || 0,
+    derivedMetrics.clockAngle,
+    derivedMetrics.totalField,
+    derivedMetrics.machNumber,
+    derivedMetrics.electricField
+  );
   
-  // Step 7: Calculate rhythmic parameters (K-index)
-  const rhythmicData = calculateRhythmicParameters(kIndex?.kp || 0, condition);
+  // Step 8: Calculate rhythmic parameters (K-index + magnetometer)
+  const rhythmicData = calculateRhythmicParameters(
+    kIndex?.kp || 0, 
+    condition,
+    data.magnetometer,
+    previousData?.magnetometer
+  );
   
-  // Step 8: Calculate filter and texture parameters
-  const filterData = calculateFilterParameters(solarWind.temperature, solarWind.bt || 5, condition);
+  // Step 9: Calculate filter and texture parameters (temperature + BT + flux data + plasma beta)
+  const filterData = calculateFilterParameters(
+    solarWind.temperature, 
+    solarWind.bt || derivedMetrics.totalField, 
+    condition,
+    data.xray_flux,
+    data.electron_flux,
+    derivedMetrics.plasmaBeta,
+    previousData?.xray_flux
+  );
   
-  // Step 9: Calculate decay time from density
+  // Step 10: Calculate decay time from density
   const decayTime = calculateDecayTime(solarWind.density);
   
-  // Step 10: Calculate chord voicing (harmony) - using harmonic series and space weather parameters
+  // Step 11: Calculate chord voicing (harmony) - using harmonic series and space weather parameters
   const chordVoicing = calculateChordVoicing(
     frequency, 
     midiNote, 
@@ -125,10 +165,20 @@ export function mapSpaceWeatherToHeliosinger(
     kIndex?.kp || 0
   );
   
-  // Step 11: Calculate reverb and delay parameters
-  const reverbDelayData = calculateReverbDelay(solarWind.density, solarWind.temperature, condition);
+  // Step 12: Calculate reverb and delay parameters (density + temperature + proton flux + Pdyn)
+  const reverbDelayData = calculateReverbDelay(
+    solarWind.density, 
+    solarWind.temperature, 
+    condition,
+    data.proton_flux,
+    derivedMetrics.dynamicPressure,
+    previousDerivedMetrics?.dynamicPressure
+  );
   
-  // Step 12: Combine all parameters into Heliosinger data
+  // Step 13: Calculate rumble gain from proton flux
+  const rumbleGain = calculateRumbleGain(condition, data.proton_flux);
+  
+  // Step 14: Combine all parameters into Heliosinger data
   const heliosingerData: HeliosingerData = {
     // Original ChordData fields
     baseNote: noteName,
@@ -168,7 +218,7 @@ export function mapSpaceWeatherToHeliosinger(
     
     // Texture parameters
     shimmerGain: filterData.shimmerGain,
-    rumbleGain: condition === 'extreme' ? 0.4 : condition === 'storm' ? 0.2 : 0,
+    rumbleGain: rumbleGain,
     
     // Chord voicing
     chordVoicing,
@@ -179,6 +229,10 @@ export function mapSpaceWeatherToHeliosinger(
     delayFeedback: reverbDelayData.delayFeedback,
     delayGain: reverbDelayData.delayGain
   };
+  
+  // Store current data for next call (for spike detection)
+  previousData = data;
+  previousDerivedMetrics = derivedMetrics;
   
   return heliosingerData;
 }
@@ -234,14 +288,23 @@ interface HarmonicData {
 function calculateHarmonicContent(
   density: number, 
   temperature: number, 
-  condition: SpaceWeatherCondition
+  condition: SpaceWeatherCondition,
+  machNumber?: number
 ): HarmonicData {
   const DENSITY_RANGE = { min: 0.5, max: 50.0 };
   const TEMPERATURE_RANGE = { min: 10000, max: 200000 };
   
   // Density controls number of harmonics (1-8)
   const normalizedDensity = Math.max(0, Math.min(1, (density - DENSITY_RANGE.min) / (DENSITY_RANGE.max - DENSITY_RANGE.min)));
-  const harmonicCount = 1 + Math.floor(normalizedDensity * 7);
+  let harmonicCount = 1 + Math.floor(normalizedDensity * 7);
+  
+  // Mach number → increase harmonic count cap (super-Alfvénic → more energetic texture)
+  if (machNumber !== undefined) {
+    const MA_RANGE = { min: 0, max: 10 };
+    const normalizedMA = Math.max(0, Math.min(1, machNumber / MA_RANGE.max));
+    // Increase harmonic count cap based on Mach number
+    harmonicCount = Math.min(12, harmonicCount + Math.floor(normalizedMA * 4));
+  }
   
   // Temperature controls spectral tilt
   const normalizedTemp = Math.max(0, Math.min(1, (temperature - TEMPERATURE_RANGE.min) / (TEMPERATURE_RANGE.max - TEMPERATURE_RANGE.min)));
@@ -278,7 +341,66 @@ function calculateHarmonicContent(
 }
 
 // ============================================================================
-// SPATIAL LAYER: IMF VECTOR
+// DERIVED METRICS COMPUTATION
+// ============================================================================
+
+interface DerivedMetrics {
+  dynamicPressure: number; // Pdyn in nPa
+  clockAngle: number; // θc in radians
+  totalField: number; // BT in nT
+  electricField: number; // Ey in mV/m
+  alfvenSpeed: number; // Va in km/s
+  machNumber: number; // MA (dimensionless)
+  plasmaBeta: number; // β (dimensionless)
+}
+
+function calculateDerivedMetrics(
+  density: number, // n in cm⁻³
+  velocity: number, // Vsw in km/s
+  bx: number,
+  by: number,
+  bz: number,
+  temperature: number // T in K
+): DerivedMetrics {
+  // Dynamic pressure: Pdyn = 1.6726e-6 * n * v² (nPa)
+  const dynamicPressure = 1.6726e-6 * density * velocity * velocity;
+  
+  // Total magnetic field: BT = sqrt(Bx² + By² + Bz²)
+  const totalField = Math.sqrt(bx * bx + by * by + bz * bz);
+  
+  // IMF clock angle: θc = atan2(By, Bz)
+  const clockAngle = Math.atan2(by, bz);
+  
+  // Interplanetary electric field: Ey = -Vsw * Bz (mV/m, GSM)
+  const electricField = -velocity * bz * 1e-3; // Convert to mV/m
+  
+  // Alfvén speed: Va = 21.8 * BT / sqrt(n) (km/s)
+  // where BT is in nT and n is in cm⁻³
+  const alfvenSpeed = density > 0 ? 21.8 * totalField / Math.sqrt(density) : 0;
+  
+  // Alfvén Mach number: MA = Vsw / Va
+  const machNumber = alfvenSpeed > 0 ? velocity / alfvenSpeed : 0;
+  
+  // Plasma beta approximation: β ∝ n * T / BT²
+  // Using simplified formula: β ≈ 4.03e-6 * n * T / BT²
+  // where n is in cm⁻³, T is in K, BT is in nT
+  const plasmaBeta = totalField > 0 
+    ? 4.03e-6 * density * temperature / (totalField * totalField)
+    : 0;
+  
+  return {
+    dynamicPressure,
+    clockAngle,
+    totalField,
+    electricField,
+    alfvenSpeed,
+    machNumber,
+    plasmaBeta
+  };
+}
+
+// ============================================================================
+// SPATIAL LAYER: IMF VECTOR + CLOCK ANGLE
 // ============================================================================
 
 interface SpatialData {
@@ -293,7 +415,11 @@ interface SpatialData {
 function calculateSpatialParameters(
   bz: number,
   bx: number,
-  by: number
+  by: number,
+  clockAngle?: number,
+  totalField?: number,
+  machNumber?: number,
+  electricField?: number
 ): SpatialData {
   const B_FIELD_RANGE = { min: -20, max: 20 };
   
@@ -307,6 +433,17 @@ function calculateSpatialParameters(
     stereoSpread = 0.5 + ((1 - normalizedBz) * 0.5);
   }
   
+  // Clock angle → slow auto-pan sweep; speed proportional to |By|
+  if (clockAngle !== undefined) {
+    // Map clock angle (0 to 2π) to stereo pan position (-1 to 1)
+    const panPosition = Math.sin(clockAngle);
+    // Speed of rotation proportional to |By|
+    const byMagnitude = Math.abs(by);
+    const rotationSpeed = Math.min(1, byMagnitude / 10); // Normalize to 0-1
+    // Apply clock angle influence to stereo spread
+    stereoSpread = 0.5 + panPosition * 0.3 * rotationSpeed;
+  }
+  
   // Bx: Left-right balance
   const normalizedBx = Math.max(0, Math.min(1, (bx - B_FIELD_RANGE.min) / (B_FIELD_RANGE.max - B_FIELD_RANGE.min)));
   const balanceOffset = (normalizedBx - 0.5) * 0.6;
@@ -315,22 +452,47 @@ function calculateSpatialParameters(
   const rightGain = Math.max(0.1, 0.5 - (stereoSpread / 2) - balanceOffset);
   
   // Bz detuning and vibrato
-  const detuneCents = bz < -5 ? (bz * 2) : 0;
-  const vibratoDepth = bz < 0 ? Math.min(50, Math.abs(bz) * 2) : Math.abs(bz) * 0.5;
-  const vibratoRate = Math.max(1, Math.min(10, Math.abs(bz) * 0.3));
+  let detuneCents = bz < -5 ? (bz * 2) : 0;
+  let vibratoDepth = bz < 0 ? Math.min(50, Math.abs(bz) * 2) : Math.abs(bz) * 0.5;
+  let vibratoRate = Math.max(1, Math.min(10, Math.abs(bz) * 0.3));
+  
+  // Total field BT → bias brightness/harmonics (affects vibrato depth)
+  if (totalField !== undefined) {
+    const BT_RANGE = { min: 0, max: 20 };
+    const normalizedBT = Math.max(0, Math.min(1, (totalField - BT_RANGE.min) / (BT_RANGE.max - BT_RANGE.min)));
+    // Higher BT → more vibrato depth
+    vibratoDepth *= (1 + normalizedBT * 0.5);
+  }
+  
+  // Mach number → scale vibrato/tremolo depth
+  if (machNumber !== undefined) {
+    const MA_RANGE = { min: 0, max: 10 };
+    const normalizedMA = Math.max(0, Math.min(1, machNumber / MA_RANGE.max));
+    // Super-Alfvénic → more energetic texture
+    vibratoDepth *= (1 + normalizedMA * 0.3);
+    vibratoRate *= (1 + normalizedMA * 0.2);
+  }
+  
+  // Electric field Ey → modulation intensity
+  if (electricField !== undefined) {
+    const EY_RANGE = { min: -5, max: 5 }; // mV/m typical range
+    const normalizedEy = Math.max(0, Math.min(1, Math.abs(electricField) / Math.abs(EY_RANGE.max)));
+    // Higher Ey → more agitation (faster vibrato)
+    vibratoRate *= (1 + normalizedEy * 0.4);
+  }
   
   return {
-    stereoSpread,
+    stereoSpread: Math.max(0.1, Math.min(1.0, stereoSpread)),
     leftGain,
     rightGain,
     detuneCents: Math.round(detuneCents),
-    vibratoDepth: Math.round(vibratoDepth),
-    vibratoRate: Math.round(vibratoRate * 10) / 10
+    vibratoDepth: Math.round(Math.max(0, Math.min(100, vibratoDepth))),
+    vibratoRate: Math.round(Math.max(0.1, Math.min(15, vibratoRate)) * 10) / 10
   };
 }
 
 // ============================================================================
-// RHYTHMIC LAYER: K-INDEX
+// RHYTHMIC LAYER: K-INDEX + MAGNETOMETER
 // ============================================================================
 
 interface RhythmicData {
@@ -339,13 +501,42 @@ interface RhythmicData {
   waveform: OscillatorType;
 }
 
-function calculateRhythmicParameters(kp: number, condition: SpaceWeatherCondition): RhythmicData {
+function calculateRhythmicParameters(
+  kp: number, 
+  condition: SpaceWeatherCondition,
+  magnetometer?: ComprehensiveSpaceWeatherData['magnetometer'],
+  previousMagnetometer?: ComprehensiveSpaceWeatherData['magnetometer']
+): RhythmicData {
   const K_INDEX_RANGE = { min: 0, max: 9 };
   
   const normalizedKp = Math.max(0, Math.min(1, (kp - K_INDEX_RANGE.min) / (K_INDEX_RANGE.max - K_INDEX_RANGE.min)));
   
-  const rate = 0.5 + (normalizedKp * 7.5);
-  const depth = 0.1 + (normalizedKp * 0.7);
+  let rate = 0.5 + (normalizedKp * 7.5);
+  let depth = 0.1 + (normalizedKp * 0.7);
+  
+  // Magnetometer H component → slow pulses and occasional LF "thuds"
+  if (magnetometer?.h_component !== undefined) {
+    const H_RANGE = { min: -200, max: 200 }; // nT typical range for Boulder H
+    const normalizedH = Math.max(0, Math.min(1,
+      (Math.abs(magnetometer.h_component) - Math.abs(H_RANGE.min)) / (Math.abs(H_RANGE.max) - Math.abs(H_RANGE.min))
+    ));
+    
+    // Calculate dH/dt (rate of change) for sharp changes
+    let dHdt = 0;
+    if (previousMagnetometer?.h_component !== undefined) {
+      dHdt = Math.abs(magnetometer.h_component - previousMagnetometer.h_component);
+      const DH_RANGE = { min: 0, max: 50 }; // nT change per update
+      const normalizedDH = Math.max(0, Math.min(1, dHdt / DH_RANGE.max));
+      
+      // Sharp changes → increase tremolo depth (LF "thuds")
+      depth = Math.max(depth, normalizedDH * 0.8);
+      
+      // Large H magnitude → slower pulses
+      if (normalizedH > 0.5) {
+        rate *= (1 - normalizedH * 0.4); // Slow down pulses
+      }
+    }
+  }
   
   let waveform: OscillatorType;
   if (kp < 3) {
@@ -362,40 +553,92 @@ function calculateRhythmicParameters(kp: number, condition: SpaceWeatherConditio
 }
 
 // ============================================================================
-// FILTER & TEXTURE: TEMPERATURE + BT
+// FILTER & TEXTURE: TEMPERATURE + BT + FLUX DATA
 // ============================================================================
 
 interface FilterData {
   frequency: number;
   q: number;
   shimmerGain: number;
+  xrayBoost: number; // Transient boost from X-ray flux spikes
 }
 
 function calculateFilterParameters(
   temperature: number, 
   bt: number,
-  condition: SpaceWeatherCondition
+  condition: SpaceWeatherCondition,
+  xrayFlux?: ComprehensiveSpaceWeatherData['xray_flux'],
+  electronFlux?: ComprehensiveSpaceWeatherData['electron_flux'],
+  plasmaBeta?: number,
+  previousXrayFlux?: ComprehensiveSpaceWeatherData['xray_flux']
 ): FilterData {
   const TEMPERATURE_RANGE = { min: 10000, max: 200000 };
   const BT_RANGE = { min: 0, max: 20 };
   
   const normalizedTemp = Math.max(0, Math.min(1, (temperature - TEMPERATURE_RANGE.min) / (TEMPERATURE_RANGE.max - TEMPERATURE_RANGE.min)));
-  const baseFrequency = 200 + (normalizedTemp * 1800);
+  let baseFrequency = 200 + (normalizedTemp * 1800);
   
   const normalizedBt = Math.max(0, Math.min(1, (bt - BT_RANGE.min) / (BT_RANGE.max - BT_RANGE.min)));
-  const q = 1 + (normalizedBt * 7);
+  let q = 1 + (normalizedBt * 7);
   
-  const shimmerGain = normalizedTemp > 0.7 ? (normalizedTemp - 0.7) * 0.3 : 0;
+  // Base shimmer gain from temperature
+  let shimmerGain = normalizedTemp > 0.7 ? (normalizedTemp - 0.7) * 0.3 : 0;
+  
+  // Enhance shimmer gain from electron flux (high-frequency shimmer/air)
+  if (electronFlux?.flux_2mev !== undefined) {
+    const ELECTRON_FLUX_RANGE = { min: 1e3, max: 1e6 }; // Typical range for 2MeV electrons
+    const normalizedElectron = Math.max(0, Math.min(1, 
+      (electronFlux.flux_2mev - ELECTRON_FLUX_RANGE.min) / (ELECTRON_FLUX_RANGE.max - ELECTRON_FLUX_RANGE.min)
+    ));
+    shimmerGain = Math.max(shimmerGain, normalizedElectron * 0.4);
+  }
+  
+  // X-ray flux spikes → brief brightness boost and filter opening
+  let xrayBoost = 0;
+  if (xrayFlux?.short_wave !== undefined) {
+    const XRAY_FLUX_RANGE = { min: 1e-8, max: 1e-3 }; // W/m² typical range
+    const normalizedXray = Math.max(0, Math.min(1,
+      (xrayFlux.short_wave - XRAY_FLUX_RANGE.min) / (XRAY_FLUX_RANGE.max - XRAY_FLUX_RANGE.min)
+    ));
+    // Detect spikes (values above 70% of range indicate flares)
+    if (normalizedXray > 0.7) {
+      xrayBoost = (normalizedXray - 0.7) * 0.3; // 0 to 0.09 boost
+    }
+    
+    // Detect transient spikes (sudden increases) - compare with previous value
+    if (previousXrayFlux?.short_wave !== undefined && previousXrayFlux.short_wave > 0) {
+      const spikeRatio = xrayFlux.short_wave / previousXrayFlux.short_wave;
+      // If flux increased by more than 2x, it's a spike
+      if (spikeRatio > 2.0) {
+        // Additional boost for transient spike (0.1-0.2s tempo bump effect)
+        const spikeIntensity = Math.min(1, (spikeRatio - 2.0) / 10); // Normalize spike intensity
+        xrayBoost = Math.max(xrayBoost, spikeIntensity * 0.15); // Additional 0-0.15 boost
+      }
+    }
+  }
+  
+  // Plasma beta affects filter brightness and tilt
+  if (plasmaBeta !== undefined) {
+    const normalizedBeta = Math.max(0, Math.min(1, Math.log10(Math.max(0.01, plasmaBeta)) / 3)); // Log scale 0.01 to 1000
+    // High beta → brighter filter (higher frequency)
+    baseFrequency *= (1 + normalizedBeta * 0.2);
+    // High beta → more open filter (lower Q)
+    q *= (1 - normalizedBeta * 0.3);
+  }
   
   let finalFrequency = baseFrequency;
   if (condition === 'storm' || condition === 'extreme') {
     finalFrequency *= 1.2;
   }
   
+  // Apply X-ray boost to frequency (brief filter opening)
+  finalFrequency *= (1 + xrayBoost);
+  
   return {
     frequency: Math.min(20000, finalFrequency),
-    q: Math.min(20, q),
-    shimmerGain
+    q: Math.max(0.5, Math.min(20, q)),
+    shimmerGain: Math.min(0.5, shimmerGain),
+    xrayBoost
   };
 }
 
@@ -634,12 +877,15 @@ interface ReverbDelayData {
 }
 
 /**
- * Calculate reverb and delay parameters based on density and temperature
+ * Calculate reverb and delay parameters based on density, temperature, proton flux, and dynamic pressure
  */
 function calculateReverbDelay(
   density: number,
   temperature: number,
-  condition: SpaceWeatherCondition
+  condition: SpaceWeatherCondition,
+  protonFlux?: ComprehensiveSpaceWeatherData['proton_flux'],
+  dynamicPressure?: number,
+  previousDynamicPressure?: number
 ): ReverbDelayData {
   const DENSITY_RANGE = { min: 0.5, max: 50.0 };
   const TEMPERATURE_RANGE = { min: 10000, max: 200000 };
@@ -647,11 +893,42 @@ function calculateReverbDelay(
   // Density → reverb size (high density = smaller room, low = cathedral)
   const normalizedDensity = Math.max(0, Math.min(1, (density - DENSITY_RANGE.min) / (DENSITY_RANGE.max - DENSITY_RANGE.min)));
   // Invert: low density = large room (high reverb), high density = small room (low reverb)
-  const reverbRoomSize = 0.2 + ((1 - normalizedDensity) * 0.6); // 0.2 (small) to 0.8 (large)
+  let reverbRoomSize = 0.2 + ((1 - normalizedDensity) * 0.6); // 0.2 (small) to 0.8 (large)
+  
+  // Proton flux → increase reverb density during radiation storms (dense "air")
+  if (protonFlux?.flux_10mev !== undefined) {
+    const PROTON_FLUX_RANGE = { min: 1, max: 1e5 }; // Typical range for 10MeV protons (pfu)
+    const normalizedProton = Math.max(0, Math.min(1,
+      (protonFlux.flux_10mev - PROTON_FLUX_RANGE.min) / (PROTON_FLUX_RANGE.max - PROTON_FLUX_RANGE.min)
+    ));
+    // Higher proton flux → denser reverb (longer tail)
+    reverbRoomSize = Math.min(1.0, reverbRoomSize + normalizedProton * 0.3);
+  }
   
   // Temperature → delay feedback (high temp = more echoes)
   const normalizedTemp = Math.max(0, Math.min(1, (temperature - TEMPERATURE_RANGE.min) / (TEMPERATURE_RANGE.max - TEMPERATURE_RANGE.min)));
-  const delayFeedback = normalizedTemp * 0.4; // 0 to 0.4 feedback
+  let delayFeedback = normalizedTemp * 0.4; // 0 to 0.4 feedback
+  
+  // Dynamic pressure → modulate delay feedback (Pdyn shocks reset feedback briefly)
+  if (dynamicPressure !== undefined) {
+    const PDYN_RANGE = { min: 0.5, max: 20 }; // nPa typical range
+    const normalizedPdyn = Math.max(0, Math.min(1,
+      (dynamicPressure - PDYN_RANGE.min) / (PDYN_RANGE.max - PDYN_RANGE.min)
+    ));
+    // High Pdyn → reduce delay feedback (transient "kick" effect)
+    delayFeedback *= (1 - normalizedPdyn * 0.5);
+    
+    // Detect Pdyn shocks (sudden increases) - compare with previousPdyn
+    if (previousDynamicPressure !== undefined && previousDynamicPressure > 0) {
+      const shockRatio = dynamicPressure / previousDynamicPressure;
+      // If pressure increased by more than 1.5x, it's a shock
+      if (shockRatio > 1.5) {
+        // Reset delay feedback briefly (percussive kick effect)
+        const shockIntensity = Math.min(1, (shockRatio - 1.5) / 2); // Normalize shock intensity
+        delayFeedback *= (1 - shockIntensity * 0.7); // Reduce feedback more during shocks
+      }
+    }
+  }
   
   // Delay time: base on condition
   let delayTime: number;
@@ -679,6 +956,30 @@ function calculateReverbDelay(
     delayFeedback: Math.max(0, Math.min(0.5, delayFeedback)),
     delayGain: Math.max(0.1, Math.min(0.4, delayGain))
   };
+}
+
+// ============================================================================
+// RUMBLE GAIN CALCULATION: PROTON FLUX
+// ============================================================================
+
+function calculateRumbleGain(
+  condition: SpaceWeatherCondition,
+  protonFlux?: ComprehensiveSpaceWeatherData['proton_flux']
+): number {
+  // Base rumble gain from condition
+  let rumbleGain = condition === 'extreme' ? 0.4 : condition === 'storm' ? 0.2 : 0;
+  
+  // Proton flux → drive sub-bass/rumble layer gain during radiation storms
+  if (protonFlux?.flux_10mev !== undefined) {
+    const PROTON_FLUX_RANGE = { min: 1, max: 1e5 }; // Typical range for 10MeV protons (pfu)
+    const normalizedProton = Math.max(0, Math.min(1,
+      (protonFlux.flux_10mev - PROTON_FLUX_RANGE.min) / (PROTON_FLUX_RANGE.max - PROTON_FLUX_RANGE.min)
+    ));
+    // Higher proton flux → more rumble (sub-bass weight)
+    rumbleGain = Math.max(rumbleGain, normalizedProton * 0.5);
+  }
+  
+  return Math.min(0.6, rumbleGain);
 }
 
 // ============================================================================
