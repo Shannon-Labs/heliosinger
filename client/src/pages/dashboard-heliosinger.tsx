@@ -215,18 +215,21 @@ export default function Dashboard() {
 
 
   // Volume change handler
-  const handleVolumeChange = (value: number[]) => {
-    const newVolume = value[0];
-    setAmbientVolume(newVolume);
+  // Accepts either array (from desktop slider) or number (from mobile player)
+  const handleVolumeChange = (value: number[] | number) => {
+    const newVolume = Array.isArray(value) ? value[0] : value;
+    const clampedVolume = Math.max(0, Math.min(1, newVolume));
+    
+    setAmbientVolume(clampedVolume);
     
     if (isHeliosingerEnabled) {
-      heliosinger.setVolume(newVolume);
+      heliosinger.setVolume(clampedVolume);
     }
     
     if (isHeliosingerEnabled) {
       setTimeout(() => {
         updateAmbientMutation.mutate({
-          volume: newVolume,
+          volume: clampedVolume,
           enabled: "true"
         });
       }, 500);

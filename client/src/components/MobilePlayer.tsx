@@ -131,7 +131,10 @@ export function MobilePlayer({
                   </div>
                   <Slider
                     value={[volume]}
-                    onValueChange={(vals) => onVolumeChange(vals[0])}
+                    onValueChange={(vals) => {
+                      const newVolume = Math.max(0, Math.min(1, vals[0]));
+                      onVolumeChange(newVolume);
+                    }}
                     max={1}
                     min={0}
                     step={0.01}

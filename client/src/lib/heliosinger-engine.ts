@@ -214,6 +214,11 @@ class HeliosingerEngine {
     this.isSinging = true;
     this.currentData = heliosingerData;
     
+    // Ensure volume is set before starting (important for mobile)
+    if (this.masterGain) {
+      this.masterGain.gain.value = Math.max(0.001, this.targetVolume);
+    }
+    
     // Configure reverb and delay
     this.configureReverbDelay(heliosingerData);
     
@@ -233,6 +238,7 @@ class HeliosingerEngine {
     console.log(`   Note: ${heliosingerData.baseNote} at ${heliosingerData.frequency.toFixed(1)}Hz`);
     console.log(`   Harmonics: ${heliosingerData.harmonicCount} partials`);
     console.log(`   Condition: ${heliosingerData.condition}`);
+    console.log(`   Volume: ${(this.targetVolume * 100).toFixed(0)}%`);
   }
   
   /**
@@ -658,13 +664,22 @@ class HeliosingerEngine {
    * Set master volume
    */
   public setVolume(volume: number): void {
-    this.targetVolume = Math.max(0, Math.min(1, volume));
+    const clampedVolume = Math.max(0, Math.min(1, volume));
+    this.targetVolume = clampedVolume;
     
+    // Apply volume immediately if audio is initialized
     if (this.masterGain && this.audioContext) {
+      const now = this.audioContext.currentTime;
+      this.masterGain.gain.cancelScheduledValues(now); // Cancel any pending changes
+      this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now); // Set current value
       this.masterGain.gain.exponentialRampToValueAtTime(
         Math.max(0.001, this.targetVolume),
-        this.audioContext.currentTime + 0.1
+        now + 0.1
       );
+      console.log(`🔊 Volume set to ${(this.targetVolume * 100).toFixed(0)}%`);
+    } else {
+      // Volume will be applied when audio starts
+      console.log(`🔊 Volume queued: ${(this.targetVolume * 100).toFixed(0)}% (audio not initialized)`);
     }
   }
   
