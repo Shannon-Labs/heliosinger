@@ -32,7 +32,7 @@ import {
 } from "@/lib/notifications";
 import { calculateRefetchInterval, getUpdateFrequencyDescription } from "@/lib/adaptive-refetch";
 import { getChordQuality, getChordSelectionExplanation } from "@/lib/chord-utils";
-import type { AmbientSettings, ComprehensiveSpaceWeatherData, SolarWindReading, SystemStatus } from "@shared/schema";
+import type { AmbientSettings, ComprehensiveSpaceWeatherData, SolarWindReading, SystemStatus as SystemStatusType } from "@shared/schema";
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -89,7 +89,7 @@ export default function Dashboard() {
   });
 
   // Fetch system status (always 30 seconds)
-  const { data: systemStatus } = useQuery<SystemStatus[]>({
+  const { data: systemStatus } = useQuery<SystemStatusType[]>({
     queryKey: ["/api/system/status"],
     refetchInterval: 30000
   });
