@@ -10,6 +10,7 @@ interface SolarHologramProps {
   data?: ComprehensiveSpaceWeatherData;
   heliosingerData?: HeliosingerData | null;
   isPlaying: boolean;
+  mode?: "app" | "stream";
 }
 
 interface ParticleSystem {
@@ -31,7 +32,7 @@ const normalize = (value: number, min: number, max: number) =>
  * inputs to a 3D sun, corona, and particle stream so users can *see* the same
  * signals they're hearing from Heliosinger.
  */
-export function SolarHologram({ data, heliosingerData, isPlaying }: SolarHologramProps) {
+export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }: SolarHologramProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
