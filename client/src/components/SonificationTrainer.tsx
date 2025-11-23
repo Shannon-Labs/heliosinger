@@ -1,6 +1,7 @@
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { AudioVisualizer } from "@/components/AudioVisualizer";
 import type { ComprehensiveSpaceWeatherData, SolarWindReading } from "@shared/schema";
 
 interface SonificationTrainerProps {
@@ -92,6 +93,14 @@ export function SonificationTrainer({ currentData, comprehensiveData }: Sonifica
         <div className="space-y-4">
           <div>
             <span className="block text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">You Are Hearing</span>
+            
+            <div className="mb-4 border-2 border-white/10">
+              <AudioVisualizer 
+                isPlaying={true} 
+                data={currentData} 
+              />
+            </div>
+
             <div className="flex items-baseline gap-4">
               <span className="text-8xl font-black text-white leading-none">
                 "{vowel}"

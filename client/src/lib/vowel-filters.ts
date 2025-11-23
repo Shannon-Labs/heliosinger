@@ -198,47 +198,75 @@ export function getVowelFromSpaceWeather(
  */
 export function getSolarMoodDescription(
   vowel: VowelFormants,
-  condition: 'quiet' | 'moderate' | 'storm' | 'extreme' | 'super_extreme'
+  condition: 'quiet' | 'moderate' | 'storm' | 'extreme' | 'super_extreme',
+  velocity?: number,
+  density?: number,
+  bz?: number,
+  kp?: number
 ): string {
-  const moodDescriptions = {
-    'quiet': {
-      'I': 'The sun softly sings a bright, clear note',
-      'E': 'The sun peacefully resonates with gentle warmth',
-      'A': 'The sun breathes a calm, open tone',
-      'O': 'The sun softly intones with rounded warmth',
-      'U': 'The sun quietly rumbles in the distance'
-    },
-    'moderate': {
-      'I': 'The sun sings brightly with growing energy',
-      'E': 'The sun resonates with moderate strength',
-      'A': 'The sun calls out with open clarity',
-      'O': 'The sun proclaims with rounded tones',
-      'U': 'The sun intones with deep resonance'
-    },
-    'storm': {
-      'I': 'The sun sings with brilliant intensity',
-      'E': 'The sun resonates with strong energy',
-      'A': 'The sun sings with powerful resonance',
-      'O': 'The sun intones with deep strength',
-      'U': 'The sun resonates with deep authority'
-    },
-    'extreme': {
-      'I': 'The sun sings with maximum brightness',
-      'E': 'The sun resonates with great power',
-      'A': 'The sun sings with profound resonance',
-      'O': 'The sun intones with cosmic strength',
-      'U': 'The sun resonates with deep majesty'
-    },
-    'super_extreme': {
-      'I': 'The sun screams with blinding, white-hot energy',
-      'E': 'The sun roars with the power of a stellar flare',
-      'A': 'The sun unleashes a torrent of raw, untamed sound',
-      'O': 'The sun bellows with the full force of the solar wind',
-      'U': 'The sun groans under the strain of immense cosmic forces'
-    }
+  // 1. Mood Verb (based on condition)
+  const verbs = {
+    'quiet': ['breathes', 'hums', 'whispers', 'drifts'],
+    'moderate': ['sings', 'intones', 'calls', 'pulses'],
+    'storm': ['resonates', 'vibrates', 'surges', 'echoes'],
+    'extreme': ['roars', 'thunders', 'blazes', 'crashes'],
+    'super_extreme': ['screams', 'shatters', 'erupts', 'howls']
   };
+  const verb = verbs[condition][Math.floor(Math.random() * verbs[condition].length)];
 
-  return moodDescriptions[condition][vowel.name] || 'The sun sings';
+  // 2. Sonic Quality (based on vowel & condition)
+  const qualities = {
+    'I': 'with bright clarity',
+    'E': 'with focused energy',
+    'A': 'with open warmth',
+    'O': 'with rounded depth',
+    'U': 'with dark resonance'
+  };
+  let quality = qualities[vowel.name] || 'with cosmic tone';
+  
+  // Intensify quality for storms
+  if (condition === 'storm' || condition === 'extreme') {
+    if (vowel.name === 'I') quality = 'with piercing brightness';
+    if (vowel.name === 'U') quality = 'with heavy sub-bass';
+  }
+
+  // 3. Cause (based on dominant data factor)
+  let cause = "as the solar wind flows"; // default
+  
+  if (velocity !== undefined && density !== undefined && bz !== undefined && kp !== undefined) {
+    // Determine dominant factor
+    const factors = [
+      { name: 'velocity', score: (velocity - 300) / 500 }, // >800 is high
+      { name: 'density', score: (density - 5) / 20 },      // >25 is high
+      { name: 'bz', score: Math.abs(bz) / 10 },            // >10 is high
+      { name: 'kp', score: kp / 7 }                        // >7 is high
+    ];
+    
+    factors.sort((a, b) => b.score - a.score);
+    const dominant = factors[0];
+    
+    if (dominant.score > 0.4) { // Only add cause if it's significant
+      switch (dominant.name) {
+        case 'velocity':
+          cause = velocity > 600 ? "driven by fast wind" : "as plasma streams accelerate";
+          break;
+        case 'density':
+          cause = density > 15 ? "as density thickens" : "under heavy particle load";
+          break;
+        case 'bz':
+          cause = bz < 0 ? "due to southward magnetic tilt" : "amidst magnetic turbulence";
+          break;
+        case 'kp':
+          cause = kp > 5 ? "during geomagnetic storm" : "as the field unsettles";
+          break;
+      }
+    } else {
+      // Fallback for quiet times
+      cause = "in the quiet void";
+    }
+  }
+
+  return `The sun ${verb} ${quality} ${cause}.`;
 }
 
 /**

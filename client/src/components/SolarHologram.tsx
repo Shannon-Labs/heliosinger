@@ -56,6 +56,9 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
     ring?: THREE.MeshBasicMaterial;
     wind?: THREE.PointsMaterial;
   }>({});
+  const meshesRef = useRef<{
+    ring?: THREE.Mesh;
+  }>({});
   const uniformsRef = useRef<SunUniforms | null>(null);
   const targetChordTensionRef = useRef(0);
   const targetBzRef = useRef(0);
@@ -368,6 +371,7 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
     const ring = new THREE.Mesh(new THREE.TorusGeometry(2.3, 0.06, 32, 180), ringMaterial);
     ring.rotation.x = Math.PI / 2;
     materialsRef.current.ring = ringMaterial;
+    meshesRef.current.ring = ring;
     group.add(ring);
 
     // Particle wind
@@ -506,14 +510,23 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
       0.0015 + velocityFactor * 0.02 + kpFactor * 0.003 + (circadianNormalized - 0.5) * 0.002;
 
     if (materialsRef.current.wind) {
-      materialsRef.current.wind.size = 0.03 + kpFactor * 0.08;
+      // Density affects particle size/opacity (visual density)
+      materialsRef.current.wind.size = 0.03 + kpFactor * 0.08 + densityFactor * 0.05;
+      materialsRef.current.wind.opacity = 0.6 + densityFactor * 0.4;
       materialsRef.current.wind.color.setHSL(0.55 + bzNormalized * 0.12, 1, 0.6);
     }
 
-    if (materialsRef.current.ring) {
+    if (materialsRef.current.ring && meshesRef.current.ring) {
       const hue = 0.1 + velocityFactor * 0.1 + (circadianNormalized - 0.5) * 0.05; // Base hue in orange/yellow range
+      
+      // Ring radius tracks VEL (Velocity)
+      const targetScale = 1.0 + velocityFactor * 0.4; // Expand up to 1.4x
+      meshesRef.current.ring.scale.setScalar(targetScale);
+
       if (stats.bz < -3) {
         materialsRef.current.ring.color.setHSL(0.05, 0.9, 0.7); // More red-orange for negative Bz
+      } else if (stats.kp >= 5) {
+        materialsRef.current.ring.color.setHSL(0.9, 1.0, 0.5); // Magenta/Red for storm
       } else {
         materialsRef.current.ring.color.setHSL(hue, 0.9, 0.65); // Warm yellow/orange otherwise
       }
@@ -619,6 +632,22 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
                 <span className="text-[10px] font-black tracking-widest -skew-x-12 text-white/70">VOWEL</span>
                 <span className="text-xl font-black -skew-x-12 font-mono uppercase">{vowelName}</span>
               </div>
+           </div>
+           
+           {/* Data -> Sound Legend */}
+           <div className="mt-4 flex flex-col items-end gap-1 opacity-80">
+             <div className="text-[9px] font-mono uppercase text-white/50 mb-1">Signal Mapping</div>
+             <div className="flex flex-col items-end gap-1 text-[10px] font-bold text-white/80">
+               <div className="flex items-center gap-2">
+                 <span>VELOCITY</span> <span className="text-primary">→</span> <span>BASE PITCH</span>
+               </div>
+               <div className="flex items-center gap-2">
+                 <span>DENSITY</span> <span className="text-primary">→</span> <span>HARMONY</span>
+               </div>
+               <div className="flex items-center gap-2">
+                 <span>Bz / Kp</span> <span className="text-primary">→</span> <span>TEXTURE</span>
+               </div>
+             </div>
            </div>
         </div>
 

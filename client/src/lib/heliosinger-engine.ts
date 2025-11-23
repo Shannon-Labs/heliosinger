@@ -49,6 +49,11 @@ interface TextureLayer {
   noiseGain?: GainNode;
   noiseFilter?: BiquadFilterNode;
   
+  // Solar Wind Hiss (velocity-driven)
+  windSource?: AudioBufferSourceNode;
+  windGain?: GainNode;
+  windFilter?: BiquadFilterNode;
+  
   // Sub-bass rumble (for extreme conditions)
   rumbleOsc?: OscillatorNode;
   rumbleGain?: GainNode;
@@ -343,10 +348,8 @@ class HeliosingerEngine {
     // Create binaural layer for calm background presence
     this.createBinauralLayer(heliosingerData);
     
-    // Create texture layer (shimmer, rumble)
-    if (heliosingerData.shimmerGain > 0 || heliosingerData.rumbleGain > 0) {
-      this.createTextureLayer(heliosingerData);
-    }
+    // Create texture layer (shimmer, rumble, wind)
+    this.createTextureLayer(heliosingerData);
     
     console.log(`🌞 The sun is singing: "${heliosingerData.solarMood}"`);
     console.log(`   Vowel: "${heliosingerData.currentVowel.displayName}" (${heliosingerData.currentVowel.description})`);
@@ -610,12 +613,46 @@ class HeliosingerEngine {
   }
   
   /**
-   * Create texture layer (shimmer, rumble)
+   * Create texture layer (shimmer, rumble, wind)
    */
   private createTextureLayer(data: HeliosingerData): void {
     if (!this.audioContext || !this.masterGain || !this.noiseBuffer) return;
     
-    // High-frequency shimmer from temperature
+    // 1. Solar Wind Hiss (Velocity-driven)
+    // Always create this as it's a core part of the "journey"
+    this.textureLayer.windSource = this.audioContext.createBufferSource();
+    this.textureLayer.windGain = this.audioContext.createGain();
+    this.textureLayer.windFilter = this.audioContext.createBiquadFilter();
+    
+    this.textureLayer.windSource.buffer = this.noiseBuffer;
+    this.textureLayer.windSource.loop = true;
+    
+    // Filter tracks velocity (set initial value)
+    this.textureLayer.windFilter.type = 'bandpass';
+    const velocity = data.velocity || 350;
+    // Map 200-800 km/s to 200-1200 Hz center freq
+    const windFreq = 200 + ((velocity - 200) / 600) * 1000;
+    this.textureLayer.windFilter.frequency.value = windFreq;
+    this.textureLayer.windFilter.Q.value = 0.8; // Wide band for "windy" sound
+    
+    // Gain tracks density (set initial value)
+    const density = data.density || 5;
+    // Map 0-20 p/cc to 0.0-0.15 gain
+    const windVol = Math.min(0.15, (density / 20) * 0.15);
+    this.textureLayer.windGain.gain.value = windVol;
+    
+    // Connect: wind -> filter -> gain -> master
+    this.textureLayer.windSource.connect(this.textureLayer.windFilter);
+    this.textureLayer.windFilter.connect(this.textureLayer.windGain);
+    this.textureLayer.windGain.connect(this.masterGain);
+    
+    try {
+      this.textureLayer.windSource.start();
+    } catch (e) {
+      console.error("Failed to start wind source", e);
+    }
+
+    // 2. High-frequency shimmer from temperature
     if (data.shimmerGain > 0) {
       this.textureLayer.noiseSource = this.audioContext.createBufferSource();
       this.textureLayer.noiseGain = this.audioContext.createGain();
@@ -814,6 +851,25 @@ class HeliosingerEngine {
     }
     
     // Update texture layer
+    if (this.textureLayer.windGain && this.textureLayer.windFilter) {
+      const velocity = heliosingerData.velocity || 350;
+      const density = heliosingerData.density || 5;
+      
+      // Update wind frequency (velocity)
+      const targetWindFreq = 200 + ((velocity - 200) / 600) * 1000;
+      this.textureLayer.windFilter.frequency.exponentialRampToValueAtTime(
+        Math.max(100, targetWindFreq),
+        now + smoothingTime
+      );
+      
+      // Update wind volume (density)
+      const targetWindVol = Math.min(0.15, (density / 20) * 0.15);
+      this.textureLayer.windGain.gain.exponentialRampToValueAtTime(
+        Math.max(0.001, targetWindVol),
+        now + smoothingTime
+      );
+    }
+
     if (this.textureLayer.noiseGain && heliosingerData.shimmerGain > 0) {
       this.textureLayer.noiseGain.gain.exponentialRampToValueAtTime(
         Math.max(0.001, heliosingerData.shimmerGain * 0.5),
@@ -871,6 +927,9 @@ class HeliosingerEngine {
     this.modulationLayer = {};
     
     // Stop texture layer
+    if (this.textureLayer.windSource) {
+      try { this.textureLayer.windSource.stop(); } catch (e) {}
+    }
     if (this.textureLayer.noiseSource) {
       try { this.textureLayer.noiseSource.stop(); } catch (e) {}
     }

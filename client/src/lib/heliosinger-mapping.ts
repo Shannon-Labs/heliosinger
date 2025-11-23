@@ -29,6 +29,10 @@ export interface ChordTone {
 }
 
 export interface HeliosingerData extends ChordData {
+  // Core space weather parameters
+  velocity: number;
+  bz: number;
+  
   // Vowel singing parameters
   currentVowel: VowelFormants;
   vowelName: VowelName;
@@ -217,13 +221,22 @@ export function mapSpaceWeatherToHeliosinger(
     detuneCents: spatialData.detuneCents,
     condition,
     density: solarWind.density,
+    velocity: solarWind.velocity,
+    bz: solarWind.bz,
     kIndex: kIndex?.kp || 0,
     
     // Heliosinger vowel singing fields
     currentVowel,
     vowelName: currentVowel.name,
     vowelDescription: currentVowel.description,
-    solarMood: getSolarMoodDescription(currentVowel, condition),
+    solarMood: getSolarMoodDescription(
+      currentVowel, 
+      condition, 
+      solarWind.velocity, 
+      solarWind.density, 
+      solarWind.bz, 
+      kIndex?.kp
+    ),
     chordQuality, // Add the new field
     formantFilters,
     
@@ -1136,6 +1149,8 @@ export function createDefaultHeliosingerMapping(): HeliosingerData {
     detuneCents: 0,
     condition: 'quiet',
     density: 5,
+    velocity: 350,
+    bz: 0,
     kIndex: 1,
     currentVowel: defaultVowel,
     vowelName: 'A',

@@ -172,8 +172,11 @@ export default function StreamView() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-destructive text-white font-bold uppercase border-2 border-white animate-pulse">
-                <div className="w-3 h-3 bg-white rounded-full" />
+              <div 
+                key={comprehensiveData?.timestamp || 'live'}
+                className="hidden md:flex items-center gap-2 px-3 py-2 bg-destructive text-white font-bold uppercase border-2 border-white animate-in fade-in zoom-in duration-500"
+              >
+                <div className="w-3 h-3 bg-white rounded-full animate-pulse" />
                 Live
               </div>
               <Button

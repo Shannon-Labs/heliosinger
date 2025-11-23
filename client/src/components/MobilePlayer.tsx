@@ -3,6 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { AudioVisualizer } from '@/components/AudioVisualizer';
 import type { HeliosingerData } from '@/lib/heliosinger-mapping';
 
 interface MobilePlayerProps {
@@ -97,6 +98,12 @@ export function MobilePlayer({
               {/* Current vowel display */}
               {currentData && (
                 <div className="text-center space-y-2">
+                  <div className="mb-4">
+                    <AudioVisualizer 
+                      isPlaying={isPlaying} 
+                      data={currentData} 
+                    />
+                  </div>
                   <div className="text-4xl font-bold">
                     {currentData.currentVowel.displayName}
                   </div>

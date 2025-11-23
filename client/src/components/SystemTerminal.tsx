@@ -169,7 +169,7 @@ export function SystemTerminal({ data }: SystemTerminalProps) {
               </span>
               <span className={`
                 break-words
-                ${log.type === 'error' ? 'text-destructive font-bold' : ''}
+                ${log.type === 'error' ? 'text-destructive font-bold bg-destructive/10 px-1' : ''}
                 ${log.type === 'warning' ? 'text-amber-500' : ''}
                 ${log.type === 'success' ? 'text-emerald-500' : ''}
                 ${log.type === 'system' ? 'text-primary/60 italic' : ''}
@@ -177,6 +177,9 @@ export function SystemTerminal({ data }: SystemTerminalProps) {
                 ${log.type === 'info' ? 'text-white/80' : ''}
               `}>
                 {log.type === 'system' && '> '}
+                {log.type === 'warning' && '⚠ '}
+                {log.type === 'error' && '✖ '}
+                {log.type === 'science' && '🔬 '}
                 {log.message}
               </span>
             </div>
