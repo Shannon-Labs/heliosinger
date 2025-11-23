@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
+import { Link } from "wouter";
 import { SystemStatus } from "@/components/system-status";
 import { Footer } from "@/components/Footer";
 import { EventsTicker } from "@/components/EventsTicker";
@@ -307,7 +308,8 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-20 md:pb-0">
+    <div className="min-h-screen bg-black text-white pb-20 md:pb-0 relative overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 opacity-5 bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:24px_24px]" />
       {/* ARIA Live Region for Dynamic Updates */}
       <div
         aria-live="polite"
@@ -320,7 +322,7 @@ export default function Dashboard() {
 
       {/* Navigation Header */}
       <nav 
-        className="border-b-4 border-border bg-background sticky top-0 z-50"
+        className="border-b-4 border-primary bg-black/95 sticky top-0 z-50 backdrop-blur"
         role="navigation"
         aria-label="Main navigation"
       >
@@ -328,14 +330,14 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <BrutalistLogo className="h-10" />
-              <h1 className="text-xl font-bold text-foreground uppercase tracking-tighter hidden md:block" data-testid="text-app-title">
+              <h1 className="text-xl font-bold text-white uppercase tracking-tighter hidden md:block" data-testid="text-app-title">
                 Heliosinger
               </h1>
             </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 bg-secondary px-4 py-2 border-2 border-border">
-                <div className={`w-3 h-3 ${isDataStreamActive ? 'bg-accent animate-pulse' : 'bg-destructive'}`} />
-                <span className="text-sm font-bold uppercase tracking-tight" data-testid="text-data-status">
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-2 bg-primary text-black px-4 py-2 border-2 border-black -skew-x-6 shadow-[4px_4px_0px_rgba(0,0,0,0.6)]">
+                <div className={`w-3 h-3 ${isDataStreamActive ? 'bg-black animate-pulse' : 'bg-destructive'}`} />
+                <span className="text-sm font-black uppercase tracking-tight skew-x-6" data-testid="text-data-status">
                   {isDataStreamActive ? 'Live Data' : 'Offline'}
                 </span>
               </div>
@@ -345,25 +347,35 @@ export default function Dashboard() {
                 onClick={() => fetchDataMutation.mutate()}
                 disabled={fetchDataMutation.isPending}
                 data-testid="button-refresh-data"
-                className="border-2 border-border hover:bg-accent hover:text-accent-foreground uppercase font-bold"
+                className="border-2 border-white bg-black text-white hover:bg-white hover:text-black uppercase font-black tracking-tight"
               >
                 <i className={`fas fa-sync-alt ${fetchDataMutation.isPending ? 'animate-spin' : ''}`} aria-hidden="true" />
               </Button>
+              <Link href="/stream">
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="bg-white text-black border-2 border-black -skew-x-6 font-black uppercase tracking-widest hover:bg-primary hover:text-black shadow-[4px_4px_0px_rgba(0,0,0,0.6)]"
+                >
+                  <span className="skew-x-6">Fullscreen Stream</span>
+                </Button>
+              </Link>
             </div>
           </div>
         </div>
       </nav>
 
-      <main id="main" className="container mx-auto px-4 py-8">
+      <main id="main" className="container mx-auto px-4 py-8 relative z-10">
         {/* Hero Section */}
-        <section className="mb-12 text-center">
+        <section className="mb-12 text-center relative">
+          <div className="absolute inset-0 -z-10 bg-gradient-to-r from-primary/10 via-transparent to-primary/10 blur-3xl" />
           <div className="flex justify-center mb-6">
-            <BrutalistLogo className="scale-150" />
+            <BrutalistLogo className="scale-150 shadow-[6px_6px_0px_rgba(0,0,0,0.5)]" />
           </div>
-          <h1 className="text-4xl font-black mb-2 text-foreground uppercase tracking-tighter">
+          <h1 className="text-4xl font-black mb-2 text-white uppercase tracking-tighter -skew-x-6 inline-block px-4 py-2 border-4 border-white/30 shadow-[6px_6px_0px_rgba(0,0,0,0.6)] bg-black/70">
             Real-Time Space Weather Sonification
           </h1>
-          <p className="text-sm text-muted-foreground max-w-2xl mx-auto border-l-4 border-primary pl-4 text-left font-mono">
+          <p className="text-sm text-white/80 max-w-2xl mx-auto border-l-4 border-primary pl-4 text-left font-mono">
             Experience space weather as the sun literally sings its story in real-time. 
             Each moment creates a unique vowel sound, pitch, and rhythm based on solar wind conditions.
           </p>

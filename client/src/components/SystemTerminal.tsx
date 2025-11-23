@@ -32,6 +32,7 @@ export function SystemTerminal({ data }: SystemTerminalProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const nextId = useRef(0);
   const prevDataRef = useRef<ComprehensiveSpaceWeatherData | undefined>(undefined);
+  const lastFactRef = useRef<string | null>(null);
 
   const addLog = (message: string, type: LogEntry['type'] = 'info') => {
     const now = new Date();
@@ -138,7 +139,10 @@ export function SystemTerminal({ data }: SystemTerminalProps) {
     const interval = setInterval(() => {
       if (Math.random() > 0.7) { // 30% chance every 15s
         const fact = EDUCATIONAL_FACTS[Math.floor(Math.random() * EDUCATIONAL_FACTS.length)];
-        addLog(fact, 'system');
+        if (fact !== lastFactRef.current) {
+          addLog(fact, 'system');
+          lastFactRef.current = fact;
+        }
       }
     }, 15000);
     return () => clearInterval(interval);
