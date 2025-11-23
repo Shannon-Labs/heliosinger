@@ -330,9 +330,6 @@ export default function Dashboard() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <BrutalistLogo className="h-10" />
-              <h1 className="text-xl font-bold text-white uppercase tracking-tighter hidden md:block" data-testid="text-app-title">
-                Heliosinger
-              </h1>
             </div>
             <div className="flex items-center space-x-3">
               <div className="flex items-center space-x-2 bg-primary text-black px-4 py-2 border-2 border-black -skew-x-6 shadow-[4px_4px_0px_rgba(0,0,0,0.6)]">
@@ -786,7 +783,16 @@ export default function Dashboard() {
         {/* <DataDashboard /> */}
 
         {/* System Status */}
-        <SystemStatus />
+        <section className="mb-10">
+          <div className="border-4 border-primary bg-black/80 shadow-[8px_8px_0px_rgba(0,0,0,0.6)]">
+            <div className="px-4 py-3 border-b-4 border-white/20 bg-primary text-black -skew-x-6">
+              <h3 className="font-black uppercase tracking-widest text-lg skew-x-6">System Status</h3>
+            </div>
+            <div className="p-4">
+              <SystemStatus />
+            </div>
+          </div>
+        </section>
 
         {/* Footer */}
         <Footer />
