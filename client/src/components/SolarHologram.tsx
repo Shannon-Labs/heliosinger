@@ -36,6 +36,7 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
   const mountRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
+  const groupRef = useRef<THREE.Group | null>(null);
   const animationRef = useRef<number>();
   const particleRef = useRef<ParticleSystem | null>(null);
   const materialsRef = useRef<{
