@@ -111,8 +111,6 @@ export default function StreamView() {
       {/* Breaking News Banner for major events */}
       {introComplete && <BreakingNewsBanner data={comprehensiveData} />}
 
-      <div className="p-6 flex items-center justify-between border-b-4 border-primary bg-black z-10 relative">
-
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0">
         {/* Left Column: Visuals (8 cols) */}
         <div className="lg:col-span-8 relative border-r-4 border-primary bg-black flex flex-col overflow-hidden h-full">
