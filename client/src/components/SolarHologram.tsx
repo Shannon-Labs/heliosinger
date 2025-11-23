@@ -482,42 +482,68 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
 
   if (mode === "stream") {
     return (
-      <div className="relative w-full h-full min-h-[500px] bg-black overflow-hidden group">
+      <div className="relative w-full h-full min-h-[500px] bg-black overflow-hidden group font-sans selection:bg-primary selection:text-black">
         <div
           ref={mountRef}
           className="absolute inset-0 bg-black/90"
           aria-label="3D solar visualization"
         />
         
-        {/* Cinematic Vignette */}
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,black_100%)] opacity-80" />
-
-        {/* Stream Overlay: Top Left - Stats */}
-        <div className="absolute top-6 left-6 flex flex-col gap-2 z-10 pointer-events-none">
-           <div className="flex items-center gap-3">
-             <Badge variant="outline" className="bg-black/50 backdrop-blur border-white/20 text-white font-mono">
-               V {stats.velocity.toFixed(0)} km/s
-             </Badge>
-             <Badge variant="outline" className="bg-black/50 backdrop-blur border-white/20 text-white font-mono">
-               ρ {stats.density.toFixed(1)}
-             </Badge>
-             <Badge variant={stats.kp >= 5 ? "destructive" : "outline"} className="bg-black/50 backdrop-blur border-white/20 font-mono">
-               Kp {stats.kp.toFixed(1)}
-             </Badge>
+        {/* Cinematic Vignette & Grain */}
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,black_120%)] opacity-80" />
+        
+        {/* Stream Overlay: Top Left - Stats (Persona Style) */}
+        <div className="absolute top-8 left-8 flex flex-col gap-4 z-10 pointer-events-none">
+           {/* Header */}
+           <div className="bg-white text-black px-6 py-2 -skew-x-12 origin-top-left border-l-8 border-primary shadow-[4px_4px_0px_rgba(0,0,0,1)]">
+             <span className="block text-2xl font-black uppercase tracking-tighter skew-x-12">
+               Solar Operations
+             </span>
            </div>
-           <div className="flex items-center gap-2 text-xs text-white/50 font-mono uppercase tracking-widest">
-             <span>{cinema.phase}</span>
-             <span>•</span>
-             <span>{vowelName}</span>
+
+           {/* Stat Block */}
+           <div className="flex flex-col gap-2 items-start pl-2">
+             {[
+               { label: "VELOCITY", val: stats.velocity.toFixed(0), unit: "KM/S" },
+               { label: "DENSITY", val: stats.density.toFixed(1), unit: "P/CM³" },
+               { label: "KP INDEX", val: stats.kp.toFixed(1), unit: "", alert: stats.kp >= 5 }
+             ].map((item) => (
+               <div key={item.label} className={`
+                 flex items-center gap-4 px-6 py-1
+                 ${item.alert ? 'bg-destructive text-white' : 'bg-black/80 text-white border border-white/20'}
+                 -skew-x-12 border-l-4 border-white shadow-[4px_4px_0px_rgba(0,0,0,0.5)]
+                 transition-all duration-300 hover:translate-x-2
+               `}>
+                 <span className="text-xs font-black tracking-widest skew-x-12 w-16 text-primary">{item.label}</span>
+                 <span className="text-xl font-black skew-x-12 font-mono tracking-tighter">{item.val}</span>
+                 <span className="text-xs font-bold skew-x-12 opacity-60">{item.unit}</span>
+               </div>
+             ))}
            </div>
         </div>
 
-        {/* Stream Overlay: Bottom Right - Director Cues */}
-        <div className="absolute bottom-20 right-6 max-w-md text-right z-10 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-           <p className="text-xs text-primary uppercase tracking-widest mb-1">System Status</p>
-           <p className="text-sm text-white/80 font-mono leading-relaxed">
-             {cinema.directorLine}
-           </p>
+        {/* Stream Overlay: Bottom Right - Director Cues (Persona Style) */}
+        <div className="absolute bottom-24 right-8 z-10 pointer-events-none max-w-md text-right flex flex-col items-end gap-2">
+           <div className="bg-black text-white px-4 py-1 skew-x-12 border-r-4 border-primary">
+             <span className="block text-xs font-bold uppercase tracking-widest -skew-x-12">
+               Current Phase // {vowelName}
+             </span>
+           </div>
+           
+           <div className="bg-white/95 text-black p-6 skew-x-12 shadow-[8px_8px_0px_rgba(0,0,0,0.8)] border-2 border-black relative max-w-sm">
+              {/* Decor elements */}
+              <div className="absolute -top-2 -right-2 w-4 h-4 bg-destructive border-2 border-black" />
+              <div className="absolute -bottom-2 -left-2 w-4 h-4 bg-primary border-2 border-black" />
+              
+              <div className="-skew-x-12">
+                <h3 className="text-3xl font-black uppercase leading-none mb-2 tracking-tighter text-black">
+                  {cinema.phase}
+                </h3>
+                <p className="text-sm font-bold font-mono leading-tight uppercase opacity-80">
+                  {cinema.directorLine}
+                </p>
+              </div>
+           </div>
         </div>
       </div>
     );

@@ -85,30 +85,34 @@ export function EventOverlay({ current, previous }: EventOverlayProps) {
           : "border-white text-white";
 
   return (
-    <div className="pointer-events-none absolute top-6 right-6 z-50 max-w-md w-full">
+    <div className="pointer-events-none absolute top-8 right-8 z-50 max-w-md w-full perspective-1000">
       <div
         className={`
-          relative overflow-hidden bg-black border-4 ${borderClass} 
-          shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] 
+          relative overflow-hidden bg-black 
+          border-y-4 border-r-4 border-l-[12px] ${borderClass}
+          shadow-[12px_12px_0px_0px_rgba(0,0,0,0.8)] 
           p-6 flex flex-col gap-2
-          animate-in slide-in-from-right-10 fade-in duration-500
+          -skew-x-6
+          animate-in slide-in-from-right-full fade-in duration-500 timing-function-out-expo
         `}
       >
-        {/* Scanlines effect overlay */}
-        <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-0 bg-[length:100%_2px,3px_100%] opacity-20" />
+        {/* Diagonal Striped Background Pattern */}
+        <div className="absolute inset-0 pointer-events-none opacity-10 bg-[repeating-linear-gradient(45deg,transparent,transparent_10px,currentColor_10px,currentColor_12px)]" />
         
-        <div className="relative z-10 flex items-center justify-between border-b-2 border-current pb-2 mb-1">
-           <span className="text-xs font-mono uppercase tracking-[0.2em] font-bold">
-             Alert System // Broadcast
+        <div className="relative z-10 flex items-center justify-between border-b-4 border-current pb-2 mb-2 skew-x-6">
+           <span className="text-sm font-black uppercase tracking-[0.2em] bg-current text-black px-2 py-0.5">
+             Alert System
            </span>
-           <div className="w-2 h-2 bg-current animate-pulse" />
+           <div className="flex gap-1">
+             {[1,2,3].map(i => <div key={i} className="w-3 h-3 bg-current animate-pulse" style={{animationDelay: `${i*100}ms`}} />)}
+           </div>
         </div>
         
-        <div className="relative z-10">
-          <h2 className="text-3xl font-black uppercase tracking-tighter leading-none mb-1">
+        <div className="relative z-10 skew-x-6">
+          <h2 className="text-4xl font-black uppercase tracking-tighter leading-[0.85] mb-2 text-white drop-shadow-md">
             {flash.title}
           </h2>
-          <p className="text-lg font-mono font-medium opacity-90 uppercase tracking-tight">
+          <p className="text-xl font-bold font-mono uppercase tracking-tight bg-white text-black inline-block px-2 py-1">
             {flash.desc}
           </p>
         </div>
