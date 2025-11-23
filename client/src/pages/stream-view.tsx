@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { SolarHologram } from "@/components/SolarHologram";
 import { BrutalistLogo } from "@/components/BrutalistLogo";
 import { SystemTerminal } from "@/components/SystemTerminal";
+import { EventsTicker } from "@/components/EventsTicker";
 import { BreakingNewsBanner } from "@/components/stream-enhancements/BreakingNewsBanner";
 import { StreamIntro } from "@/components/stream-enhancements/StreamIntro";
 import { EventOverlay } from "@/components/stream-enhancements/EventOverlay";
@@ -18,6 +19,7 @@ export default function StreamView() {
   // Show intro on first load
   const [showIntro, setShowIntro] = useState(true);
   const [introComplete, setIntroComplete] = useState(false);
+  const [showTicker, setShowTicker] = useState(true);
 
   // Heliosinger hook - auto-enabled
   const [isHeliosingerEnabled, setIsHeliosingerEnabled] = useState(true);
@@ -117,6 +119,14 @@ export default function StreamView() {
   const kIndex = comprehensiveData?.k_index?.kp ?? null;
   const currentVowel = heliosinger.currentData?.currentVowel;
   const chordQuality = heliosinger.currentData?.chordQuality;
+
+  // Auto-hide ticker after each data refresh cycle
+  useEffect(() => {
+    if (!comprehensiveData) return;
+    setShowTicker(true);
+    const timer = setTimeout(() => setShowTicker(false), 12000);
+    return () => clearTimeout(timer);
+  }, [comprehensiveData]);
 
   const vowelCue = (() => {
     if (!currentVowel || !solarWind) return "Training mode listening for live changes.";
@@ -291,6 +301,14 @@ export default function StreamView() {
               NOAA • Heliosinger Engine v2.0
             </span>
           </div>
+
+          {/* Chyron atop the log */}
+          {comprehensiveData && showTicker && (
+            <div className="border-b-2 border-white/20 bg-black/80 px-3 py-2">
+              <EventsTicker currentData={comprehensiveData} previousData={previousComprehensiveDataRef.current} />
+            </div>
+          )}
+
           <div className="flex-1 overflow-hidden relative">
             <div className="absolute inset-0">
               <SystemTerminal data={comprehensiveData} />

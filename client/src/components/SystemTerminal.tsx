@@ -22,6 +22,9 @@ const EDUCATIONAL_FACTS = [
   "INFO: Coronal Holes often emit high-speed solar wind streams (>600 km/s).",
   "INFO: Alfvén waves are magnetic waves that carry energy through the plasma.",
   "INFO: The Magnetosphere compresses on the dayside during high dynamic pressure.",
+  "INFO: Auroras brighten when solar wind couples into Earth's ring current.",
+  "INFO: Plasma temperature over 500,000 K often means fast solar wind.",
+  "INFO: Solar wind speed and density together set dynamic pressure on Earth.",
 ];
 
 export function SystemTerminal({ data }: SystemTerminalProps) {
@@ -72,6 +75,9 @@ export function SystemTerminal({ data }: SystemTerminalProps) {
       addLog(`DENSITY SHIFT: ${den.toFixed(1)} p/cm³ (Delta: ${(den - prevDen).toFixed(1)})`, 'info');
       if (den > 20) addLog("High density compression region passing spacecraft.", 'science');
     }
+    if (!prev && den) {
+      addLog(`BASELINE DENSITY: ${den.toFixed(1)} p/cm³`, 'info');
+    }
 
     // 3. Magnetic Field (Bz) Checks - Crucial for storms
     const bz = data.solar_wind?.bz ?? 0;
@@ -87,6 +93,9 @@ export function SystemTerminal({ data }: SystemTerminalProps) {
     if (bz < -10 && prevBz >= -10) {
       addLog(`CRITICAL: Strong Southward Bz (${bz.toFixed(1)} nT). Storm conditions likely.`, 'error');
     }
+    if (!prev && bz) {
+      addLog(`BASELINE IMF Bz: ${bz.toFixed(1)} nT`, 'info');
+    }
 
     // 4. Kp Index Updates
     const kp = data.k_index?.kp ?? 0;
@@ -96,12 +105,29 @@ export function SystemTerminal({ data }: SystemTerminalProps) {
       const color = kp >= 5 ? 'error' : kp >= 4 ? 'warning' : 'success';
       addLog(`GEOMAGNETIC UPDATE: Kp ${kp.toFixed(1)} [${level}]`, color);
     }
+    if (!prev && kp) {
+      addLog(`BASELINE Kp: ${kp.toFixed(1)}`, 'info');
+    }
 
     // 5. X-Ray Flux (Flares)
     const flux = data.xray_flux?.short_wave ?? 0;
     const prevFlux = prev?.xray_flux?.short_wave ?? 0;
     if (flux > 1e-5 && prevFlux <= 1e-5) { // M-class or higher threshold approx
        addLog("SOLAR FLARE DETECTED: High energy photon flux increase.", 'warning');
+    }
+    // 6. Temperature hints
+    const temp = data.solar_wind?.temperature ?? 0;
+    const prevTemp = prev?.solar_wind?.temperature ?? 0;
+    if (temp && (prevTemp === 0 || Math.abs(temp - prevTemp) > 50000)) {
+      addLog(`PLASMA TEMP: ${(temp / 1000).toFixed(0)}k K`, temp > 500000 ? 'science' : 'info');
+    }
+
+    // 7. Summary snapshot
+    if (!prev || Math.abs(vel - prevVel) > 30 || Math.abs(den - prevDen) > 2 || Math.abs(bz - prevBz) > 1) {
+      addLog(
+        `SNAPSHOT → V:${vel.toFixed(0)} km/s | D:${den.toFixed(1)} p/cc | Bz:${bz.toFixed(1)} nT | Kp:${kp.toFixed(1)}`,
+        'system'
+      );
     }
 
     prevDataRef.current = data;
