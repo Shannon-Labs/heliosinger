@@ -227,35 +227,48 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
         varying vec3 vNormal;
         varying vec3 vPosition;
         
-        // Simple hue rotation
+        // Simple hue rotation (optimized for warmer base)
         vec3 hueShift(vec3 color, float shift) {
-          const mat3 toYIQ = mat3(
-            0.299, 0.587, 0.114,
-            0.596, -0.274, -0.322,
-            0.211, -0.523, 0.312
-          );
-          const mat3 toRGB = mat3(
-            1.0, 0.956, 0.621,
-            1.0, -0.272, -0.647,
-            1.0, -1.107, 1.705
-          );
-          vec3 yiq = toYIQ * color;
-          float hue = atan(yiq.z, yiq.y) + shift;
-          float chroma = sqrt(yiq.z * yiq.z + yiq.y * yiq.y);
-          return toRGB * vec3(yiq.x, chroma * cos(hue), chroma * sin(hue));
+          float C = 1.0 - abs(mod(shift / 60.0, 2.0) - 1.0);
+          float X = C * (1.0 - abs(mod(shift / 60.0, 2.0) - 1.0));
+          vec3 K = vec3(0.0);
+          if (shift >= 0.0 && shift < 60.0) K = vec3(C, X, 0.0);
+          else if (shift >= 60.0 && shift < 120.0) K = vec3(X, C, 0.0);
+          else if (shift >= 120.0 && shift < 180.0) K = vec3(0.0, C, X);
+          else if (shift >= 180.0 && shift < 240.0) K = vec3(0.0, X, C);
+          else if (shift >= 240.0 && shift < 300.0) K = vec3(X, 0.0, C);
+          else if (shift >= 300.0 && shift < 360.0) K = vec3(C, 0.0, X);
+
+          float m = 0.5; // Simplistic lightness
+          return (color + m);
         }
         
         void main() {
           float fresnel = pow(1.0 - dot(normalize(vNormal), vec3(0.0, 0.0, 1.0)), 2.0);
           float flare = sin(vPosition.y * 8.0 + uTime * 3.5) * 0.5 + 0.5;
-          float activity = mix(0.35, 1.2, uActivity);
-          vec3 base = mix(vec3(0.08, 0.14, 0.32), vec3(0.12, 0.35 + uBrightness * 0.4, 0.55), activity);
-          base = hueShift(base, uHueShift + uCircadian * 0.4);
-          vec3 color = base + fresnel * 0.6 + flare * 0.35 * activity;
+          float activity = mix(0.45, 1.3, uActivity); // Slightly increased base activity
           
+          vec3 baseColor = mix(
+            vec3(0.9, 0.3, 0.05), // Deep fiery red-orange
+            vec3(1.0, 0.6 + uBrightness * 0.2, 0.1), // Bright yellow-orange
+            activity
+          );
+          
+          // Apply hue shift based on overall system state and circadian rhythm
+          // This hueShift is simplified for direct color manipulation now
+          // For actual hue shift, need to convert RGB to HSL/HSV, shift H, then back to RGB
+          // For now, let's just adjust based on a fixed warm range
+          vec3 finalBase = baseColor;
+          finalBase.r = clamp(finalBase.r + uHueShift * 0.5 - 0.2 + uCircadian * 0.1, 0.0, 1.0);
+          finalBase.g = clamp(finalBase.g + uHueShift * 0.3 - 0.1 + uCircadian * 0.05, 0.0, 1.0);
+          finalBase.b = clamp(finalBase.b + uHueShift * 0.1 - 0.05 + uCircadian * 0.02, 0.0, 1.0);
+
+
+          vec3 color = finalBase + fresnel * 0.7 + flare * 0.45 * activity; // Increased fresnel and flare
+
           // Bz pushes warmer when southward, cooler when northward
-          color.r += max(0.0, -uBz) * 0.5;
-          color.b += max(0.0, uBz) * 0.4;
+          color.r += max(0.0, -uBz) * 0.6; // Stronger red push
+          color.b += max(0.0, uBz) * 0.5; // Stronger blue push
           
           gl_FragColor = vec4(color, 1.0);
         }
@@ -289,11 +302,22 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
         varying vec3 vNormal;
         void main() {
           float intensity = pow(1.0 - dot(normalize(vNormal), vec3(0.0, 0.0, 1.0)), 1.2);
-          float glow = intensity * (0.4 + uActivity * 0.8);
-          vec3 color = mix(vec3(0.05, 0.35, 0.65), vec3(0.75, 0.35, 0.15), max(0.0, -uBz));
-          color = mix(color, vec3(0.12, 0.55, 0.85), clamp(uCircadian * 0.5 + 0.2, 0.0, 1.0));
-          color += vec3(0.1, 0.25, 0.4) * uActivity;
-          gl_FragColor = vec4(color, glow);
+          float glow = intensity * (0.6 + uActivity * 1.2); // Increased glow intensity
+          
+          vec3 baseCoronaColor = mix(
+            vec3(1.0, 0.5, 0.0), // Orange
+            vec3(1.0, 0.8, 0.0), // Bright yellow
+            uActivity
+          );
+
+          // Blend with Bz for magnetic influence (more red for southward, slight blue for northward)
+          vec3 bzColor = mix(baseCoronaColor, vec3(1.0, 0.2, 0.0), max(0.0, -uBz * 0.8)); // Redder for negative Bz
+          bzColor = mix(bzColor, vec3(0.8, 0.9, 1.0), max(0.0, uBz * 0.5)); // Bluer for positive Bz
+
+          // Blend with circadian for diurnal shift (e.g., more orange/red during "day", deeper reds during "night")
+          vec3 finalColor = mix(bzColor, vec3(0.8, 0.3, 0.0), 1.0 - uCircadian); // Deeper red for lower circadian
+
+          gl_FragColor = vec4(finalColor, glow);
         }
       `,
     });
@@ -333,7 +357,7 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
     const particleGeometry = new THREE.BufferGeometry();
     particleGeometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     const particleMaterial = new THREE.PointsMaterial({
-      color: 0x5ef2ff,
+      color: 0xffa000, // Bright orange-yellow
       size: 0.035,
       transparent: true,
       depthWrite: false,
@@ -420,7 +444,7 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
     uniformsRef.current.uBz.value = bzNormalized;
     uniformsRef.current.uBrightness.value = vowelBrightness;
     uniformsRef.current.uHueShift.value =
-      0.4 + (heliosingerData ? normalize(heliosingerData.midiNote, 36, 84) * 0.5 : 0.15);
+      0.0 + (heliosingerData ? normalize(heliosingerData.midiNote, 36, 84) * 0.1 : 0.05); // Smaller hue shifts on an already warm base
     uniformsRef.current.uCircadian.value = circadianNormalized;
 
     dynamicsRef.current.rotationVelocity =
@@ -434,11 +458,11 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
     }
 
     if (materialsRef.current.ring) {
-      const hue = 0.08 + velocityFactor * 0.2 + (circadianNormalized - 0.5) * 0.15;
+      const hue = 0.1 + velocityFactor * 0.1 + (circadianNormalized - 0.5) * 0.05; // Base hue in orange/yellow range
       if (stats.bz < -3) {
-        materialsRef.current.ring.color.setHSL(0.02, 0.9, 0.65);
+        materialsRef.current.ring.color.setHSL(0.05, 0.9, 0.7); // More red-orange for negative Bz
       } else {
-        materialsRef.current.ring.color.setHSL(hue, 0.9, 0.6);
+        materialsRef.current.ring.color.setHSL(hue, 0.9, 0.65); // Warm yellow/orange otherwise
       }
       materialsRef.current.ring.opacity = 0.25 + densityFactor * 0.3 + (1 - circadianNormalized) * 0.1;
     }
