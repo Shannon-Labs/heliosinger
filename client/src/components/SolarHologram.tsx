@@ -27,6 +27,17 @@ const clamp = (value: number, min: number, max: number) =>
 const normalize = (value: number, min: number, max: number) =>
   clamp((value - min) / (max - min), 0, 1);
 
+type SunUniforms = {
+  uTime: { value: number };
+  uActivity: { value: number };
+  uBz: { value: number };
+  uBrightness: { value: number };
+  uHueShift: { value: number };
+  uCircadian: { value: number };
+  uChordTension: { value: number };
+  uPulseStrength: { value: number };
+};
+
 /**
  * SolarHologram renders a lightweight Three.js scene that maps live space-weather
  * inputs to a 3D sun, corona, and particle stream so users can *see* the same
@@ -45,13 +56,9 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
     ring?: THREE.MeshBasicMaterial;
     wind?: THREE.PointsMaterial;
   }>({});
-  const uniformsRef = useRef<{
-    uTime: { value: number };
-    uActivity: { value: number };
-    uBz: { value: number };
-    uBrightness: { value: number };
-    uHueShift: { value: number };
-  } | null>(null);
+  const uniformsRef = useRef<SunUniforms | null>(null);
+  const targetChordTensionRef = useRef(0);
+  const targetBzRef = useRef(0);
   const dynamicsRef = useRef({
     rotationVelocity: 0.004,
     windSpeed: 0.006,
@@ -185,7 +192,7 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
     scene.add(new THREE.AmbientLight(0x123444, 0.6));
 
     // Shared uniforms for shaders
-    const uniforms = {
+    const uniforms: SunUniforms = {
       uTime: { value: 0 },
       uActivity: { value: 0.5 },
       uBz: { value: 0 },
