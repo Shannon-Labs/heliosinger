@@ -112,14 +112,15 @@ export default function StreamView() {
       {/* Breaking News Banner for major events */}
       {introComplete && <BreakingNewsBanner data={comprehensiveData} />}
 
-      <div className="p-6 flex items-center justify-between border-b-4 border-primary bg-black z-10">
-        <div className="flex items-center gap-4">
-          <BrutalistLogo className="scale-125" />
-          <div className="flex flex-col">
-            <span className="text-2xl font-black uppercase tracking-tighter text-white">
+      <div className="p-6 flex items-center justify-between border-b-4 border-primary bg-black z-10 relative">
+        <div className="flex items-center gap-6">
+          {/* Logo wrapper to ensure no overlap from transform if we were to use it, but removing scale is safer */}
+          <BrutalistLogo className="h-12 w-auto" />
+          <div className="flex flex-col justify-center">
+            <span className="text-2xl font-black uppercase tracking-tighter text-white leading-none">
               Live Space Weather Sonification
             </span>
-            <span className="text-sm font-mono text-primary uppercase">
+            <span className="text-sm font-mono text-primary uppercase tracking-widest">
               Real-time Solar Wind Data Stream
             </span>
           </div>

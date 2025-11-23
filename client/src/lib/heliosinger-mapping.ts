@@ -15,6 +15,7 @@ import {
   getSolarMoodDescription,
   getFormantFiltersForVowel
 } from "./vowel-filters";
+import { getChordQuality, type ChordQuality } from "./chord-utils";
 
 // ============================================================================
 // HELIOSINGER AUDIO DATA INTERFACE
@@ -33,6 +34,9 @@ export interface HeliosingerData extends ChordData {
   vowelName: VowelName;
   vowelDescription: string;
   solarMood: string;
+  
+  // Chord Quality Metadata (New)
+  chordQuality: ChordQuality;
   
   // Formant filter parameters
   formantFilters: Array<{
@@ -192,6 +196,16 @@ export function mapSpaceWeatherToHeliosinger(
     solarWind.velocity,
     solarWind.density
   );
+
+  // Step 14.5: Calculate detailed chord quality metadata
+  const chordQuality = getChordQuality(
+    condition,
+    chordVoicing,
+    solarWind.temperature,
+    solarWind.density,
+    solarWind.bz,
+    kIndex?.kp
+  );
   
   // Step 15: Combine all parameters into Heliosinger data
   const heliosingerData: HeliosingerData = {
@@ -210,6 +224,7 @@ export function mapSpaceWeatherToHeliosinger(
     vowelName: currentVowel.name,
     vowelDescription: currentVowel.description,
     solarMood: getSolarMoodDescription(currentVowel, condition),
+    chordQuality, // Add the new field
     formantFilters,
     
     // Enhanced spatial parameters
@@ -1126,6 +1141,12 @@ export function createDefaultHeliosingerMapping(): HeliosingerData {
     vowelName: 'A',
     vowelDescription: defaultVowel.description,
     solarMood: 'The sun breathes a calm, open tone',
+    chordQuality: getChordQuality('quiet', [{
+      frequency: 65.41,
+      midiNote: 36,
+      noteName: 'C2',
+      amplitude: 1.0
+    }]),
     formantFilters: getFormantFiltersForVowel(defaultVowel, 65.41),
     stereoSpread: 0.1,
     leftGain: 0.5,

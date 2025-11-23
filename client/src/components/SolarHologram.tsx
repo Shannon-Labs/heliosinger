@@ -491,9 +491,10 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
   }, [stats, heliosingerData, timeBeat]);
 
   const vowelName = heliosingerData?.currentVowel?.displayName ?? "—";
-  const chordLabel = heliosingerData?.chordVoicing
-    ?.map((tone) => tone.noteName)
-    .join(" · ");
+  // Use the new chord quality metadata for display
+  const chordLabel = heliosingerData?.chordQuality?.name 
+    ? `${heliosingerData.chordQuality.name} (${heliosingerData.chordQuality.symbol})`
+    : heliosingerData?.chordVoicing?.map((tone) => tone.noteName).join(" · ");
 
   const mappingRows = [
     {
@@ -534,55 +535,56 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
         {/* Cinematic Vignette & Grain */}
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,black_120%)] opacity-80" />
         
-        {/* Stream Overlay: Top Left - Stats (Persona Style) */}
-        <div className="absolute top-8 left-8 flex flex-col gap-6 z-10 pointer-events-none">
+        {/* Stream Overlay: Top Header Bar (Persona Style) */}
+        <div className="absolute top-0 left-0 right-0 p-6 z-10 pointer-events-none flex flex-wrap items-start justify-between gap-4">
            
-           {/* Solar Data Block */}
-           <div className="flex flex-col gap-2 items-start">
-             <div className="bg-white text-black px-4 py-1 -skew-x-12 border-l-8 border-primary shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-1">
-               <span className="block text-xl font-black uppercase tracking-tighter skew-x-12">
+           {/* Left: Solar Data */}
+           <div className="flex flex-col gap-1 items-start">
+             <div className="bg-white text-black px-4 py-0.5 -skew-x-12 border-l-8 border-primary shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-1">
+               <span className="block text-lg font-black uppercase tracking-tighter skew-x-12">
                  Solar Telemetry
                </span>
              </div>
-             {[
-               { label: "VELOCITY", val: stats.velocity.toFixed(0), unit: "KM/S" },
-               { label: "DENSITY", val: stats.density.toFixed(1), unit: "P/CM³" },
-               { label: "KP INDEX", val: stats.kp.toFixed(1), unit: "", alert: stats.kp >= 5 }
-             ].map((item) => (
-               <div key={item.label} className={`
-                 flex items-center gap-4 px-6 py-1
-                 ${item.alert ? 'bg-destructive text-white' : 'bg-black/90 text-white border border-white/20'}
-                 -skew-x-12 border-l-4 border-white shadow-[4px_4px_0px_rgba(0,0,0,0.5)]
-               `}>
-                 <span className="text-xs font-black tracking-widest skew-x-12 w-16 text-primary">{item.label}</span>
-                 <span className="text-xl font-black skew-x-12 font-mono tracking-tighter">{item.val}</span>
-                 <span className="text-xs font-bold skew-x-12 opacity-60">{item.unit}</span>
-               </div>
-             ))}
+             <div className="flex gap-2 flex-wrap">
+               {[
+                 { label: "VEL", val: stats.velocity.toFixed(0), unit: "KM/S" },
+                 { label: "DEN", val: stats.density.toFixed(1), unit: "P/CM³" },
+                 { label: "KP", val: stats.kp.toFixed(1), unit: "", alert: stats.kp >= 5 }
+               ].map((item) => (
+                 <div key={item.label} className={`
+                   flex items-center gap-2 px-4 py-1
+                   ${item.alert ? 'bg-destructive text-white' : 'bg-black/90 text-white border border-white/20'}
+                   -skew-x-12 border-l-4 border-white shadow-[4px_4px_0px_rgba(0,0,0,0.5)]
+                 `}>
+                   <span className="text-[10px] font-black tracking-widest skew-x-12 text-primary">{item.label}</span>
+                   <span className="text-lg font-black skew-x-12 font-mono tracking-tighter">{item.val}</span>
+                   {item.unit && <span className="text-[10px] font-bold skew-x-12 opacity-60">{item.unit}</span>}
+                 </div>
+               ))}
+             </div>
            </div>
 
-           {/* Audio Data Block (New) */}
-           <div className="flex flex-col gap-2 items-start pl-8">
-              <div className="bg-primary text-white px-4 py-1 -skew-x-12 border-r-8 border-white shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-1">
-               <span className="block text-xl font-black uppercase tracking-tighter skew-x-12">
-                 Heliosinger Audio
+           {/* Right: Audio Data */}
+           <div className="flex flex-col gap-1 items-end">
+              <div className="bg-primary text-white px-4 py-0.5 skew-x-12 border-r-8 border-white shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-1">
+               <span className="block text-lg font-black uppercase tracking-tighter -skew-x-12">
+                 Audio Synthesis
                </span>
              </div>
-             <div className="flex flex-col gap-1">
-                <div className="bg-black/90 text-white px-6 py-2 -skew-x-12 border-r-4 border-primary flex items-baseline gap-4">
-                  <span className="text-xs font-black tracking-widest skew-x-12 text-primary">PITCH</span>
-                  <span className="text-2xl font-black skew-x-12 font-mono">{heliosingerData?.baseNote ?? "--"}</span>
-                  <span className="text-sm font-bold skew-x-12 opacity-80">{heliosingerData?.frequency.toFixed(0)} Hz</span>
+             <div className="flex gap-2 flex-wrap justify-end">
+                <div className="bg-black/90 text-white px-4 py-1 skew-x-12 border-r-4 border-primary flex items-baseline gap-2">
+                  <span className="text-[10px] font-black tracking-widest -skew-x-12 text-primary">PITCH</span>
+                  <span className="text-lg font-black -skew-x-12 font-mono">{heliosingerData?.baseNote ?? "--"}</span>
                 </div>
-                <div className="bg-white/90 text-black px-6 py-2 -skew-x-12 border-r-4 border-black flex items-baseline gap-4">
-                  <span className="text-xs font-black tracking-widest skew-x-12 text-black/70">CHORD</span>
-                  <span className="text-xl font-black skew-x-12 font-mono">
-                    {heliosingerData?.chordVoicing ? heliosingerData.chordVoicing.map(n => n.noteName).join("·") : "SCANNING..."}
+                <div className="bg-white/90 text-black px-4 py-1 skew-x-12 border-r-4 border-black flex items-baseline gap-2">
+                  <span className="text-[10px] font-black tracking-widest -skew-x-12 text-black/70">CHORD</span>
+                  <span className="text-lg font-black -skew-x-12 font-mono">
+                    {heliosingerData?.chordQuality?.symbol ?? heliosingerData?.baseNote ?? "..."}
                   </span>
                 </div>
-                <div className="bg-destructive/90 text-white px-6 py-1 -skew-x-12 border-r-4 border-black flex items-baseline gap-4">
-                  <span className="text-xs font-black tracking-widest skew-x-12 text-white/70">VOWEL</span>
-                  <span className="text-lg font-black skew-x-12 font-mono uppercase">{vowelName}</span>
+                <div className="bg-destructive/90 text-white px-4 py-1 skew-x-12 border-r-4 border-black flex items-baseline gap-2">
+                  <span className="text-[10px] font-black tracking-widest -skew-x-12 text-white/70">VOWEL</span>
+                  <span className="text-lg font-black -skew-x-12 font-mono uppercase">{vowelName}</span>
                 </div>
              </div>
            </div>
@@ -590,123 +592,113 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
 
         {/* Background Pattern (Halftone/Dots) */}
         <div className="absolute inset-0 pointer-events-none opacity-5 bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:20px_20px] z-0" />
-
-        {/* Stream Overlay: Bottom Right - Director Cues (Simplified) */}
-        <div className="absolute bottom-24 right-8 z-10 pointer-events-none max-w-md text-right flex flex-col items-end gap-2">
-           {/* Keep the phase indicator but make it simpler */}
-           <div className="bg-black text-white px-4 py-2 skew-x-12 border-r-8 border-destructive shadow-[6px_6px_0px_rgba(255,255,255,0.2)]">
-             <span className="block text-4xl font-black uppercase tracking-tighter -skew-x-12 leading-none">
-               {cinema.phase}
-             </span>
-             <span className="block text-xs font-bold font-mono uppercase tracking-widest -skew-x-12 text-primary mt-1">
-               {cinema.directorLine}
-             </span>
-           </div>
-        </div>
       </div>
     );
   }
 
   return (
-    <Card className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border-primary/30 shadow-2xl">
-      <CardHeader className="flex flex-col gap-2">
-        <CardTitle className="flex items-center gap-3 text-lg md:text-xl font-display">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary">
-            <i className="fas fa-meteor" />
-          </span>
-          Solar Hologram — Hear & See the Sun
-          <Badge variant={isPlaying ? "default" : "secondary"} className="ml-auto">
-            {isPlaying ? "Live Audio + Visual" : "Visual Only"}
-          </Badge>
-        </CardTitle>
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          A 3D solar body driven by live space-weather: velocity spins the surface, Bz tilts the
-          color, Kp ignites the corona, and density thickens the solar-wind stream you hear.
-        </p>
-      </CardHeader>
-      <CardContent className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-6 items-center">
-        <div className="relative rounded-2xl border border-primary/30 bg-gradient-to-b from-slate-900/80 via-slate-900/50 to-black/60 overflow-hidden shadow-lg">
+    <div className="w-full bg-black p-1 border-l-4 border-primary shadow-[8px_8px_0px_rgba(0,0,0,0.5)] relative overflow-hidden">
+       {/* Background Pattern */}
+       <div className="absolute inset-0 pointer-events-none opacity-5 bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:20px_20px] z-0" />
+
+       {/* Header Block */}
+       <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6 px-4 pt-4">
+         <div className="flex items-center gap-3">
+           <div className="w-10 h-10 bg-primary text-black flex items-center justify-center -skew-x-12 border-2 border-white shadow-[4px_4px_0px_rgba(255,255,255,0.1)]">
+             <i className="fas fa-meteor text-xl skew-x-12" />
+           </div>
+           <div className="flex flex-col">
+             <h2 className="text-2xl font-black uppercase tracking-tighter leading-none text-white">
+               Solar Hologram
+             </h2>
+             <span className="text-xs font-bold text-primary tracking-[0.2em] uppercase">
+               Visual Interface // {isPlaying ? "ONLINE" : "STANDBY"}
+             </span>
+           </div>
+         </div>
+         <div className={`
+           px-4 py-1 -skew-x-12 border-2 border-white/20
+           ${isPlaying ? 'bg-destructive/20 text-destructive' : 'bg-white/10 text-white/50'}
+         `}>
+           <span className="block text-xs font-black tracking-widest skew-x-12 uppercase">
+             {isPlaying ? "Live Feed Active" : "Visual Mode Only"}
+           </span>
+         </div>
+       </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-8 relative z-10 px-4 pb-4">
+        {/* 3D Viewport */}
+        <div className="relative border-4 border-white/10 bg-black/50 h-[320px] sm:h-[420px] overflow-hidden group shadow-inner">
+           <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-primary z-20" />
+           <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-primary z-20" />
+           
           <div
             ref={mountRef}
-            className="w-full h-[320px] sm:h-[420px] bg-slate-950/70 backdrop-blur-sm"
+            className="w-full h-full"
             aria-label="3D solar visualization"
           />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
-          <div className="absolute left-4 right-4 bottom-4 flex flex-wrap items-center gap-3 text-xs">
-            <Badge variant="outline" className="bg-background/60 backdrop-blur px-3">
-              {stats.velocity.toFixed(0)} km/s · {stats.density.toFixed(1)} p/cm³
-            </Badge>
-            <Badge variant="outline" className="bg-background/60 backdrop-blur px-3">
-              Bz {stats.bz > 0 ? "+" : ""}
-              {stats.bz.toFixed(1)} nT
-            </Badge>
-            <Badge
-              variant={stats.kp >= 5 ? "destructive" : stats.kp >= 3 ? "secondary" : "default"}
-              className="bg-background/60 backdrop-blur px-3"
-            >
-              Kp {stats.kp.toFixed(1)}
-            </Badge>
-            <Badge variant="outline" className="bg-background/60 backdrop-blur px-3">
-              Vowel "{vowelName}"
-            </Badge>
+          
+          {/* Viewport HUD Overlays */}
+          <div className="absolute bottom-4 left-4 flex flex-col gap-1 pointer-events-none">
+            <div className="flex gap-2">
+               <span className="bg-black text-white text-[10px] px-2 py-0.5 border border-white/20">V: {stats.velocity.toFixed(0)}</span>
+               <span className="bg-black text-white text-[10px] px-2 py-0.5 border border-white/20">D: {stats.density.toFixed(1)}</span>
+            </div>
+            <div className="bg-primary/90 text-black text-xs font-black px-2 py-0.5 inline-block -skew-x-12 origin-bottom-left">
+              <span className="skew-x-12 block">PHASE // {cinema.phase.toUpperCase()}</span>
+            </div>
           </div>
         </div>
 
-        <div className="space-y-3">
-          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 shadow-inner">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-primary/80">Sonification Map</p>
-                <p className="text-sm text-muted-foreground">
-                  How today&apos;s data sculpts both the sound and the hologram.
-                </p>
-              </div>
-              <Badge variant="secondary" className="border-primary/40">
-                {heliosingerData?.solarMood ?? "Calibrating..."}
-              </Badge>
+        {/* Stats Column */}
+        <div className="space-y-6">
+          {/* Status Header */}
+          <div className="border-l-4 border-primary pl-4 py-1">
+            <p className="text-xs font-black uppercase tracking-widest text-white/50 mb-1">System Mood</p>
+            <div className="text-2xl font-black text-white uppercase leading-none tracking-tight">
+               {heliosingerData?.solarMood ?? "CALIBRATING..."}
             </div>
           </div>
 
-          <div className="space-y-3">
+          {/* Metric Bars */}
+          <div className="space-y-4">
             {mappingRows.map((row) => (
-              <div
-                key={row.label}
-                className="rounded-lg border border-border/50 bg-background/60 p-3 shadow-sm"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold">{row.label}</div>
-                  <div className="text-sm text-primary font-mono">{row.value}</div>
+              <div key={row.label} className="group">
+                <div className="flex items-end justify-between mb-1">
+                  <span className="text-xs font-bold text-primary uppercase tracking-wider">{row.label}</span>
+                  <span className="text-sm font-mono font-bold text-white">{row.value}</span>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">{row.helper}</p>
-                <div className="mt-2">
-                  <Progress value={row.amount} className="h-2" />
+                <div className="h-3 bg-white/10 w-full -skew-x-12 border border-white/10 overflow-hidden relative">
+                   <div 
+                     className="h-full bg-gradient-to-r from-primary to-destructive origin-left transition-all duration-700" 
+                     style={{ width: `${row.amount}%` }} 
+                   />
+                   {/* Striped overlay on bar */}
+                   <div className="absolute inset-0 bg-[repeating-linear-gradient(90deg,transparent,transparent_2px,black_2px,black_3px)] opacity-20" />
                 </div>
+                <p className="text-[10px] text-white/40 mt-1 font-mono uppercase tracking-tight group-hover:text-white/80 transition-colors">
+                  {row.helper}
+                </p>
               </div>
             ))}
           </div>
 
-          <div className="rounded-lg border border-accent/30 bg-accent/5 p-4 shadow-sm space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold">Director cues (live)</div>
-              <Badge variant="secondary" className="text-[11px]">Scene: {cinema.phase}</Badge>
-            </div>
-            <div className="flex flex-wrap gap-2 text-xs">
-              <Badge variant="outline" className="bg-background/60">Palette: {cinema.palette}</Badge>
-              <Badge variant="outline" className="bg-background/60">Tempo: {cinema.tempo}</Badge>
-            </div>
-            <div className="text-sm text-muted-foreground leading-relaxed">
-              {cinema.directorLine}
-            </div>
-            <div className="flex flex-wrap gap-2 pt-1">
-              {cinema.shots.map((shot) => (
-                <Badge key={shot.title} variant="outline" className="bg-background/70">
-                  {shot.title} · {shot.tie}
-                </Badge>
-              ))}
-            </div>
+          {/* Director Cues (Compact) */}
+          <div className="bg-white/5 border border-white/10 p-4 -skew-x-6 relative">
+             <div className="absolute top-0 right-0 bg-destructive text-white text-[10px] font-bold px-2 py-0.5">
+                LIVE CUES
+             </div>
+             <div className="skew-x-6">
+                <div className="text-xs text-primary font-bold uppercase tracking-widest mb-2">
+                  {cinema.palette}
+                </div>
+                <div className="text-sm text-white/80 font-mono leading-tight uppercase">
+                  {cinema.directorLine}
+                </div>
+             </div>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
