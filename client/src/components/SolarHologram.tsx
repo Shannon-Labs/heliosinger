@@ -176,7 +176,7 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 100);
-    camera.position.set(0, 0, 6);
+    camera.position.set(0, 0, 4.5); // Closer camera for bigger sun
 
     // Lights
     const keyLight = new THREE.PointLight(0xffffff, 2.6, 50);
@@ -192,6 +192,8 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
       uBrightness: { value: 0.5 },
       uHueShift: { value: 0.55 },
       uCircadian: { value: 0.0 },
+      uChordTension: { value: 0.0 },
+      uPulseStrength: { value: 0.0 },
     };
     uniformsRef.current = uniforms;
 
@@ -207,11 +209,13 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
       vertexShader: `
         uniform float uTime;
         uniform float uActivity;
+        uniform float uPulseStrength;
         varying vec3 vNormal;
         varying vec3 vPosition;
         void main() {
-          float noise = sin(position.y * 6.0 + uTime * 2.5) * 0.05 * uActivity;
-          vec3 displaced = position + normal * noise;
+          float pulse = sin(uTime * 10.0) * uPulseStrength * 0.05;
+          float noise = sin(position.y * 6.0 + uTime * 2.5) * 0.05 * (uActivity + uPulseStrength);
+          vec3 displaced = position + normal * (noise + pulse);
           vNormal = normalMatrix * normal;
           vPosition = displaced;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(displaced, 1.0);
@@ -224,6 +228,7 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
         uniform float uBrightness;
         uniform float uHueShift;
         uniform float uCircadian;
+        uniform float uChordTension;
         varying vec3 vNormal;
         varying vec3 vPosition;
         
@@ -246,22 +251,22 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
           // Dark base -> Mid -> Highlight
           
           // Colors (Atlus Style: High Contrast Red/Black/Yellow)
+          // Modify palette based on Chord Tension (Major=0 -> Gold/Red, Minor=0.5 -> Red/Blue, Dim=1.0 -> Purple/Black)
+          
           vec3 colShadow = vec3(0.1, 0.0, 0.05); // Almost black red
           vec3 colMid = vec3(0.85, 0.1, 0.1);    // Vibrant Persona Red
           vec3 colHigh = vec3(1.0, 0.95, 0.0);   // Bright Yellow
           
-          // Adjust colors based on Bz (Magnetic field)
-          // Southward (negative) -> More aggressive red
-          // Northward (positive) -> Slightly more magenta/cyan tint? No, stick to style. 
-          // Let's make Northward imply a "Cooler" inverted style logic or just subtle shift.
-          // Actually, Persona style is strict. Let's keep the palette but shift intensity.
+          // Shift towards "Tension" Palette (Purples/Cyans for dissonance)
+          if (uChordTension > 0.1) {
+             colShadow = mix(colShadow, vec3(0.1, 0.0, 0.2), uChordTension);
+             colMid = mix(colMid, vec3(0.6, 0.0, 0.8), uChordTension); // Red -> Purple
+             colHigh = mix(colHigh, vec3(0.8, 0.9, 1.0), uChordTension); // Yellow -> Cyan/White
+          }
           
+          // Adjust colors based on Bz (Magnetic field)
           if (uBz < -5.0) {
-             colMid = vec3(0.9, 0.0, 0.0); // Pure red
-             colHigh = vec3(1.0, 0.8, 0.2);
-          } else if (uBz > 5.0) {
-             // Subtle shift to "Velvet Room" Blue for contrast if Northward? 
-             // Or just keep it consistent. Let's add a subtle blue rim for contrast.
+             colMid = mix(colMid, vec3(0.9, 0.0, 0.0), 0.5); // More pure red
           }
 
           // 3-Step Cel Shade
@@ -462,8 +467,19 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
     uniformsRef.current.uBz.value = bzNormalized;
     uniformsRef.current.uBrightness.value = vowelBrightness;
     uniformsRef.current.uHueShift.value =
-      0.0 + (heliosingerData ? normalize(heliosingerData.midiNote, 36, 84) * 0.1 : 0.05); // Smaller hue shifts on an already warm base
+      0.0 + (heliosingerData ? normalize(heliosingerData.midiNote, 36, 84) * 0.1 : 0.05);
     uniformsRef.current.uCircadian.value = circadianNormalized;
+
+    // Update dynamic visual parameters
+    const isMinor = heliosingerData?.chordQuality?.name?.includes("Minor") ?? false;
+    const isDissonant = heliosingerData?.chordQuality?.name?.includes("Dissonant") ?? false;
+    const tension = isDissonant ? 1.0 : isMinor ? 0.6 : 0.0;
+    
+    uniformsRef.current.uChordTension.value = tension;
+    
+    // Pulse strength from tremolo or Kp
+    const pulse = heliosingerData?.tremoloDepth ? heliosingerData.tremoloDepth * 2.0 : 0.0;
+    uniformsRef.current.uPulseStrength.value = pulse + (kpFactor * 0.5);
 
     dynamicsRef.current.rotationVelocity =
       0.001 + velocityFactor * 0.011 + kpFactor * 0.002 + (circadianNormalized - 0.5) * 0.003;
@@ -535,63 +551,87 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
         {/* Cinematic Vignette & Grain */}
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,black_120%)] opacity-80" />
         
-        {/* Stream Overlay: Top Header Bar (Persona Style) */}
-        <div className="absolute top-0 left-0 right-0 p-6 z-10 pointer-events-none flex flex-wrap items-start justify-between gap-4">
-           
-           {/* Left: Solar Data */}
-           <div className="flex flex-col gap-1 items-start">
-             <div className="bg-white text-black px-4 py-0.5 -skew-x-12 border-l-8 border-primary shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-1">
-               <span className="block text-lg font-black uppercase tracking-tighter skew-x-12">
-                 Solar Telemetry
-               </span>
-             </div>
-             <div className="flex gap-2 flex-wrap">
-               {[
-                 { label: "VEL", val: stats.velocity.toFixed(0), unit: "KM/S" },
-                 { label: "DEN", val: stats.density.toFixed(1), unit: "P/CM³" },
-                 { label: "KP", val: stats.kp.toFixed(1), unit: "", alert: stats.kp >= 5 }
-               ].map((item) => (
-                 <div key={item.label} className={`
-                   flex items-center gap-2 px-4 py-1
-                   ${item.alert ? 'bg-destructive text-white' : 'bg-black/90 text-white border border-white/20'}
-                   -skew-x-12 border-l-4 border-white shadow-[4px_4px_0px_rgba(0,0,0,0.5)]
-                 `}>
-                   <span className="text-[10px] font-black tracking-widest skew-x-12 text-primary">{item.label}</span>
-                   <span className="text-lg font-black skew-x-12 font-mono tracking-tighter">{item.val}</span>
-                   {item.unit && <span className="text-[10px] font-bold skew-x-12 opacity-60">{item.unit}</span>}
-                 </div>
-               ))}
-             </div>
+        {/* Top Left: Solar Telemetry (Persona Style) */}
+        <div className="absolute top-8 left-8 flex flex-col gap-1 items-start z-10 pointer-events-none">
+           <div className="bg-white text-black px-4 py-0.5 -skew-x-12 border-l-8 border-primary shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-1">
+             <span className="block text-lg font-black uppercase tracking-tighter skew-x-12">
+               Solar Telemetry
+             </span>
            </div>
+           <div className="flex flex-col gap-2">
+             {[
+               { label: "VEL", val: stats.velocity.toFixed(0), unit: "KM/S" },
+               { label: "DEN", val: stats.density.toFixed(1), unit: "P/CM³" },
+               { label: "KP", val: stats.kp.toFixed(1), unit: "", alert: stats.kp >= 5 }
+             ].map((item) => (
+               <div key={item.label} className={`
+                 flex items-center gap-4 px-4 py-1
+                 ${item.alert ? 'bg-destructive text-white' : 'bg-black/90 text-white border border-white/20'}
+                 -skew-x-12 border-l-4 border-white shadow-[4px_4px_0px_rgba(0,0,0,0.5)]
+               `}>
+                 <span className="text-[10px] font-black tracking-widest skew-x-12 text-primary w-6">{item.label}</span>
+                 <span className="text-xl font-black skew-x-12 font-mono tracking-tighter">{item.val}</span>
+                 {item.unit && <span className="text-[10px] font-bold skew-x-12 opacity-60">{item.unit}</span>}
+               </div>
+             ))}
+           </div>
+        </div>
 
-           {/* Right: Audio Data */}
-           <div className="flex flex-col gap-1 items-end">
-              <div className="bg-primary text-white px-4 py-0.5 skew-x-12 border-r-8 border-white shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-1">
-               <span className="block text-lg font-black uppercase tracking-tighter -skew-x-12">
-                 Audio Synthesis
-               </span>
-             </div>
-             <div className="flex gap-2 flex-wrap justify-end">
-                <div className="bg-black/90 text-white px-4 py-1 skew-x-12 border-r-4 border-primary flex items-baseline gap-2">
-                  <span className="text-[10px] font-black tracking-widest -skew-x-12 text-primary">PITCH</span>
-                  <span className="text-lg font-black -skew-x-12 font-mono">{heliosingerData?.baseNote ?? "--"}</span>
-                </div>
-                <div className="bg-white/90 text-black px-4 py-1 skew-x-12 border-r-4 border-black flex items-baseline gap-2">
-                  <span className="text-[10px] font-black tracking-widest -skew-x-12 text-black/70">CHORD</span>
-                  <span className="text-lg font-black -skew-x-12 font-mono">
-                    {heliosingerData?.chordQuality?.symbol ?? heliosingerData?.baseNote ?? "..."}
-                  </span>
-                </div>
-                <div className="bg-destructive/90 text-white px-4 py-1 skew-x-12 border-r-4 border-black flex items-baseline gap-2">
-                  <span className="text-[10px] font-black tracking-widest -skew-x-12 text-white/70">VOWEL</span>
-                  <span className="text-lg font-black -skew-x-12 font-mono uppercase">{vowelName}</span>
-                </div>
-             </div>
+        {/* Top Right: Audio Synthesis (Persona Style) */}
+        <div className="absolute top-8 right-8 flex flex-col gap-1 items-end z-10 pointer-events-none">
+            <div className="bg-primary text-white px-4 py-0.5 skew-x-12 border-r-8 border-white shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-1">
+             <span className="block text-lg font-black uppercase tracking-tighter -skew-x-12">
+               Audio Synthesis
+             </span>
+           </div>
+           <div className="flex flex-col gap-2 items-end">
+              <div className="bg-black/90 text-white px-6 py-1 skew-x-12 border-r-4 border-primary flex items-baseline gap-4">
+                <span className="text-[10px] font-black tracking-widest -skew-x-12 text-primary">PITCH</span>
+                <span className="text-xl font-black -skew-x-12 font-mono">{heliosingerData?.baseNote ?? "--"}</span>
+              </div>
+              <div className="bg-white/90 text-black px-6 py-1 skew-x-12 border-r-4 border-black flex items-baseline gap-4">
+                <span className="text-[10px] font-black tracking-widest -skew-x-12 text-black/70">CHORD</span>
+                <span className="text-xl font-black -skew-x-12 font-mono">
+                  {heliosingerData?.chordQuality?.symbol ?? "..."}
+                </span>
+              </div>
+              <div className="bg-destructive/90 text-white px-6 py-1 skew-x-12 border-r-4 border-black flex items-baseline gap-4">
+                <span className="text-[10px] font-black tracking-widest -skew-x-12 text-white/70">VOWEL</span>
+                <span className="text-xl font-black -skew-x-12 font-mono uppercase">{vowelName}</span>
+              </div>
            </div>
         </div>
 
         {/* Background Pattern (Halftone/Dots) */}
         <div className="absolute inset-0 pointer-events-none opacity-5 bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:20px_20px] z-0" />
+
+        {/* Stream Overlay: Active Effects (RPG Buffs) */}
+        <div className="absolute top-32 right-6 flex flex-col gap-2 items-end z-10 pointer-events-none">
+           {heliosingerData?.vibratoDepth && heliosingerData.vibratoDepth > 0 ? (
+             <div className="bg-black/80 text-white px-3 py-0.5 skew-x-12 border-r-4 border-white flex items-center gap-2 animate-in slide-in-from-right-4 fade-in">
+               <span className="text-[10px] font-black tracking-widest -skew-x-12 text-primary">VIBRATO</span>
+               <span className="text-xs font-bold -skew-x-12 text-white/80">LVL {heliosingerData.vibratoDepth}</span>
+             </div>
+           ) : null}
+           {heliosingerData?.tremoloDepth && heliosingerData.tremoloDepth > 0.1 ? (
+             <div className="bg-black/80 text-white px-3 py-0.5 skew-x-12 border-r-4 border-destructive flex items-center gap-2 animate-in slide-in-from-right-4 fade-in delay-75">
+               <span className="text-[10px] font-black tracking-widest -skew-x-12 text-destructive">TREMOLO</span>
+               <span className="text-xs font-bold -skew-x-12 text-white/80">{(heliosingerData.tremoloRate).toFixed(1)}HZ</span>
+             </div>
+           ) : null}
+           {heliosingerData?.reverbRoomSize && heliosingerData.reverbRoomSize > 0.4 ? (
+             <div className="bg-black/80 text-white px-3 py-0.5 skew-x-12 border-r-4 border-white flex items-center gap-2 animate-in slide-in-from-right-4 fade-in delay-100">
+               <span className="text-[10px] font-black tracking-widest -skew-x-12 text-white/70">REVERB</span>
+               <span className="text-xs font-bold -skew-x-12 text-white/80">{(heliosingerData.reverbRoomSize * 100).toFixed(0)}%</span>
+             </div>
+           ) : null}
+           {heliosingerData?.binauralMix && heliosingerData.binauralMix > 0.05 ? (
+             <div className="bg-white/90 text-black px-3 py-0.5 skew-x-12 border-r-4 border-black flex items-center gap-2 animate-in slide-in-from-right-4 fade-in delay-150">
+               <span className="text-[10px] font-black tracking-widest -skew-x-12 text-black/70">BINAURAL</span>
+               <span className="text-xs font-bold -skew-x-12">ACTIVE</span>
+             </div>
+           ) : null}
+        </div>
       </div>
     );
   }

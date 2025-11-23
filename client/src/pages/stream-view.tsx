@@ -8,7 +8,6 @@ import { BrutalistLogo } from "@/components/BrutalistLogo";
 import { SystemTerminal } from "@/components/SystemTerminal";
 import { AudioVisualizer } from "@/components/AudioVisualizer";
 import { BreakingNewsBanner } from "@/components/stream-enhancements/BreakingNewsBanner";
-import { AnimatedMetrics } from "@/components/stream-enhancements/AnimatedMetrics";
 import { StreamIntro } from "@/components/stream-enhancements/StreamIntro";
 import { ViewerReactions } from "@/components/stream-enhancements/ViewerReactions";
 import { EventOverlay } from "@/components/stream-enhancements/EventOverlay";
@@ -113,32 +112,6 @@ export default function StreamView() {
       {introComplete && <BreakingNewsBanner data={comprehensiveData} />}
 
       <div className="p-6 flex items-center justify-between border-b-4 border-primary bg-black z-10 relative">
-        <div className="flex items-center gap-6">
-          {/* Logo wrapper to ensure no overlap from transform if we were to use it, but removing scale is safer */}
-          <BrutalistLogo className="h-12 w-auto" />
-          <div className="flex flex-col justify-center">
-            <span className="text-2xl font-black uppercase tracking-tighter text-white leading-none">
-              Live Space Weather Sonification
-            </span>
-            <span className="text-sm font-mono text-primary uppercase tracking-widest">
-              Real-time Solar Wind Data Stream
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-           <div className="flex items-center gap-2 px-4 py-2 bg-destructive text-white font-bold uppercase border-2 border-white animate-pulse">
-             <div className="w-3 h-3 bg-white rounded-full" />
-             LIVE
-           </div>
-        </div>
-      </div>
-
-      {/* Animated Metrics Bar */}
-      {introComplete && comprehensiveData && (
-        <div className="border-b-2 border-primary/30 p-4 bg-black/90 backdrop-blur-sm">
-          <AnimatedMetrics data={comprehensiveData} />
-        </div>
-      )}
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0">
         {/* Left Column: Visuals (8 cols) */}
