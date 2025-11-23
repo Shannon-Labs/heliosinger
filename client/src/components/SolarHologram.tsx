@@ -562,6 +562,7 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
              {[
                { label: "VEL", val: stats.velocity.toFixed(0), unit: "KM/S" },
                { label: "DEN", val: stats.density.toFixed(1), unit: "P/CM³" },
+               { label: "BZ", val: stats.bz.toFixed(1), unit: "nT", alert: stats.bz < -5 },
                { label: "KP", val: stats.kp.toFixed(1), unit: "", alert: stats.kp >= 5 }
              ].map((item) => (
                <div key={item.label} className={`

@@ -1,8 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEffect, useState, useRef } from "react";
 import { SolarHologram } from "@/components/SolarHologram";
-import { SonificationTrainer } from "@/components/SonificationTrainer";
-import { EnhancedSpaceWeatherViz } from "@/components/EnhancedSpaceWeatherViz";
 import { EventsTicker } from "@/components/EventsTicker";
 import { BrutalistLogo } from "@/components/BrutalistLogo";
 import { SystemTerminal } from "@/components/SystemTerminal";
@@ -14,6 +12,8 @@ import { EventOverlay } from "@/components/stream-enhancements/EventOverlay";
 import { apiRequest } from "@/lib/queryClient";
 import { useHeliosinger } from "@/hooks/use-heliosinger";
 import { calculateRefetchInterval } from "@/lib/adaptive-refetch";
+import { Button } from "@/components/ui/button";
+import { Volume2, VolumeX } from "lucide-react";
 import type { ComprehensiveSpaceWeatherData, SolarWindReading } from "@shared/schema";
 
 export default function StreamView() {
@@ -58,6 +58,20 @@ export default function StreamView() {
     
     return () => document.removeEventListener('click', unlockHandler);
   }, [introComplete, heliosinger]);
+
+  // Handle manual audio start
+  const toggleAudio = async () => {
+    if (heliosinger.isSinging) {
+      heliosinger.stop();
+    } else {
+      try {
+        await heliosinger.unlock();
+        await heliosinger.start();
+      } catch (e) {
+        console.error("Failed to start audio", e);
+      }
+    }
+  };
 
   // Data fetching logic (same as dashboard)
   const [updateFrequency, setUpdateFrequency] = useState(60000);
@@ -111,6 +125,47 @@ export default function StreamView() {
       {/* Breaking News Banner for major events */}
       {introComplete && <BreakingNewsBanner data={comprehensiveData} />}
 
+      <div className="p-4 md:p-6 flex items-center justify-between border-b-4 border-primary bg-black z-10 relative">
+        <div className="flex items-center gap-6 overflow-hidden">
+          {/* Logo wrapper to ensure no overlap */}
+          <div className="shrink-0">
+            <BrutalistLogo className="h-12 w-auto" />
+          </div>
+          <div className="flex flex-col justify-center min-w-0">
+            <span className="text-xl md:text-2xl font-black uppercase tracking-tighter text-white leading-tight truncate">
+              Live Space Weather Sonification
+            </span>
+            <span className="text-xs md:text-sm font-mono text-primary uppercase tracking-widest truncate">
+              Real-time Solar Wind Data Stream
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-4 shrink-0">
+           <Button
+             variant="outline"
+             size="sm"
+             className="h-10 px-4 border-2 border-white bg-black hover:bg-white hover:text-black font-black tracking-widest uppercase transition-colors"
+             onClick={toggleAudio}
+           >
+             {heliosinger.isSinging ? (
+               <>
+                 <Volume2 className="w-4 h-4 mr-2" />
+                 AUDIO ON
+               </>
+             ) : (
+               <>
+                 <VolumeX className="w-4 h-4 mr-2" />
+                 AUDIO OFF
+               </>
+             )}
+           </Button>
+           <div className="flex items-center gap-2 px-4 py-2 bg-destructive text-white font-bold uppercase border-2 border-white animate-pulse hidden md:flex">
+             <div className="w-3 h-3 bg-white rounded-full" />
+             LIVE
+           </div>
+        </div>
+      </div>
+
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0">
         {/* Left Column: Visuals (8 cols) */}
         <div className="lg:col-span-8 relative border-r-4 border-primary bg-black flex flex-col overflow-hidden h-full">
@@ -137,28 +192,21 @@ export default function StreamView() {
         </div>
 
         {/* Right Column: Data & Training (4 cols) */}
-        <div className="lg:col-span-4 bg-black flex flex-col h-full overflow-hidden">
-          {/* Top Half: Scrollable Data */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {/* Sonification Trainer - The "Why" */}
-            {heliosinger.currentData && (
-              <SonificationTrainer 
-                currentData={heliosinger.currentData}
-                comprehensiveData={comprehensiveData}
-              />
-            )}
-
-            {/* Detailed Viz */}
-            <EnhancedSpaceWeatherViz data={comprehensiveData} />
+        <div className="lg:col-span-4 bg-black flex flex-col h-full overflow-hidden border-l-4 border-primary">
+          {/* Header for Log */}
+          <div className="p-4 border-b-2 border-white/20 bg-primary/10">
+            <h3 className="font-black text-primary uppercase tracking-widest">
+              SYSTEM LOG // OPERATIONS
+            </h3>
           </div>
 
-          {/* Bottom: System Terminal (Fixed height) */}
-          <div className="h-48 border-t-4 border-primary">
+          {/* System Terminal (Expanded) */}
+          <div className="flex-1 overflow-hidden p-0">
             <SystemTerminal />
           </div>
           
           {/* Footer Info */}
-          <div className="border-t-2 border-white/20 p-2 bg-black">
+          <div className="border-t-2 border-white/20 p-4 bg-black">
             <p className="text-xs font-mono text-muted-foreground text-center uppercase">
               Powered by NOAA DSCOVR • Heliosinger Engine v2.0
             </p>
