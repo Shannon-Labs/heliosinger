@@ -227,50 +227,68 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
         varying vec3 vNormal;
         varying vec3 vPosition;
         
-        // Simple hue rotation (optimized for warmer base)
-        vec3 hueShift(vec3 color, float shift) {
-          float C = 1.0 - abs(mod(shift / 60.0, 2.0) - 1.0);
-          float X = C * (1.0 - abs(mod(shift / 60.0, 2.0) - 1.0));
-          vec3 K = vec3(0.0);
-          if (shift >= 0.0 && shift < 60.0) K = vec3(C, X, 0.0);
-          else if (shift >= 60.0 && shift < 120.0) K = vec3(X, C, 0.0);
-          else if (shift >= 120.0 && shift < 180.0) K = vec3(0.0, C, X);
-          else if (shift >= 180.0 && shift < 240.0) K = vec3(0.0, X, C);
-          else if (shift >= 240.0 && shift < 300.0) K = vec3(X, 0.0, C);
-          else if (shift >= 300.0 && shift < 360.0) K = vec3(C, 0.0, X);
-
-          float m = 0.5; // Simplistic lightness
-          return (color + m);
+        // Halftone pattern function
+        float halftone(vec2 uv, float scale) {
+          vec2 nearest = 2.0 * fract(uv * scale) - 1.0;
+          float dist = length(nearest);
+          return 1.0 - step(0.7, dist); // Hard dots
         }
-        
+
         void main() {
-          float fresnel = pow(1.0 - dot(normalize(vNormal), vec3(0.0, 0.0, 1.0)), 2.0);
-          float flare = sin(vPosition.y * 8.0 + uTime * 3.5) * 0.5 + 0.5;
-          float activity = mix(0.45, 1.3, uActivity); // Slightly increased base activity
+          // View direction is effectively z-axis in view space
+          float NdotV = dot(normalize(vNormal), vec3(0.0, 0.0, 1.0));
           
-          vec3 baseColor = mix(
-            vec3(0.9, 0.3, 0.05), // Deep fiery red-orange
-            vec3(1.0, 0.6 + uBrightness * 0.2, 0.1), // Bright yellow-orange
-            activity
-          );
+          // Activity drives the "turbulence" and threshold for bands
+          float noise = sin(vPosition.y * 10.0 + uTime * 4.0) * cos(vPosition.x * 10.0 - uTime * 2.0) * 0.5 + 0.5;
+          float intensity = NdotV + (noise * 0.2 * uActivity);
           
-          // Apply hue shift based on overall system state and circadian rhythm
-          // This hueShift is simplified for direct color manipulation now
-          // For actual hue shift, need to convert RGB to HSL/HSV, shift H, then back to RGB
-          // For now, let's just adjust based on a fixed warm range
-          vec3 finalBase = baseColor;
-          finalBase.r = clamp(finalBase.r + uHueShift * 0.5 - 0.2 + uCircadian * 0.1, 0.0, 1.0);
-          finalBase.g = clamp(finalBase.g + uHueShift * 0.3 - 0.1 + uCircadian * 0.05, 0.0, 1.0);
-          finalBase.b = clamp(finalBase.b + uHueShift * 0.1 - 0.05 + uCircadian * 0.02, 0.0, 1.0);
-
-
-          vec3 color = finalBase + fresnel * 0.7 + flare * 0.45 * activity; // Increased fresnel and flare
-
-          // Bz pushes warmer when southward, cooler when northward
-          color.r += max(0.0, -uBz) * 0.6; // Stronger red push
-          color.b += max(0.0, uBz) * 0.5; // Stronger blue push
+          // Cel Shading Steps (Quantize intensity)
+          // Dark base -> Mid -> Highlight
           
-          gl_FragColor = vec4(color, 1.0);
+          // Colors (Atlus Style: High Contrast Red/Black/Yellow)
+          vec3 colShadow = vec3(0.1, 0.0, 0.05); // Almost black red
+          vec3 colMid = vec3(0.85, 0.1, 0.1);    // Vibrant Persona Red
+          vec3 colHigh = vec3(1.0, 0.95, 0.0);   // Bright Yellow
+          
+          // Adjust colors based on Bz (Magnetic field)
+          // Southward (negative) -> More aggressive red
+          // Northward (positive) -> Slightly more magenta/cyan tint? No, stick to style. 
+          // Let's make Northward imply a "Cooler" inverted style logic or just subtle shift.
+          // Actually, Persona style is strict. Let's keep the palette but shift intensity.
+          
+          if (uBz < -5.0) {
+             colMid = vec3(0.9, 0.0, 0.0); // Pure red
+             colHigh = vec3(1.0, 0.8, 0.2);
+          } else if (uBz > 5.0) {
+             // Subtle shift to "Velvet Room" Blue for contrast if Northward? 
+             // Or just keep it consistent. Let's add a subtle blue rim for contrast.
+          }
+
+          // 3-Step Cel Shade
+          vec3 finalColor;
+          if (intensity > 0.75) {
+            finalColor = colHigh;
+          } else if (intensity > 0.4) {
+            finalColor = colMid;
+          } else {
+            finalColor = colShadow;
+            
+            // Apply halftone to shadow
+            float dot = halftone(gl_FragCoord.xy / 1000.0, 80.0); // Screen space dots
+            finalColor = mix(vec3(0.0), colShadow, dot);
+          }
+          
+          // Rim light (sharp)
+          float rim = 1.0 - NdotV;
+          if (rim > 0.85) {
+             finalColor = vec3(1.0, 1.0, 1.0);
+          }
+
+          // Flare/Activity overlay (Pop art style)
+          float popNoise = step(0.95, noise * uActivity);
+          finalColor = mix(finalColor, vec3(1.0, 1.0, 0.8), popNoise);
+
+          gl_FragColor = vec4(finalColor, 1.0);
         }
       `,
     });
@@ -517,16 +535,15 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,black_120%)] opacity-80" />
         
         {/* Stream Overlay: Top Left - Stats (Persona Style) */}
-        <div className="absolute top-8 left-8 flex flex-col gap-4 z-10 pointer-events-none">
-           {/* Header */}
-           <div className="bg-white text-black px-6 py-2 -skew-x-12 origin-top-left border-l-8 border-primary shadow-[4px_4px_0px_rgba(0,0,0,1)]">
-             <span className="block text-2xl font-black uppercase tracking-tighter skew-x-12">
-               Solar Operations
-             </span>
-           </div>
-
-           {/* Stat Block */}
-           <div className="flex flex-col gap-2 items-start pl-2">
+        <div className="absolute top-8 left-8 flex flex-col gap-6 z-10 pointer-events-none">
+           
+           {/* Solar Data Block */}
+           <div className="flex flex-col gap-2 items-start">
+             <div className="bg-white text-black px-4 py-1 -skew-x-12 border-l-8 border-primary shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-1">
+               <span className="block text-xl font-black uppercase tracking-tighter skew-x-12">
+                 Solar Telemetry
+               </span>
+             </div>
              {[
                { label: "VELOCITY", val: stats.velocity.toFixed(0), unit: "KM/S" },
                { label: "DENSITY", val: stats.density.toFixed(1), unit: "P/CM³" },
@@ -534,9 +551,8 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
              ].map((item) => (
                <div key={item.label} className={`
                  flex items-center gap-4 px-6 py-1
-                 ${item.alert ? 'bg-destructive text-white' : 'bg-black/80 text-white border border-white/20'}
+                 ${item.alert ? 'bg-destructive text-white' : 'bg-black/90 text-white border border-white/20'}
                  -skew-x-12 border-l-4 border-white shadow-[4px_4px_0px_rgba(0,0,0,0.5)]
-                 transition-all duration-300 hover:translate-x-2
                `}>
                  <span className="text-xs font-black tracking-widest skew-x-12 w-16 text-primary">{item.label}</span>
                  <span className="text-xl font-black skew-x-12 font-mono tracking-tighter">{item.val}</span>
@@ -544,29 +560,47 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
                </div>
              ))}
            </div>
+
+           {/* Audio Data Block (New) */}
+           <div className="flex flex-col gap-2 items-start pl-8">
+              <div className="bg-primary text-white px-4 py-1 -skew-x-12 border-r-8 border-white shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-1">
+               <span className="block text-xl font-black uppercase tracking-tighter skew-x-12">
+                 Heliosinger Audio
+               </span>
+             </div>
+             <div className="flex flex-col gap-1">
+                <div className="bg-black/90 text-white px-6 py-2 -skew-x-12 border-r-4 border-primary flex items-baseline gap-4">
+                  <span className="text-xs font-black tracking-widest skew-x-12 text-primary">PITCH</span>
+                  <span className="text-2xl font-black skew-x-12 font-mono">{heliosingerData?.baseNote ?? "--"}</span>
+                  <span className="text-sm font-bold skew-x-12 opacity-80">{heliosingerData?.frequency.toFixed(0)} Hz</span>
+                </div>
+                <div className="bg-white/90 text-black px-6 py-2 -skew-x-12 border-r-4 border-black flex items-baseline gap-4">
+                  <span className="text-xs font-black tracking-widest skew-x-12 text-black/70">CHORD</span>
+                  <span className="text-xl font-black skew-x-12 font-mono">
+                    {heliosingerData?.chordVoicing ? heliosingerData.chordVoicing.map(n => n.noteName).join("·") : "SCANNING..."}
+                  </span>
+                </div>
+                <div className="bg-destructive/90 text-white px-6 py-1 -skew-x-12 border-r-4 border-black flex items-baseline gap-4">
+                  <span className="text-xs font-black tracking-widest skew-x-12 text-white/70">VOWEL</span>
+                  <span className="text-lg font-black skew-x-12 font-mono uppercase">{vowelName}</span>
+                </div>
+             </div>
+           </div>
         </div>
 
-        {/* Stream Overlay: Bottom Right - Director Cues (Persona Style) */}
+        {/* Background Pattern (Halftone/Dots) */}
+        <div className="absolute inset-0 pointer-events-none opacity-5 bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:20px_20px] z-0" />
+
+        {/* Stream Overlay: Bottom Right - Director Cues (Simplified) */}
         <div className="absolute bottom-24 right-8 z-10 pointer-events-none max-w-md text-right flex flex-col items-end gap-2">
-           <div className="bg-black text-white px-4 py-1 skew-x-12 border-r-4 border-primary">
-             <span className="block text-xs font-bold uppercase tracking-widest -skew-x-12">
-               Current Phase // {vowelName}
+           {/* Keep the phase indicator but make it simpler */}
+           <div className="bg-black text-white px-4 py-2 skew-x-12 border-r-8 border-destructive shadow-[6px_6px_0px_rgba(255,255,255,0.2)]">
+             <span className="block text-4xl font-black uppercase tracking-tighter -skew-x-12 leading-none">
+               {cinema.phase}
              </span>
-           </div>
-           
-           <div className="bg-white/95 text-black p-6 skew-x-12 shadow-[8px_8px_0px_rgba(0,0,0,0.8)] border-2 border-black relative max-w-sm">
-              {/* Decor elements */}
-              <div className="absolute -top-2 -right-2 w-4 h-4 bg-destructive border-2 border-black" />
-              <div className="absolute -bottom-2 -left-2 w-4 h-4 bg-primary border-2 border-black" />
-              
-              <div className="-skew-x-12">
-                <h3 className="text-3xl font-black uppercase leading-none mb-2 tracking-tighter text-black">
-                  {cinema.phase}
-                </h3>
-                <p className="text-sm font-bold font-mono leading-tight uppercase opacity-80">
-                  {cinema.directorLine}
-                </p>
-              </div>
+             <span className="block text-xs font-bold font-mono uppercase tracking-widest -skew-x-12 text-primary mt-1">
+               {cinema.directorLine}
+             </span>
            </div>
         </div>
       </div>

@@ -162,15 +162,6 @@ export default function StreamView() {
                )}
             </div>
           </div>
-          
-          {/* Audio Visualizer at bottom of visual column */}
-          {heliosinger.currentData && (
-            <AudioVisualizer 
-              isPlaying={heliosinger.isSinging}
-              vowel={heliosinger.currentData.vowelName}
-              pitch={heliosinger.currentData.frequency}
-            />
-          )}
         </div>
 
         {/* Right Column: Data & Training (4 cols) */}
