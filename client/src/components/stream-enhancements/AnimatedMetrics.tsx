@@ -15,7 +15,7 @@ export function AnimatedMetrics({ data }: AnimatedMetricsProps) {
   const [displayKp, setDisplayKp] = useState(0);
 
   useEffect(() => {
-    if (!data) return;
+    if (!data || !data.solar_wind || !data.k_index) return;
 
     const animateValue = (start: number, end: number, setter: (v: number) => void, duration = 1000) => {
       const startTime = Date.now();
@@ -35,7 +35,7 @@ export function AnimatedMetrics({ data }: AnimatedMetricsProps) {
     animateValue(displayKp, data.k_index.kp, setDisplayKp);
   }, [data]);
 
-  if (!data) return null;
+  if (!data || !data.solar_wind || !data.k_index) return null;
 
   return (
     <Card className="bg-black/80 border-2 border-primary/50 backdrop-blur-sm">

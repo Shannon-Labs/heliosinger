@@ -19,6 +19,7 @@ export interface NotificationSettings {
   conditionChanges: boolean; // Notify on condition changes
   velocityChanges: boolean; // Notify on large velocity changes
   bzEvents: boolean; // Notify on strong Bz events
+  densityAlerts?: boolean; // Optional legacy support for density alerts
   quietHours: {
     enabled: boolean;
     start: number; // Hour (0-23)
@@ -33,6 +34,7 @@ const DEFAULT_SETTINGS: NotificationSettings = {
   conditionChanges: true,
   velocityChanges: true,
   bzEvents: true,
+  densityAlerts: false,
   quietHours: {
     enabled: false,
     start: 22, // 10 PM
@@ -349,4 +351,3 @@ export function checkAndNotifyEvents(change: SpaceWeatherChange): void {
     return;
   }
 }
-

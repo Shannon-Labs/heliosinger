@@ -13,9 +13,10 @@ export function BreakingNewsBanner({ data }: BreakingNewsBannerProps) {
   const [severity, setSeverity] = useState<'info' | 'warning' | 'critical'>('info');
 
   useEffect(() => {
-    if (!data) return;
+    if (!data || !data.solar_wind || !data.k_index) return;
 
-    const { kp, solar_wind } = data;
+    const kp = data.k_index.kp;
+    const solar_wind = data.solar_wind;
     const bz = solar_wind.bz;
 
     // Trigger banner for significant events

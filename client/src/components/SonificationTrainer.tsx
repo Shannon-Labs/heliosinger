@@ -9,7 +9,7 @@ interface SonificationTrainerProps {
 }
 
 export function SonificationTrainer({ currentData, comprehensiveData }: SonificationTrainerProps) {
-  if (!currentData || !comprehensiveData) return null;
+  if (!currentData || !comprehensiveData || !comprehensiveData.solar_wind) return null;
 
   const { velocity, density, bz } = comprehensiveData.solar_wind;
   const vowel = currentData.vowelName;

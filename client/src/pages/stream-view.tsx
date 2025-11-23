@@ -1,21 +1,18 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEffect, useState, useRef } from "react";
 import { SolarHologram } from "@/components/SolarHologram";
-import { SonificationTrainer } from "@/components/SonificationTrainer";
-import { EventsTicker } from "@/components/EventsTicker";
 import { BrutalistLogo } from "@/components/BrutalistLogo";
 import { SystemTerminal } from "@/components/SystemTerminal";
-import { AudioVisualizer } from "@/components/AudioVisualizer";
 import { BreakingNewsBanner } from "@/components/stream-enhancements/BreakingNewsBanner";
 import { StreamIntro } from "@/components/stream-enhancements/StreamIntro";
-import { ViewerReactions } from "@/components/stream-enhancements/ViewerReactions";
 import { EventOverlay } from "@/components/stream-enhancements/EventOverlay";
 import { apiRequest } from "@/lib/queryClient";
 import { useHeliosinger } from "@/hooks/use-heliosinger";
 import { calculateRefetchInterval } from "@/lib/adaptive-refetch";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Volume2, VolumeX } from "lucide-react";
-import type { ComprehensiveSpaceWeatherData, SolarWindReading } from "@shared/schema";
+import type { ComprehensiveSpaceWeatherData } from "@shared/schema";
 
 export default function StreamView() {
   // Show intro on first load
@@ -116,6 +113,29 @@ export default function StreamView() {
     setShowIntro(false);
   };
 
+  const solarWind = comprehensiveData?.solar_wind ?? null;
+  const kIndex = comprehensiveData?.k_index?.kp ?? null;
+  const currentVowel = heliosinger.currentData?.currentVowel;
+  const chordQuality = heliosinger.currentData?.chordQuality;
+
+  const vowelCue = (() => {
+    if (!currentVowel || !solarWind) return "Training mode listening for live changes.";
+    switch (currentVowel.displayName) {
+      case "I":
+        return "Fast, hot wind or southward Bz pushes the voice bright (\"ee\").";
+      case "E":
+        return "Moderate activity leans into a focused \"eh\" timbre.";
+      case "A":
+        return "Open plasma and calm field widen the vowel toward \"ah\".";
+      case "O":
+        return "Northward or rising density rounds toward \"oh\".";
+      case "U":
+        return "Slow or dense wind dampens into \"oo\" darkness.";
+      default:
+        return "The sun shifts vowels as data flexes.";
+    }
+  })();
+
   return (
     <div className="min-h-screen bg-black text-foreground overflow-hidden flex flex-col">
       {/* Stream Intro Animation */}
@@ -126,112 +146,155 @@ export default function StreamView() {
       {/* Breaking News Banner for major events */}
       {introComplete && <BreakingNewsBanner data={comprehensiveData} />}
 
-      <div className="p-4 md:p-6 flex items-center justify-between border-b-4 border-primary bg-black z-10 relative">
-        <div className="flex items-center gap-6 overflow-hidden">
-          {/* Logo wrapper to ensure no overlap */}
-          <div className="shrink-0">
-            <BrutalistLogo className="h-12 w-auto" />
+      <div className="flex-1 flex flex-col">
+        {/* Top band ~1/5: logo + telemetry + audio/training info */}
+        <div className="p-4 md:p-6 border-b-4 border-primary bg-black relative basis-[22vh] min-h-[220px] flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <BrutalistLogo className="h-12 w-auto" />
+              <div className="flex flex-col">
+                <span className="text-xl md:text-2xl font-black uppercase tracking-tighter text-white leading-tight">
+                  Solar Telemetry + Audio Synthesis
+                </span>
+                <span className="text-xs md:text-sm font-mono text-primary uppercase tracking-widest">
+                  Live stream // NOAA DSCOVR feed
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-destructive text-white font-bold uppercase border-2 border-white animate-pulse">
+                <div className="w-3 h-3 bg-white rounded-full" />
+                Live
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 px-4 border-2 border-white bg-black hover:bg-white hover:text-black font-black tracking-widest uppercase transition-colors"
+                onClick={toggleAudio}
+              >
+                {heliosinger.isSinging ? (
+                  <>
+                    <Volume2 className="w-4 h-4 mr-2" />
+                    MUTE AUDIO
+                  </>
+                ) : (
+                  <>
+                    <VolumeX className="w-4 h-4 mr-2" />
+                    ENABLE AUDIO
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
-          <div className="flex flex-col justify-center min-w-0">
-            <span className="text-xl md:text-2xl font-black uppercase tracking-tighter text-white leading-tight truncate">
-              Live Space Weather Sonification
-            </span>
-            <span className="text-xs md:text-sm font-mono text-primary uppercase tracking-widest truncate">
-              Real-time Solar Wind Data Stream
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-4 shrink-0">
-           <Button
-             variant="outline"
-             size="sm"
-             className="h-10 px-4 border-2 border-white bg-black hover:bg-white hover:text-black font-black tracking-widest uppercase transition-colors"
-             onClick={toggleAudio}
-           >
-             {heliosinger.isSinging ? (
-               <>
-                 <Volume2 className="w-4 h-4 mr-2" />
-                 MUTE AUDIO
-               </>
-             ) : (
-               <>
-                 <VolumeX className="w-4 h-4 mr-2" />
-                 ENABLE AUDIO
-               </>
-             )}
-           </Button>
-           <div className="flex items-center gap-2 px-4 py-2 bg-destructive text-white font-bold uppercase border-2 border-white animate-pulse hidden md:flex">
-             <div className="w-3 h-3 bg-white rounded-full" />
-             LIVE
-           </div>
-        </div>
-      </div>
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden">
-        {/* Left Column: Visuals (8 cols) */}
-        <div className="lg:col-span-8 relative border-r-4 border-primary bg-black flex flex-col h-full overflow-hidden">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-black/70 border-2 border-primary px-3 py-2 -skew-x-6 shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
+              <div className="skew-x-6 flex items-center justify-between text-xs uppercase font-black text-primary">
+                Vel
+                <span className="text-white text-lg">
+                  {solarWind ? `${solarWind.velocity.toFixed(0)} km/s` : "--"}
+                </span>
+              </div>
+            </div>
+            <div className="bg-white text-black border-2 border-black px-3 py-2 -skew-x-6 shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
+              <div className="skew-x-6 flex items-center justify-between text-xs uppercase font-black">
+                Density
+                <span className="text-lg">
+                  {solarWind ? `${solarWind.density.toFixed(1)} p/cc` : "--"}
+                </span>
+              </div>
+            </div>
+            <div className="bg-destructive text-white border-2 border-black px-3 py-2 -skew-x-6 shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
+              <div className="skew-x-6 flex items-center justify-between text-xs uppercase font-black">
+                Bz
+                <span className="text-lg">
+                  {solarWind ? `${solarWind.bz.toFixed(1)} nT` : "--"}
+                </span>
+              </div>
+            </div>
+            <div className="bg-primary text-black border-2 border-black px-3 py-2 -skew-x-6 shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
+              <div className="skew-x-6 flex items-center justify-between text-xs uppercase font-black">
+                Kp
+                <span className="text-lg">
+                  {kIndex !== null && kIndex !== undefined ? kIndex.toFixed(1) : "--"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="bg-black/70 border-2 border-white px-4 py-3 -skew-x-6 shadow-[6px_6px_0px_rgba(0,0,0,0.5)]">
+              <div className="skew-x-6 flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-[11px] uppercase text-white/70 font-bold">Pitch // Base</p>
+                  <p className="text-xl font-black text-white tracking-tight">{heliosinger.currentData?.baseNote ?? "--"}</p>
+                </div>
+                <div className="text-right text-xs text-white/60 font-mono">
+                  {heliosinger.currentData ? `${heliosinger.currentData.frequency.toFixed(0)} Hz` : ""}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white text-black border-2 border-black px-4 py-3 -skew-x-6 shadow-[6px_6px_0px_rgba(0,0,0,0.5)]">
+              <div className="skew-x-6 flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-[11px] uppercase text-black/70 font-bold">Chord // Training</p>
+                  <p className="text-xl font-black tracking-tight">
+                    {chordQuality?.symbol ?? "..."} {chordQuality?.name ? `(${chordQuality.name})` : ""}
+                  </p>
+                </div>
+                <Badge variant="secondary" className="skew-x-0 bg-black text-white border-2 border-black rounded-none">
+                  Training
+                </Badge>
+              </div>
+              <p className="skew-x-6 text-[11px] uppercase text-black/70 mt-2 truncate">
+                Vowel {currentVowel?.displayName ?? "—"} · {vowelCue}
+              </p>
+            </div>
+
+            <div className="bg-primary text-black border-2 border-black px-4 py-3 -skew-x-6 shadow-[6px_6px_0px_rgba(0,0,0,0.5)]">
+              <div className="skew-x-6 flex items-center justify-between">
+                <div className="space-y-1">
+                  <p className="text-[11px] uppercase font-black">Mood</p>
+                  <p className="text-xl font-black tracking-tight">
+                    {heliosinger.currentData?.solarMood ?? "Calibrating"}
+                  </p>
+                </div>
+                <div className="text-right text-xs font-mono">
+                  {heliosinger.currentData?.condition ?? "—"}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Middle band: open canvas with hologram + overlays */}
+        <div className="flex-1 relative bg-black border-y-4 border-primary overflow-hidden">
           <EventOverlay current={comprehensiveData} previous={previousComprehensiveDataRef.current} />
-          {/* Hologram takes up most space */}
-          <div className="flex-1 relative min-h-0">
+          <div className="absolute inset-0">
             <SolarHologram
               data={comprehensiveData}
               heliosingerData={heliosinger.currentData}
               isPlaying={true}
               mode="stream"
             />
-            
-            {/* Overlay Ticker */}
-            <div className="absolute bottom-0 left-0 right-0 bg-black/80 border-t-4 border-primary p-4 backdrop-blur-sm">
-               {comprehensiveData && (
-                 <EventsTicker 
-                   currentData={comprehensiveData} 
-                   previousData={previousComprehensiveDataRef.current}
-                 />
-               )}
-            </div>
           </div>
         </div>
 
-        {/* Right Column: Data & Training (4 cols) */}
-        <div className="lg:col-span-4 bg-black flex flex-col h-full overflow-hidden border-l-4 border-primary">
-          
-          {/* Top 1/3: Educational / Trainer */}
-          <div className="flex-[1] border-b-4 border-primary overflow-y-auto bg-black/90">
-             <div className="p-4 sticky top-0 bg-black/95 backdrop-blur z-10 border-b border-white/10">
-               <h3 className="font-black text-white uppercase tracking-widest flex items-center gap-2">
-                 <span className="w-2 h-2 bg-primary rounded-full" />
-                 Training Module
-               </h3>
-             </div>
-             <div className="p-4 pt-0">
-               {heliosinger.currentData && (
-                  <SonificationTrainer 
-                    currentData={heliosinger.currentData}
-                    comprehensiveData={comprehensiveData}
-                  />
-                )}
-             </div>
+        {/* Bottom band ~1/5: system log */}
+        <div className="basis-[22vh] min-h-[200px] border-t-4 border-primary bg-black flex flex-col">
+          <div className="p-3 border-b-2 border-white/20 bg-primary/20 flex items-center justify-between">
+            <h3 className="font-black text-primary uppercase tracking-widest text-xs">
+              System Log // Operations
+            </h3>
+            <span className="text-[10px] font-mono text-white/70 uppercase">
+              NOAA • Heliosinger Engine v2.0
+            </span>
           </div>
-
-          {/* Bottom 2/3: System Log */}
-          <div className="flex-[2] flex flex-col min-h-0">
-            <div className="p-2 border-b-2 border-white/20 bg-primary/10 shrink-0">
-              <h3 className="font-black text-primary uppercase tracking-widest text-xs">
-                SYSTEM LOG // OPERATIONS
-              </h3>
+          <div className="flex-1 overflow-hidden relative">
+            <div className="absolute inset-0">
+              <SystemTerminal data={comprehensiveData} />
             </div>
-            <div className="flex-1 overflow-hidden relative">
-              <div className="absolute inset-0">
-                <SystemTerminal data={comprehensiveData} />
-              </div>
-            </div>
-          </div>
-          
-          {/* Footer Info */}
-          <div className="border-t-2 border-white/20 p-2 bg-black shrink-0">
-            <p className="text-[10px] font-mono text-muted-foreground text-center uppercase">
-              Powered by NOAA DSCOVR • Heliosinger Engine v2.0
-            </p>
           </div>
         </div>
       </div>

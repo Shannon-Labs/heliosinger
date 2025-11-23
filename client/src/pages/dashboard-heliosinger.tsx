@@ -8,7 +8,6 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { SystemStatus } from "@/components/system-status";
 import { Footer } from "@/components/Footer";
-import { EnhancedSpaceWeatherViz } from "@/components/EnhancedSpaceWeatherViz";
 import { EventsTicker } from "@/components/EventsTicker";
 import { MobilePlayer } from "@/components/MobilePlayer";
 import { MiniVowelChart } from "@/components/MiniVowelChart";
@@ -361,12 +360,9 @@ export default function Dashboard() {
           <div className="flex justify-center mb-6">
             <BrutalistLogo className="scale-150" />
           </div>
-          <h1 className="text-6xl font-black mb-2 text-foreground uppercase tracking-tighter">
-            Heliosinger
-          </h1>
-          <p className="text-xl text-muted-foreground mb-2 font-mono uppercase">
+          <h1 className="text-4xl font-black mb-2 text-foreground uppercase tracking-tighter">
             Real-Time Space Weather Sonification
-          </p>
+          </h1>
           <p className="text-sm text-muted-foreground max-w-2xl mx-auto border-l-4 border-primary pl-4 text-left font-mono">
             Experience space weather as the sun literally sings its story in real-time. 
             Each moment creates a unique vowel sound, pitch, and rhythm based on solar wind conditions.
@@ -601,11 +597,6 @@ export default function Dashboard() {
           <ComprehensiveSpaceWeather />
         </div> */}
 
-        {/* Enhanced Visualizations with Change Tracking */}
-        <div className="mb-8">
-          <EnhancedSpaceWeatherViz data={comprehensiveData} />
-        </div>
-
         {/* Change Tracker */}
         {/* {comprehensiveData && (
           <div className="mb-8">
@@ -621,58 +612,60 @@ export default function Dashboard() {
         {/* Notification Settings */}
         {isNotificationSupported() && (
           <section className="mb-8">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <i className="fas fa-bell text-primary" />
-                  Notifications
+            <Card className="border-4 border-primary bg-black relative overflow-hidden shadow-[10px_10px_0px_rgba(0,0,0,0.5)]">
+              <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:22px_22px]" />
+              <CardHeader className="bg-primary text-black border-b-4 border-black skew-x-3">
+                <CardTitle className="flex items-center gap-3 -skew-x-3 uppercase tracking-widest font-black text-xl">
+                  <i className="fas fa-bell text-black" />
+                  Alert System
                   {!canSendNotifications() && (
-                    <Badge variant="secondary" className="ml-auto">
-                      Permission Required
+                    <Badge variant="secondary" className="ml-auto bg-black text-white border-2 border-black rounded-none">
+                      Permission Needed
                     </Badge>
                   )}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="relative space-y-4 p-6">
                 {!canSendNotifications() && (
-                  <div className="bg-accent/10 border border-accent/30 rounded-lg p-4 mb-4">
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Enable browser notifications to receive alerts about significant space weather events.
-                    </p>
-                    <Button
-                      onClick={async () => {
-                        const permission = await requestNotificationPermission();
-                        if (permission === 'granted') {
-                          toast({
-                            title: "Notifications Enabled",
-                            description: "You'll now receive alerts for significant space weather events.",
-                          });
-                          setNotificationSettings(getNotificationSettings());
-                        } else {
-                          toast({
-                            title: "Permission Denied",
-                            description: "Please enable notifications in your browser settings.",
-                            variant: "destructive",
-                          });
-                        }
-                      }}
-                      size="sm"
-                    >
-                      Enable Notifications
-                    </Button>
+                  <div className="bg-black/80 text-white border-2 border-primary px-4 py-3 -skew-x-3 shadow-[6px_6px_0px_rgba(0,0,0,0.6)]">
+                    <div className="flex items-center gap-3 skew-x-3">
+                      <i className="fas fa-bolt text-primary" />
+                      <div>
+                        <p className="text-sm font-bold uppercase tracking-tight">Enable Atlus Alerts</p>
+                        <p className="text-xs text-white/70">Get dramatic pop-in alerts when storms hit.</p>
+                      </div>
+                      <Button
+                        onClick={async () => {
+                          const permission = await requestNotificationPermission();
+                          if (permission === 'granted') {
+                            toast({
+                              title: "Notifications Enabled",
+                              description: "You'll now receive alerts for significant space weather events.",
+                            });
+                            setNotificationSettings(getNotificationSettings());
+                          } else {
+                            toast({
+                              title: "Permission Denied",
+                              description: "Please enable notifications in your browser settings.",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                        size="sm"
+                        className="ml-auto bg-white text-black font-black uppercase tracking-widest border-2 border-black hover:bg-primary hover:text-black"
+                      >
+                        Activate
+                      </Button>
+                    </div>
                   </div>
                 )}
 
                 {canSendNotifications() && (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-1">
-                        <Label htmlFor="notifications-enabled" className="text-sm font-medium">
-                          Enable Notifications
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
-                          Receive alerts for significant space weather events
-                        </p>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between bg-white text-black px-4 py-3 -skew-x-3 border-2 border-black shadow-[6px_6px_0px_rgba(0,0,0,0.5)]">
+                      <div className="space-y-1 skew-x-3">
+                        <p className="text-xs font-black uppercase tracking-widest">Global Alerts</p>
+                        <p className="text-[11px] opacity-70">Persona-style flashes when thresholds trip.</p>
                       </div>
                       <Switch
                         id="notifications-enabled"
@@ -686,84 +679,81 @@ export default function Dashboard() {
                     </div>
 
                     {notificationSettings.enabled && (
-                      <div className="space-y-3 pl-4 border-l-2 border-primary/20">
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="notify-kp" className="text-sm">
-                            Kp Threshold Crossings
-                          </Label>
-                          <Switch
-                            id="notify-kp"
-                            checked={notificationSettings.kpThresholds}
-                            onCheckedChange={(checked) => {
-                              const updated = { ...notificationSettings, kpThresholds: checked };
-                              setNotificationSettings(updated);
-                              saveNotificationSettings(updated);
-                            }}
-                          />
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="bg-black/80 text-white border-2 border-primary p-3 -skew-x-3 shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
+                          <div className="skew-x-3 flex items-center justify-between">
+                            <div>
+                              <p className="text-[11px] uppercase font-black tracking-widest">Kp Spikes</p>
+                              <p className="text-[10px] text-white/70">Stormfront flashes</p>
+                            </div>
+                            <Switch
+                              id="notify-kp"
+                              checked={notificationSettings.kpThresholds}
+                              onCheckedChange={(checked) => {
+                                const updated = { ...notificationSettings, kpThresholds: checked };
+                                setNotificationSettings(updated);
+                                saveNotificationSettings(updated);
+                              }}
+                            />
+                          </div>
                         </div>
 
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="notify-condition" className="text-sm">
-                            Condition Changes
-                          </Label>
-                          <Switch
-                            id="notify-condition"
-                            checked={notificationSettings.conditionChanges}
-                            onCheckedChange={(checked) => {
-                              const updated = { ...notificationSettings, conditionChanges: checked };
-                              setNotificationSettings(updated);
-                              saveNotificationSettings(updated);
-                            }}
-                          />
+                        <div className="bg-white text-black border-2 border-black p-3 -skew-x-3 shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
+                          <div className="skew-x-3 flex items-center justify-between">
+                            <div>
+                              <p className="text-[11px] uppercase font-black tracking-widest">Bz Swings</p>
+                              <p className="text-[10px] text-black/70">Southward alarms</p>
+                            </div>
+                            <Switch
+                              id="notify-bz"
+                              checked={notificationSettings.bzEvents}
+                              onCheckedChange={(checked) => {
+                                const updated = { ...notificationSettings, bzEvents: checked };
+                                setNotificationSettings(updated);
+                                saveNotificationSettings(updated);
+                              }}
+                            />
+                          </div>
                         </div>
 
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="notify-velocity" className="text-sm">
-                            Large Velocity Changes
-                          </Label>
-                          <Switch
-                            id="notify-velocity"
-                            checked={notificationSettings.velocityChanges}
-                            onCheckedChange={(checked) => {
-                              const updated = { ...notificationSettings, velocityChanges: checked };
-                              setNotificationSettings(updated);
-                              saveNotificationSettings(updated);
-                            }}
-                          />
+                        <div className="bg-destructive text-white border-2 border-black p-3 -skew-x-3 shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
+                          <div className="skew-x-3 flex items-center justify-between">
+                            <div>
+                              <p className="text-[11px] uppercase font-black tracking-widest">Density Jumps</p>
+                              <p className="text-[10px] text-white/80">Plasma surge pings</p>
+                            </div>
+                            <Switch
+                              id="notify-density"
+                              checked={notificationSettings.densityAlerts ?? false}
+                              onCheckedChange={(checked) => {
+                                const updated = { ...notificationSettings, densityAlerts: checked };
+                                setNotificationSettings(updated);
+                                saveNotificationSettings(updated);
+                              }}
+                            />
+                          </div>
                         </div>
 
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="notify-bz" className="text-sm">
-                            Strong Bz Events
-                          </Label>
-                          <Switch
-                            id="notify-bz"
-                            checked={notificationSettings.bzEvents}
-                            onCheckedChange={(checked) => {
-                              const updated = { ...notificationSettings, bzEvents: checked };
-                              setNotificationSettings(updated);
-                              saveNotificationSettings(updated);
-                            }}
-                          />
-                        </div>
-
-                        <div className="flex items-center justify-between pt-2 border-t border-border">
-                          <Label htmlFor="notify-sound" className="text-sm">
-                            Sound Notifications
-                          </Label>
-                          <Switch
-                            id="notify-sound"
-                            checked={notificationSettings.soundEnabled}
-                            onCheckedChange={(checked) => {
-                              const updated = { ...notificationSettings, soundEnabled: checked };
-                              setNotificationSettings(updated);
-                              saveNotificationSettings(updated);
-                            }}
-                          />
+                        <div className="bg-primary text-black border-2 border-black p-3 -skew-x-3 shadow-[4px_4px_0px_rgba(0,0,0,0.5)] sm:col-span-3">
+                          <div className="skew-x-3 flex items-center justify-between">
+                            <div>
+                              <p className="text-[11px] uppercase font-black tracking-widest">Sound Notifications</p>
+                              <p className="text-[10px] text-black/70">Cues sync with vocalizer</p>
+                            </div>
+                            <Switch
+                              id="notify-sound"
+                              checked={notificationSettings.soundEnabled}
+                              onCheckedChange={(checked) => {
+                                const updated = { ...notificationSettings, soundEnabled: checked };
+                                setNotificationSettings(updated);
+                                saveNotificationSettings(updated);
+                              }}
+                            />
+                          </div>
                         </div>
                       </div>
                     )}
-                  </>
+                  </div>
                 )}
               </CardContent>
             </Card>

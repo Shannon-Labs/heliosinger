@@ -1170,6 +1170,9 @@ export function createDefaultHeliosingerMapping(): HeliosingerData {
     reverbRoomSize: 0.3,
     delayTime: 0.15,
     delayFeedback: 0.1,
-    delayGain: 0.2
+    delayGain: 0.2,
+    binauralBeatHz: 0,
+    binauralBaseHz: 65.41,
+    binauralMix: 0
   };
 }
