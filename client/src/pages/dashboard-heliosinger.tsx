@@ -674,7 +674,7 @@ export default function Dashboard() {
                     <div className="flex items-center justify-between bg-white text-black px-4 py-3 -skew-x-3 border-2 border-black shadow-[6px_6px_0px_rgba(0,0,0,0.5)]">
                       <div className="space-y-1 skew-x-3">
                         <p className="text-xs font-black uppercase tracking-widest">Global Alerts</p>
-                        <p className="text-[11px] opacity-70">Persona-style flashes when thresholds trip.</p>
+                        <p className="text-[11px] opacity-70">High-contrast flashes when thresholds trip.</p>
                       </div>
                       <Switch
                         id="notifications-enabled"
@@ -789,7 +789,7 @@ export default function Dashboard() {
               <h3 className="font-black uppercase tracking-widest text-lg skew-x-6">System Status</h3>
             </div>
             <div className="p-4">
-              <SystemStatus />
+              <SystemStatus variant="atlus" showTitle={false} />
             </div>
           </div>
         </section>

@@ -25,7 +25,6 @@ export function BreakingNewsBanner({ data }: BreakingNewsBannerProps) {
     const solar_wind = data.solar_wind;
     const bz = solar_wind.bz;
 
-    // Trigger banner for significant events
     if (kp >= 7) {
       setMessage('EXTREME GEOMAGNETIC STORM IN PROGRESS');
       setSeverity('critical');

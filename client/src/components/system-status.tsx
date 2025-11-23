@@ -3,7 +3,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export function SystemStatus() {
+interface SystemStatusProps {
+  variant?: "default" | "atlus";
+  showTitle?: boolean;
+}
+
+export function SystemStatus({ variant = "default", showTitle = true }: SystemStatusProps) {
 
   // Fetch system status
   const { data: systemStatus, isLoading } = useQuery<Array<{
@@ -73,7 +78,7 @@ export function SystemStatus() {
   if (isLoading) {
     return (
       <section className="mb-8" aria-busy="true">
-        <Card>
+        <Card className={variant === "atlus" ? "bg-black/90 border-2 border-white/20 shadow-[6px_6px_0px_rgba(0,0,0,0.6)]" : ""}>
           <CardContent className="p-6">
             <Skeleton className="h-8 w-64 mb-6" />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -105,9 +110,9 @@ export function SystemStatus() {
 
   return (
     <section className="mb-8">
-      <Card>
+      <Card className={variant === "atlus" ? "bg-black/90 border-2 border-white/20 shadow-[6px_6px_0px_rgba(0,0,0,0.6)]" : ""}>
         <CardContent className="p-6">
-          <h2 className="text-2xl font-bold mb-6">System Status</h2>
+          {showTitle && <h2 className="text-2xl font-bold mb-6">System Status</h2>}
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             {expectedComponents.map(component => {

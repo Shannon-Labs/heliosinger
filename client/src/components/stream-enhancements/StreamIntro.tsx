@@ -13,22 +13,22 @@ export function StreamIntro({ onComplete }: StreamIntroProps) {
     {
       title: "HELIOSINGER",
       subtitle: "The Sun Sings Space Weather",
-      accent: "🔊",
+      accent: null,
     },
     {
       title: "LIVE SONIFICATION",
       subtitle: "Real-time data from NOAA DSCOVR",
-      accent: "🛰️",
+      accent: null,
     },
     {
       title: "TRAINING MODE",
       subtitle: "Learn to hear what the sun is saying",
-      accent: "🎵",
+      accent: null,
     },
     {
       title: "STREAM ACTIVE",
       subtitle: "Listening to the solar wind...",
-      accent: "☀️",
+      accent: null,
     },
   ];
 
@@ -40,10 +40,10 @@ export function StreamIntro({ onComplete }: StreamIntroProps) {
         const fadeTimer = setTimeout(() => {
           setShow(false);
           onComplete();
-        }, 2000);
+        }, 1200);
         return () => clearTimeout(fadeTimer);
       }
-    }, 2500);
+    }, 1200);
 
     return () => clearTimeout(timer);
   }, [step, introSteps.length, onComplete]);
@@ -66,7 +66,21 @@ export function StreamIntro({ onComplete }: StreamIntroProps) {
             transition={{ type: 'spring', stiffness: 200, damping: 20 }}
             className="text-center"
           >
-            <div className="text-8xl mb-8">{introSteps[step].accent}</div>
+            <div className="text-8xl mb-8">
+              <svg
+                className="h-16 w-16 mx-auto"
+                viewBox="0 0 64 64"
+                fill="none"
+                aria-hidden="true"
+              >
+                <rect x="10" y="8" width="12" height="48" rx="2" fill="currentColor" className="text-primary" />
+                <rect x="26" y="12" width="12" height="44" rx="2" fill="currentColor" className="text-primary/70" />
+                <rect x="42" y="20" width="12" height="36" rx="2" fill="currentColor" className="text-primary/40" />
+                <circle cx="16" cy="52" r="6" fill="currentColor" className="text-white" />
+                <circle cx="32" cy="52" r="6" fill="currentColor" className="text-white/80" />
+                <circle cx="48" cy="52" r="6" fill="currentColor" className="text-white/60" />
+              </svg>
+            </div>
             <h1 className="text-6xl font-black text-primary uppercase tracking-wider mb-4">
               {introSteps[step].title}
             </h1>

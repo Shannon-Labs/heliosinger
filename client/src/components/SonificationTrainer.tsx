@@ -80,7 +80,6 @@ export function SonificationTrainer({ currentData, comprehensiveData }: Sonifica
     <div className="border-4 border-primary bg-black p-6 shadow-[8px_8px_0px_0px_hsl(var(--primary))] mb-8">
       <div className="flex items-center justify-between mb-6 border-b-4 border-primary pb-2">
         <h3 className="text-2xl font-black uppercase tracking-tighter text-primary">
-          <i className="fas fa-graduation-cap mr-2"></i>
           Training Mode
         </h3>
         <Badge variant="outline" className="border-2 border-primary text-primary font-bold rounded-none uppercase">
