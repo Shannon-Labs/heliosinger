@@ -41,8 +41,22 @@ export default function Dashboard() {
   });
 
   // Fetch current solar wind data
-  const { data: currentData, isLoading: currentLoading, error: currentError } = useQuery({
+  const { data: currentData, isLoading: currentLoading, error: currentError } = useQuery<{
+    id: string;
+    velocity: number;
+    density: number;
+    bz: number;
+    timestamp: Date | string;
+    bt: number | null;
+    temperature: number | null;
+    raw_data?: unknown;
+  }>({
     queryKey: ["/api/solar-wind/current"],
+    queryFn: async ({ queryKey }) => {
+      const response = await fetch(queryKey.join("/"));
+      if (!response.ok) throw new Error("Failed to fetch current data");
+      return response.json();
+    },
     refetchInterval: 60000, // Refetch every minute
     retry: false
   });
@@ -50,19 +64,32 @@ export default function Dashboard() {
   // Fetch comprehensive space weather data
   const { data: comprehensiveData, isLoading: comprehensiveLoading } = useQuery<ComprehensiveSpaceWeatherData>({
     queryKey: ["/api/space-weather/comprehensive"],
-    queryFn: () => apiRequest("GET", "/api/space-weather/comprehensive"),
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/space-weather/comprehensive");
+      return (await response.json()) as ComprehensiveSpaceWeatherData;
+    },
     refetchInterval: 60000, // Refetch every minute
   });
 
   // Fetch system status
-  const { data: systemStatus } = useQuery({
+  const { data: systemStatus } = useQuery<Array<{ component: string; status: string; details?: string; id?: string; last_update?: string }>>({
     queryKey: ["/api/system/status"],
+    queryFn: async ({ queryKey }) => {
+      const response = await fetch(queryKey.join("/"));
+      if (!response.ok) throw new Error("Failed to fetch system status");
+      return response.json();
+    },
     refetchInterval: 30000
   });
 
   // Fetch ambient settings
-  const { data: ambientSettings, isLoading: ambientLoading } = useQuery({
+  const { data: ambientSettings, isLoading: ambientLoading } = useQuery<AmbientSettings>({
     queryKey: ["/api/settings/ambient"],
+    queryFn: async ({ queryKey }) => {
+      const response = await fetch(queryKey.join("/"));
+      if (!response.ok) throw new Error("Failed to fetch ambient settings");
+      return response.json();
+    },
     refetchInterval: 60000
   });
 
@@ -107,9 +134,9 @@ export default function Dashboard() {
     const settings = ambientSettings || stored;
     
     if (settings) {
-      setAmbientVolume(settings.volume || 0.3);
-      setRespectNight(settings.respect_night === "true");
-      setDayOnly(settings.day_only === "true");
+      setAmbientVolume((settings.volume as number) || 0.3);
+      setRespectNight((settings.respect_night as string) === "true");
+      setDayOnly((settings.day_only as string) === "true");
     }
   }, [ambientSettings]);
 
@@ -215,7 +242,7 @@ export default function Dashboard() {
 
   // Legacy ambient update no longer needed; Heliosinger handles updates
 
-  const isDataStreamActive = systemStatus?.find(s => s.component === 'data_stream')?.status === 'active';
+  const isDataStreamActive = systemStatus?.find((s: { component: string; status: string }) => s.component === 'data_stream')?.status === 'active';
 
   if (currentError && !currentData) {
     return (
@@ -287,7 +314,11 @@ export default function Dashboard() {
 
         {/* Solar Wind Data Display */}
         <SolarWindDisplay 
-          data={currentData} 
+          data={currentData ? {
+            ...currentData,
+            timestamp: typeof currentData.timestamp === 'string' ? new Date(currentData.timestamp) : currentData.timestamp,
+            raw_data: currentData.raw_data ?? null
+          } : undefined} 
           loading={currentLoading}
           onRefresh={() => fetchDataMutation.mutate()}
           refreshing={fetchDataMutation.isPending}
@@ -405,8 +436,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Condition:</span>
-                      <Badge variant={heliosinger.currentData.condition === 'extreme' ? 'destructive' : 
-                                     heliosinger.currentData.condition === 'storm' ? 'warning' : 'default'}
+                      <Badge variant={heliosinger.currentData.condition === 'extreme' ? 'destructive' : 'default'}
                              className="text-xs">
                         {heliosinger.currentData.condition}
                       </Badge>

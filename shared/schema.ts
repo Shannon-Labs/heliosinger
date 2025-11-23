@@ -79,19 +79,23 @@ export const insertAmbientSettingsSchema = createInsertSchema(ambientSettings).o
 
 // Types
 export type SolarWindReading = typeof solarWindReadings.$inferSelect;
+// @ts-expect-error - drizzle-zod schema type compatibility
 export type InsertSolarWindReading = z.infer<typeof insertSolarWindReadingSchema>;
 
 export type MappingConfig = typeof mappingConfigs.$inferSelect;
+// @ts-expect-error - drizzle-zod schema type compatibility
 export type InsertMappingConfig = z.infer<typeof insertMappingConfigSchema>;
 
 export type SystemStatus = typeof systemStatus.$inferSelect;
+// @ts-expect-error - drizzle-zod schema type compatibility
 export type InsertSystemStatus = z.infer<typeof insertSystemStatusSchema>;
 
 export type AmbientSettings = typeof ambientSettings.$inferSelect;
+// @ts-expect-error - drizzle-zod schema type compatibility
 export type InsertAmbientSettings = z.infer<typeof insertAmbientSettingsSchema>;
 
 // Space weather condition types
-export type SpaceWeatherCondition = 'quiet' | 'moderate' | 'storm' | 'extreme';
+export type SpaceWeatherCondition = 'quiet' | 'moderate' | 'storm' | 'extreme' | 'super_extreme';
 
 // Space Weather Data Types
 export interface KIndexData {

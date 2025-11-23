@@ -64,6 +64,11 @@ export interface HeliosingerData extends ChordData {
   delayTime: number;
   delayFeedback: number;
   delayGain: number;
+
+  // Binaural drift layer (calming dual-tone beat)
+  binauralBeatHz: number;
+  binauralBaseHz: number;
+  binauralMix: number;
 }
 
 // ============================================================================
@@ -73,6 +78,7 @@ export interface HeliosingerData extends ChordData {
 // Module-level state for tracking previous values (for spike detection)
 let previousData: ComprehensiveSpaceWeatherData | null = null;
 let previousDerivedMetrics: DerivedMetrics | null = null;
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 export function mapSpaceWeatherToHeliosinger(
   data: ComprehensiveSpaceWeatherData
@@ -177,8 +183,17 @@ export function mapSpaceWeatherToHeliosinger(
   
   // Step 13: Calculate rumble gain from proton flux
   const rumbleGain = calculateRumbleGain(condition, data.proton_flux);
+
+  // Step 14: Calming binaural beat layer (time + condition aware)
+  const binauralData = calculateBinauralBeat(
+    frequency,
+    condition,
+    kIndex?.kp || 0,
+    solarWind.velocity,
+    solarWind.density
+  );
   
-  // Step 14: Combine all parameters into Heliosinger data
+  // Step 15: Combine all parameters into Heliosinger data
   const heliosingerData: HeliosingerData = {
     // Original ChordData fields
     baseNote: noteName,
@@ -227,7 +242,12 @@ export function mapSpaceWeatherToHeliosinger(
     reverbRoomSize: reverbDelayData.reverbRoomSize,
     delayTime: reverbDelayData.delayTime,
     delayFeedback: reverbDelayData.delayFeedback,
-    delayGain: reverbDelayData.delayGain
+    delayGain: reverbDelayData.delayGain,
+
+    // Binaural layer
+    binauralBeatHz: binauralData.beatHz,
+    binauralBaseHz: binauralData.baseHz,
+    binauralMix: binauralData.mix
   };
   
   // Store current data for next call (for spike detection)
@@ -705,7 +725,20 @@ function calculateChordVoicing(
   // Build chord from harmonic series
   // Harmonic series: f, 2f (octave), 3f (fifth), 4f (octave), 5f (major third), 6f (fifth), 7f (minor 7th), 9f (major 9th)
   
-  if (condition === 'extreme') {
+  if (condition === 'super_extreme') {
+    // Super Extreme: Maximum dissonance for major events
+    // Use major second and tritone for a jarring, intense sound
+    chordTones.push(
+      createChordToneFromInterval(fundamentalFreq, fundamentalMidi, fundamentalNote, 2, 0.35), // Major 2nd
+      createChordToneFromInterval(fundamentalFreq, fundamentalMidi, fundamentalNote, 6, 0.3)  // Tritone
+    );
+    // Add a high, piercing minor 9th if density is high
+    if (normalizedDensity > 0.5) {
+      chordTones.push(
+        createChordToneFromInterval(fundamentalFreq, fundamentalMidi, fundamentalNote, 13, 0.2) // Minor 9th
+      );
+    }
+  } else if (condition === 'extreme') {
     // Extreme: Dissonant intervals from non-harmonic partials
     // Use tritone and minor second for maximum tension
     chordTones.push(
@@ -945,6 +978,12 @@ function calculateReverbDelay(
     case 'extreme':
       delayTime = 0.5; // Longer delay for dramatic effect
       break;
+    case 'super_extreme':
+      delayTime = 0.75; // Even longer for super extreme
+      break;
+    default:
+      delayTime = 0.2; // A safe default
+      break;
   }
   
   // Delay gain: subtle (20-30% wet/dry mix)
@@ -967,7 +1006,20 @@ function calculateRumbleGain(
   protonFlux?: ComprehensiveSpaceWeatherData['proton_flux']
 ): number {
   // Base rumble gain from condition
-  let rumbleGain = condition === 'extreme' ? 0.4 : condition === 'storm' ? 0.2 : 0;
+  let rumbleGain;
+  switch (condition) {
+    case 'super_extreme':
+      rumbleGain = 0.6;
+      break;
+    case 'extreme':
+      rumbleGain = 0.4;
+      break;
+    case 'storm':
+      rumbleGain = 0.2;
+      break;
+    default:
+      rumbleGain = 0;
+  }
   
   // Proton flux → drive sub-bass/rumble layer gain during radiation storms
   if (protonFlux?.flux_10mev !== undefined) {
@@ -979,7 +1031,48 @@ function calculateRumbleGain(
     rumbleGain = Math.max(rumbleGain, normalizedProton * 0.5);
   }
   
-  return Math.min(0.6, rumbleGain);
+  return Math.min(0.8, rumbleGain); // Allow up to 0.8 for super extreme proton storms
+}
+
+// ============================================================================
+// BINAURAL LAYER: CALM, TIME-AWARE DRIFT
+// ============================================================================
+
+function calculateBinauralBeat(
+  fundamentalHz: number,
+  condition: SpaceWeatherCondition,
+  kp: number,
+  velocity: number,
+  density: number
+): { beatHz: number; baseHz: number; mix: number } {
+  // Time-of-day drift (sinusoid over 24h)
+  const now = new Date();
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const circadian = 0.5 + 0.5 * Math.sin((minutes / 1440) * Math.PI * 2);
+  
+  // Beat rate: calmer midday/evening (~4-6 Hz), nudged higher during storms/fast wind
+  const stormPush = kp >= 6 ? 2 : kp >= 4 ? 1 : 0;
+  const windPush = velocity > 700 ? 0.5 : velocity > 550 ? 0.25 : 0;
+  const densityDamping = density > 15 ? -0.5 : density > 8 ? -0.25 : 0;
+  const beatHz = clamp(3 + circadian * 2 + stormPush + windPush + densityDamping, 2, 8.5);
+  
+  // Base carrier: keep in a mid range so it sits under the vowels
+  const baseHz = clamp(fundamentalHz * 0.45, 90, 420);
+  
+  // Mix: subtle by default, grows a bit at night or during calm conditions
+  let mix = 0.06 + circadian * 0.08;
+  if (condition === 'quiet' || condition === 'moderate') {
+    mix += 0.04;
+  }
+  if (kp >= 6) {
+    mix += 0.02; // keep present during storms so the beat stays perceptible
+  }
+  
+  return {
+    beatHz,
+    baseHz,
+    mix: clamp(mix, 0.05, 0.2)
+  };
 }
 
 // ============================================================================
@@ -993,6 +1086,10 @@ function determineSpaceWeatherCondition(
   const kp = kIndex?.kp || 0;
   const velocity = solarWind.velocity;
   const bz = solarWind.bz;
+
+  if (kp >= 8) {
+    return 'super_extreme';
+  }
   
   if (kp >= 7 || (kp >= 5 && bz < -15)) {
     return 'extreme';

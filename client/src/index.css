@@ -1,73 +1,83 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@300;400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  /* Heliosinger Color Palette - Based on Logo */
-  /* Deep Blue Background: #0A1E3E */
-  --background: hsl(218, 72%, 14%);
-  --foreground: hsl(0, 0%, 98%);
-  --card: hsl(218, 72%, 18%);
-  --card-foreground: hsl(0, 0%, 98%);
-  --popover: hsl(218, 72%, 14%);
-  --popover-foreground: hsl(0, 0%, 98%);
-  /* Light Blue Plasma: #00B4D8 */
-  --primary: hsl(191, 100%, 42%);
-  --primary-foreground: hsl(218, 72%, 14%);
-  --secondary: hsl(218, 72%, 22%);
-  --secondary-foreground: hsl(0, 0%, 98%);
-  --muted: hsl(218, 72%, 20%);
-  --muted-foreground: hsl(0, 0%, 70%);
-  /* Chartreuse Yellow: #DFFF00 */
-  --accent: hsl(67, 100%, 50%);
-  --accent-foreground: hsl(218, 72%, 14%);
-  --destructive: hsl(14, 100%, 60%);
-  --destructive-foreground: hsl(0, 0%, 98%);
-  --border: hsl(218, 72%, 25%);
-  --input: hsl(218, 72%, 22%);
-  /* Light Blue Plasma for ring */
-  --ring: hsl(191, 100%, 42%);
-  /* Golden Orange: #FFA500 */
-  --warning: hsl(39, 100%, 50%);
-  /* Chartreuse Yellow for success */
-  --success: hsl(67, 100%, 50%);
+  /* Heliosinger Brutalist Palette */
+  /* Stark Black Background */
+  --background: hsl(0, 0%, 5%);
+  --foreground: hsl(0, 0%, 95%);
   
-  /* Chart colors for space weather data - Updated to match palette */
-  --chart-1: hsl(191, 100%, 42%); /* Light Blue Plasma */
-  --chart-2: hsl(67, 100%, 50%); /* Chartreuse Yellow */
-  --chart-3: hsl(39, 100%, 50%); /* Golden Orange */
-  --chart-4: hsl(14, 100%, 60%); /* Red for alerts */
-  --chart-5: hsl(191, 100%, 60%); /* Lighter blue */
+  /* Card: Dark Gray */
+  --card: hsl(0, 0%, 10%);
+  --card-foreground: hsl(0, 0%, 95%);
   
-  /* Sidebar colors - Updated to match palette */
-  --sidebar: hsl(218, 72%, 18%);
-  --sidebar-foreground: hsl(0, 0%, 98%);
-  --sidebar-primary: hsl(191, 100%, 42%);
-  --sidebar-primary-foreground: hsl(218, 72%, 14%);
-  --sidebar-accent: hsl(218, 72%, 22%);
-  --sidebar-accent-foreground: hsl(67, 100%, 50%);
-  --sidebar-border: hsl(218, 72%, 25%);
-  --sidebar-ring: hsl(191, 100%, 42%);
+  --popover: hsl(0, 0%, 10%);
+  --popover-foreground: hsl(0, 0%, 95%);
+  
+  /* Electric Blue */
+  --primary: hsl(200, 100%, 50%);
+  --primary-foreground: hsl(0, 0%, 0%);
+  
+  --secondary: hsl(0, 0%, 20%);
+  --secondary-foreground: hsl(0, 0%, 95%);
+  
+  --muted: hsl(0, 0%, 20%);
+  --muted-foreground: hsl(0, 0%, 60%);
+  
+  /* Acid Green */
+  --accent: hsl(120, 100%, 50%);
+  --accent-foreground: hsl(0, 0%, 0%);
+  
+  /* Hot Pink */
+  --destructive: hsl(330, 100%, 50%);
+  --destructive-foreground: hsl(0, 0%, 95%);
+  
+  --border: hsl(0, 0%, 30%);
+  --input: hsl(0, 0%, 20%);
+  --ring: hsl(200, 100%, 50%);
+  
+  /* Warning Orange */
+  --warning: hsl(30, 100%, 50%);
+  --success: hsl(120, 100%, 50%);
+  
+  /* Chart colors */
+  --chart-1: hsl(200, 100%, 50%);
+  --chart-2: hsl(120, 100%, 50%);
+  --chart-3: hsl(30, 100%, 50%);
+  --chart-4: hsl(330, 100%, 50%);
+  --chart-5: hsl(280, 100%, 50%);
+  
+  /* Sidebar */
+  --sidebar: hsl(0, 0%, 10%);
+  --sidebar-foreground: hsl(0, 0%, 95%);
+  --sidebar-primary: hsl(200, 100%, 50%);
+  --sidebar-primary-foreground: hsl(0, 0%, 0%);
+  --sidebar-accent: hsl(0, 0%, 20%);
+  --sidebar-accent-foreground: hsl(120, 100%, 50%);
+  --sidebar-border: hsl(0, 0%, 30%);
+  --sidebar-ring: hsl(200, 100%, 50%);
   
   /* Typography */
-  --font-sans: 'Inter', 'Open Sans', sans-serif;
+  --font-sans: 'Space Grotesk', 'Inter', sans-serif;
+  --font-display: 'Space Grotesk', sans-serif;
   --font-serif: 'Georgia', serif;
-  --font-mono: 'Roboto Mono', 'Menlo', monospace;
+  --font-mono: 'Roboto Mono', monospace;
   
-  /* Layout */
-  --radius: 0.75rem;
+  /* Layout - Brutalist: No Radius */
+  --radius: 0rem;
   
-  /* Shadows with space theme - Updated to Light Blue Plasma */
-  --shadow-2xs: 0px 1px 2px 0px hsl(191, 100%, 42%, 0.05);
-  --shadow-xs: 0px 1px 3px 0px hsl(191, 100%, 42%, 0.1), 0px 1px 2px 0px hsl(191, 100%, 42%, 0.06);
-  --shadow-sm: 0px 1px 3px 0px hsl(191, 100%, 42%, 0.1), 0px 1px 2px 0px hsl(191, 100%, 42%, 0.06);
-  --shadow: 0px 1px 3px 0px hsl(191, 100%, 42%, 0.1), 0px 1px 2px 0px hsl(191, 100%, 42%, 0.06);
-  --shadow-md: 0px 4px 6px -1px hsl(191, 100%, 42%, 0.1), 0px 2px 4px -1px hsl(191, 100%, 42%, 0.06);
-  --shadow-lg: 0px 10px 15px -3px hsl(191, 100%, 42%, 0.1), 0px 4px 6px -2px hsl(191, 100%, 42%, 0.05);
-  --shadow-xl: 0px 20px 25px -5px hsl(191, 100%, 42%, 0.1), 0px 10px 10px -5px hsl(191, 100%, 42%, 0.04);
-  --shadow-2xl: 0px 25px 50px -12px hsl(191, 100%, 42%, 0.25);
+  /* Shadows - Hard Shadows */
+  --shadow-2xs: 2px 2px 0px 0px hsl(0, 0%, 0%);
+  --shadow-xs: 3px 3px 0px 0px hsl(0, 0%, 0%);
+  --shadow-sm: 4px 4px 0px 0px hsl(0, 0%, 0%);
+  --shadow: 5px 5px 0px 0px hsl(0, 0%, 0%);
+  --shadow-md: 6px 6px 0px 0px hsl(0, 0%, 0%);
+  --shadow-lg: 8px 8px 0px 0px hsl(0, 0%, 0%);
+  --shadow-xl: 10px 10px 0px 0px hsl(0, 0%, 0%);
+  --shadow-2xl: 12px 12px 0px 0px hsl(0, 0%, 0%);
   
   --tracking-normal: 0em;
   --spacing: 0.25rem;
@@ -365,6 +375,11 @@
   .text-space-mono {
     font-family: var(--font-mono);
     font-feature-settings: "tnum" 1;
+  }
+  
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
   }
 
   /* Animation utilities */

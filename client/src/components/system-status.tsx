@@ -6,8 +6,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 export function SystemStatus() {
 
   // Fetch system status
-  const { data: systemStatus, isLoading } = useQuery({
+  const { data: systemStatus, isLoading } = useQuery<Array<{
+    id: string;
+    component: string;
+    status: string;
+    details?: string | null;
+    last_update: string | Date;
+  }>>({
     queryKey: ["/api/system/status"],
+    queryFn: async ({ queryKey }) => {
+      const response = await fetch(queryKey.join("/"));
+      if (!response.ok) throw new Error("Failed to fetch system status");
+      return response.json();
+    },
     refetchInterval: 30000 // Refresh every 30 seconds
   });
 
@@ -85,10 +96,10 @@ export function SystemStatus() {
     );
   }
 
-  const statusByComponent = systemStatus?.reduce((acc, status) => {
+  const statusByComponent = systemStatus?.reduce((acc: Record<string, typeof systemStatus[0]>, status: typeof systemStatus[0]) => {
     acc[status.component] = status;
     return acc;
-  }, {} as Record<string, any>) || {};
+  }, {} as Record<string, typeof systemStatus[0]>) || {};
 
   const expectedComponents = ['network', 'data_stream'];
 
@@ -102,7 +113,7 @@ export function SystemStatus() {
             {expectedComponents.map(component => {
               const status = statusByComponent[component];
               const componentStatus = status?.status || 'unknown';
-              const componentDetails = getComponentDetails(component, componentStatus, status?.details);
+              const componentDetails = getComponentDetails(component, componentStatus, status?.details ?? undefined);
               
               return (
                 <div 
@@ -125,13 +136,13 @@ export function SystemStatus() {
             <div className="mt-6 pt-6 border-t border-border">
               <h3 className="text-lg font-semibold mb-4">Detailed Status</h3>
               <div className="space-y-2">
-                {systemStatus.map(status => (
+                {systemStatus.map((status: typeof systemStatus[0]) => (
                   <div key={status.id} className="flex items-center justify-between p-3 bg-secondary/20 rounded-lg">
                     <div className="flex items-center space-x-3">
                       <i className={getStatusIcon(status.status)} aria-hidden="true" />
                       <div>
                         <div className="font-medium">{getComponentLabel(status.component)}</div>
-                        <div className="text-sm text-muted-foreground">{status.details}</div>
+                        <div className="text-sm text-muted-foreground">{status.details ?? ''}</div>
                       </div>
                     </div>
                     <div className="text-right">

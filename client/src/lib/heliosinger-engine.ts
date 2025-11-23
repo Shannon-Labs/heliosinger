@@ -54,6 +54,15 @@ interface TextureLayer {
   rumbleGain?: GainNode;
 }
 
+interface BinauralLayer {
+  leftOsc?: OscillatorNode;
+  rightOsc?: OscillatorNode;
+  leftGain?: GainNode;
+  rightGain?: GainNode;
+  leftPan?: StereoPannerNode;
+  rightPan?: StereoPannerNode;
+}
+
 class HeliosingerEngine {
   private audioContext: AudioContext | null = null;
   private masterGain: GainNode | null = null;
@@ -69,6 +78,7 @@ class HeliosingerEngine {
   private heliosingerLayer: HeliosingerLayer | null = null;
   private modulationLayer: ModulationLayer = {};
   private textureLayer: TextureLayer = {};
+  private binauralLayer: BinauralLayer = {};
   
   // State
   private isSinging: boolean = false;
@@ -329,6 +339,9 @@ class HeliosingerEngine {
     
     // Create modulation layer (vibrato, tremolo)
     this.createModulationLayer(heliosingerData);
+
+    // Create binaural layer for calm background presence
+    this.createBinauralLayer(heliosingerData);
     
     // Create texture layer (shimmer, rumble)
     if (heliosingerData.shimmerGain > 0 || heliosingerData.rumbleGain > 0) {
@@ -541,9 +554,59 @@ class HeliosingerEngine {
         this.modulationLayer.tremoloLfo.start();
         console.log(`Started tremolo LFO at ${this.modulationLayer.tremoloLfo.frequency.value.toFixed(2)}Hz`);
       } catch (error) {
-        console.error(`Failed to start tremolo LFO:`, error);
-      }
+      console.error(`Failed to start tremolo LFO:`, error);
     }
+  }
+
+  /**
+   * Calming binaural beat layer to keep the experience soothing in the background.
+   */
+  private createBinauralLayer(data: HeliosingerData): void {
+    if (!this.audioContext || !this.masterGain) return;
+
+    // Clean up any previous layer first
+    if (this.binauralLayer.leftOsc) {
+      try { this.binauralLayer.leftOsc.stop(); } catch (e) {}
+    }
+    if (this.binauralLayer.rightOsc) {
+      try { this.binauralLayer.rightOsc.stop(); } catch (e) {}
+    }
+    this.binauralLayer = {};
+
+    const leftOsc = this.audioContext.createOscillator();
+    const rightOsc = this.audioContext.createOscillator();
+    const leftGain = this.audioContext.createGain();
+    const rightGain = this.audioContext.createGain();
+    const leftPan = this.audioContext.createStereoPanner();
+    const rightPan = this.audioContext.createStereoPanner();
+
+    leftOsc.type = 'sine';
+    rightOsc.type = 'sine';
+
+    const base = Math.max(20, data.binauralBaseHz);
+    const offset = Math.max(0.5, data.binauralBeatHz / 2);
+    leftOsc.frequency.value = base - offset;
+    rightOsc.frequency.value = base + offset;
+
+    const mix = Math.max(0.01, data.binauralMix);
+    leftGain.gain.value = mix;
+    rightGain.gain.value = mix;
+
+    leftPan.pan.value = -0.85;
+    rightPan.pan.value = 0.85;
+
+    leftOsc.connect(leftGain);
+    rightOsc.connect(rightGain);
+    leftGain.connect(leftPan);
+    rightGain.connect(rightPan);
+    leftPan.connect(this.masterGain);
+    rightPan.connect(this.masterGain);
+
+    try { leftOsc.start(); } catch (e) { console.error('Failed to start left binaural osc', e); }
+    try { rightOsc.start(); } catch (e) { console.error('Failed to start right binaural osc', e); }
+
+    this.binauralLayer = { leftOsc, rightOsc, leftGain, rightGain, leftPan, rightPan };
+  }
   }
   
   /**
@@ -732,6 +795,23 @@ class HeliosingerEngine {
         now + smoothingTime
       );
     }
+
+    // Update binaural layer
+    if (this.binauralLayer.leftOsc && this.binauralLayer.rightOsc && this.binauralLayer.leftGain && this.binauralLayer.rightGain) {
+      const base = Math.max(20, heliosingerData.binauralBaseHz);
+      const offset = Math.max(0.5, heliosingerData.binauralBeatHz / 2);
+      const mix = Math.max(0.005, heliosingerData.binauralMix);
+      this.binauralLayer.leftOsc.frequency.exponentialRampToValueAtTime(
+        Math.max(20, base - offset),
+        now + smoothingTime
+      );
+      this.binauralLayer.rightOsc.frequency.exponentialRampToValueAtTime(
+        Math.max(20, base + offset),
+        now + smoothingTime
+      );
+      this.binauralLayer.leftGain.gain.exponentialRampToValueAtTime(mix, now + smoothingTime);
+      this.binauralLayer.rightGain.gain.exponentialRampToValueAtTime(mix, now + smoothingTime);
+    }
     
     // Update texture layer
     if (this.textureLayer.noiseGain && heliosingerData.shimmerGain > 0) {
@@ -798,6 +878,15 @@ class HeliosingerEngine {
       try { this.textureLayer.rumbleOsc.stop(); } catch (e) {}
     }
     this.textureLayer = {};
+
+    // Stop binaural layer
+    if (this.binauralLayer.leftOsc) {
+      try { this.binauralLayer.leftOsc.stop(); } catch (e) {}
+    }
+    if (this.binauralLayer.rightOsc) {
+      try { this.binauralLayer.rightOsc.stop(); } catch (e) {}
+    }
+    this.binauralLayer = {};
     
     this.currentData = null;
     

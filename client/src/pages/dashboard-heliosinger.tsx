@@ -7,18 +7,14 @@ import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { SystemStatus } from "@/components/system-status";
-import { DataDashboard } from "@/components/data-dashboard";
-import { ComprehensiveSpaceWeather } from "@/components/comprehensive-space-weather";
-import { HeliosingerGuide } from "@/components/heliosinger-guide";
-import { VowelChart } from "@/components/vowel-chart";
 import { Footer } from "@/components/Footer";
-import { DataSourceAttribution } from "@/components/DataSourceAttribution";
-import { ChangeTracker } from "@/components/ChangeTracker";
 import { EnhancedSpaceWeatherViz } from "@/components/EnhancedSpaceWeatherViz";
-import { SpaceWeatherExamples } from "@/components/SpaceWeatherExamples";
 import { EventsTicker } from "@/components/EventsTicker";
 import { MobilePlayer } from "@/components/MobilePlayer";
 import { MiniVowelChart } from "@/components/MiniVowelChart";
+import { BrutalistLogo } from "@/components/BrutalistLogo";
+import { SolarHologram } from "@/components/SolarHologram";
+import { SonificationTrainer } from "@/components/SonificationTrainer";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getAmbientSettings, saveAmbientSettings } from "@/lib/localStorage";
@@ -39,7 +35,7 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   
   // Heliosinger hook - primary sonification system
-  const [isHeliosingerEnabled, setIsHeliosingerEnabled] = useState(false);
+  const [isHeliosingerEnabled, setIsHeliosingerEnabled] = useState(true);
   const [ambientVolume, setAmbientVolume] = useState(0.3);
   const [backgroundMode, setBackgroundMode] = useState(false);
   
@@ -105,7 +101,7 @@ export default function Dashboard() {
 
   // Update ambient settings mutation (saves to localStorage for static site)
   const updateAmbientMutation = useMutation({
-    mutationFn: async (settings: Partial<AmbientSettings>) => {
+    mutationFn: async (settings: Partial<AmbientSettings & { background_mode?: string }>) => {
       // Save to localStorage
       saveAmbientSettings(settings as any);
       // Also try to save via API (for Cloudflare Functions)
@@ -299,11 +295,12 @@ export default function Dashboard() {
     
     // Describe rhythm/tremolo
     let rhythmDesc = 'steady';
-    if (data.kIndex >= 7) {
+    const kIndex = data.kIndex ?? 0;
+    if (kIndex >= 7) {
       rhythmDesc = 'intense, chaotic tremolo';
-    } else if (data.kIndex >= 5) {
+    } else if (kIndex >= 5) {
       rhythmDesc = 'fast pulsing tremolo';
-    } else if (data.kIndex >= 3) {
+    } else if (kIndex >= 3) {
       rhythmDesc = 'moderate tremolo';
     }
 
@@ -324,40 +321,32 @@ export default function Dashboard() {
 
       {/* Navigation Header */}
       <nav 
-        className="border-b border-border/50 bg-gradient-to-r from-background via-primary/5 to-background backdrop-blur-md sticky top-0 z-50 shadow-sm"
+        className="border-b-4 border-border bg-background sticky top-0 z-50"
         role="navigation"
         aria-label="Main navigation"
       >
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <img 
-                src="/preview.webp" 
-                alt="Heliosinger Logo" 
-                className="w-10 h-10 rounded-lg object-contain"
-                loading="lazy"
-                decoding="async"
-                fetchPriority="low"
-                aria-hidden="true"
-              />
-              <h1 className="text-xl font-bold text-foreground" data-testid="text-app-title">
-                Heliosinger: Listen to the Sun
+              <BrutalistLogo className="h-10" />
+              <h1 className="text-xl font-bold text-foreground uppercase tracking-tighter hidden md:block" data-testid="text-app-title">
+                Heliosinger
               </h1>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 bg-gradient-to-r from-accent/20 to-primary/20 px-4 py-2 rounded-full border border-accent/30">
-                <div className={`w-2.5 h-2.5 rounded-full ${isDataStreamActive ? 'bg-accent animate-pulse shadow-lg shadow-accent/50' : 'bg-destructive'}`} />
-                <span className="text-sm font-medium" data-testid="text-data-status">
+              <div className="flex items-center space-x-2 bg-secondary px-4 py-2 border-2 border-border">
+                <div className={`w-3 h-3 ${isDataStreamActive ? 'bg-accent animate-pulse' : 'bg-destructive'}`} />
+                <span className="text-sm font-bold uppercase tracking-tight" data-testid="text-data-status">
                   {isDataStreamActive ? 'Live Data' : 'Offline'}
                 </span>
               </div>
               <Button 
-                variant="ghost" 
+                variant="outline" 
                 size="sm"
                 onClick={() => fetchDataMutation.mutate()}
                 disabled={fetchDataMutation.isPending}
                 data-testid="button-refresh-data"
-                className="hover:bg-primary/10"
+                className="border-2 border-border hover:bg-accent hover:text-accent-foreground uppercase font-bold"
               >
                 <i className={`fas fa-sync-alt ${fetchDataMutation.isPending ? 'animate-spin' : ''}`} aria-hidden="true" />
               </Button>
@@ -370,26 +359,29 @@ export default function Dashboard() {
         {/* Hero Section */}
         <section className="mb-12 text-center">
           <div className="flex justify-center mb-6">
-            <img 
-              src="/preview.webp" 
-              alt="Heliosinger Logo" 
-              className="h-24 w-24 rounded-2xl object-contain shadow-lg"
-              loading="eager"
-              decoding="async"
-              fetchPriority="high"
-            />
+            <BrutalistLogo className="scale-150" />
           </div>
-          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
+          <h1 className="text-6xl font-black mb-2 text-foreground uppercase tracking-tighter">
             Heliosinger
           </h1>
-          <p className="text-xl text-muted-foreground mb-2">
+          <p className="text-xl text-muted-foreground mb-2 font-mono uppercase">
             Real-Time Space Weather Sonification
           </p>
-          <p className="text-sm text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-sm text-muted-foreground max-w-2xl mx-auto border-l-4 border-primary pl-4 text-left font-mono">
             Experience space weather as the sun literally sings its story in real-time. 
             Each moment creates a unique vowel sound, pitch, and rhythm based on solar wind conditions.
           </p>
         </section>
+
+        {/* Data-driven 3D solar hologram */}
+        <div className="mb-10">
+          <SolarHologram
+            data={comprehensiveData}
+            heliosingerData={heliosinger.currentData}
+            isPlaying={isHeliosingerEnabled && heliosinger.isSinging}
+          />
+        </div>
+
 
         {/* Recent Events Ticker */}
         {comprehensiveData && (
@@ -403,24 +395,24 @@ export default function Dashboard() {
 
         {/* Heliosinger Mode Controls - Moved to Top */}
         <section className="mb-8">
-          <Card className="bg-gradient-to-br from-background via-primary/5 to-accent/5 border-primary/20 shadow-lg" aria-busy={comprehensiveLoading}>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <div className={`w-3 h-3 rounded-full mr-3 ${isHeliosingerEnabled ? 'bg-accent animate-pulse' : 'bg-muted'}`} />
+          <Card className="bg-card border-4 border-primary shadow-none" aria-busy={comprehensiveLoading}>
+            <CardHeader className="border-b-4 border-primary bg-primary text-primary-foreground">
+              <CardTitle className="flex items-center uppercase font-black tracking-tighter text-2xl">
+                <div className={`w-4 h-4 mr-3 border-2 border-black ${isHeliosingerEnabled ? 'bg-accent animate-pulse' : 'bg-muted'}`} />
                 Heliosinger Mode
-                <Badge variant={isHeliosingerEnabled ? "default" : "secondary"} className="ml-auto">
-                  {isHeliosingerEnabled ? "Singing" : "Silent"}
+                <Badge variant={isHeliosingerEnabled ? "default" : "secondary"} className="ml-auto border-2 border-black rounded-none text-lg">
+                  {isHeliosingerEnabled ? "SINGING" : "SILENT"}
                 </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-6 pt-6">
               {/* Master Toggle */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between border-b-2 border-border pb-4">
                 <div className="space-y-1">
-                  <Label htmlFor="heliosinger-toggle" className="text-base font-medium">
+                  <Label htmlFor="heliosinger-toggle" className="text-lg font-bold uppercase">
                     Let the Sun Sing
                   </Label>
-                  <p id="heliosinger-description" className="text-sm text-muted-foreground">
+                  <p id="heliosinger-description" className="text-sm text-muted-foreground font-mono">
                     The sun literally sings space weather using vowel sounds and harmonic synthesis
                   </p>
                 </div>
@@ -433,16 +425,17 @@ export default function Dashboard() {
                   data-testid="switch-heliosinger-toggle"
                   aria-label="Enable Heliosinger mode to hear the sun sing space weather"
                   aria-describedby="heliosinger-description"
+                  className="scale-125"
                 />
               </div>
 
               {/* Volume Control */}
-              <div className="space-y-2">
+              <div className="space-y-2 border-b-2 border-border pb-4">
                 <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">
+                  <Label className="text-sm font-bold uppercase">
                     Solar Volume
                   </Label>
-                  <span className="text-sm text-muted-foreground" data-testid="text-ambient-volume">
+                  <span className="text-sm font-mono bg-secondary px-2 py-1" data-testid="text-ambient-volume">
                     {Math.round(ambientVolume * 100)}%
                   </span>
                 </div>
@@ -463,12 +456,12 @@ export default function Dashboard() {
               </div>
 
               {/* Background Mode Toggle */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between border-b-2 border-border pb-4">
                 <div className="space-y-1">
-                  <Label htmlFor="background-mode-toggle" className="text-sm font-medium">
+                  <Label htmlFor="background-mode-toggle" className="text-sm font-bold uppercase">
                     Background Mode
                   </Label>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground font-mono">
                     Continue playing when tab is hidden (like background music)
                   </p>
                 </div>
@@ -488,36 +481,10 @@ export default function Dashboard() {
 
               {/* Current Vowel Display with Mini Chart */}
               {heliosinger.currentData && (
-                <div className="bg-gradient-to-br from-primary/20 via-accent/10 to-primary/20 rounded-xl p-6 border-2 border-primary/30 shadow-lg">
-                  <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-6 items-center">
-                    {/* Mini Vowel Chart */}
-                    <div className="flex justify-center md:justify-start">
-                      <MiniVowelChart
-                        currentVowel={heliosinger.currentData.vowelName}
-                        currentVowelData={{
-                          name: heliosinger.currentData.vowelName,
-                          displayName: heliosinger.currentData.currentVowel.displayName,
-                          openness: heliosinger.currentData.currentVowel.openness,
-                          frontness: heliosinger.currentData.currentVowel.frontness,
-                          brightness: heliosinger.currentData.currentVowel.brightness
-                        }}
-                      />
-                    </div>
-                    
-                    {/* Large Vowel Display */}
-                    <div className="text-center md:text-left space-y-3">
-                      <div className="text-7xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent drop-shadow-lg" data-testid="current-vowel">
-                        "{heliosinger.currentData.currentVowel.displayName}"
-                      </div>
-                      <div className="text-lg font-medium text-muted-foreground" data-testid="vowel-description">
-                        {heliosinger.currentData.vowelDescription}
-                      </div>
-                      <div className="text-base italic font-semibold text-accent bg-accent/10 px-4 py-2 rounded-lg inline-block" data-testid="solar-mood">
-                        {heliosinger.currentData.solarMood}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <SonificationTrainer 
+                  currentData={heliosinger.currentData}
+                  comprehensiveData={comprehensiveData}
+                />
               )}
 
               {/* Status and Information */}
@@ -630,9 +597,9 @@ export default function Dashboard() {
         </section>
 
         {/* Comprehensive Space Weather Display */}
-        <div className="mb-8">
+        {/* <div className="mb-8">
           <ComprehensiveSpaceWeather />
-        </div>
+        </div> */}
 
         {/* Enhanced Visualizations with Change Tracking */}
         <div className="mb-8">
@@ -640,16 +607,16 @@ export default function Dashboard() {
         </div>
 
         {/* Change Tracker */}
-        {comprehensiveData && (
+        {/* {comprehensiveData && (
           <div className="mb-8">
             <ChangeTracker data={comprehensiveData} enabled={true} />
           </div>
-        )}
+        )} */}
 
         {/* Data Source Attribution */}
-        <div className="mb-8">
+        {/* <div className="mb-8">
           <DataSourceAttribution />
-        </div>
+        </div> */}
 
         {/* Notification Settings */}
         {isNotificationSupported() && (
@@ -804,31 +771,17 @@ export default function Dashboard() {
         )}
 
         {/* Space Weather Examples - What You're Listening For */}
-        <section className="mb-8">
+        {/* <section className="mb-8">
           <SpaceWeatherExamples />
-        </section>
+        </section> */}
 
         {/* Educational Guide */}
-        <section className="mb-8">
+        {/* <section className="mb-8">
           <HeliosingerGuide />
-        </section>
-
-        {/* Vowel Chart */}
-        <section className="mb-8">
-          <VowelChart 
-            currentVowel={heliosinger.currentData?.vowelName}
-            currentVowelData={heliosinger.currentData ? {
-              name: heliosinger.currentData.vowelName,
-              displayName: heliosinger.currentData.currentVowel.displayName,
-              openness: heliosinger.currentData.currentVowel.openness,
-              frontness: heliosinger.currentData.currentVowel.frontness,
-              brightness: heliosinger.currentData.currentVowel.brightness
-            } : undefined}
-          />
-        </section>
+        </section> */}
 
         {/* Data Dashboard */}
-        <DataDashboard />
+        {/* <DataDashboard /> */}
 
         {/* System Status */}
         <SystemStatus />

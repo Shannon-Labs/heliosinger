@@ -37,6 +37,7 @@ export function MusicStaff({ chordVoicing, clef = 'treble' }: MusicStaffProps) {
       }
 
       // Create renderer
+      if (!containerRef.current) return;
       const renderer = new Renderer(containerRef.current, Renderer.Backends.SVG);
       renderer.resize(400, 150);
       const ctx = renderer.getContext();
@@ -80,7 +81,7 @@ export function MusicStaff({ chordVoicing, clef = 'treble' }: MusicStaffProps) {
       });
 
       // Create voice and format
-      const voice = new Voice({ num_beats: 4, beat_value: 4 });
+      const voice = new Voice({ numBeats: 4, beatValue: 4 });
       voice.addTickables(notes);
       
       // Format notes to fit on staff

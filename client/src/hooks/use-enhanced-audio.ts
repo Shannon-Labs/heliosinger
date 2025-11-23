@@ -32,7 +32,10 @@ export function useEnhancedAudio(options: UseEnhancedAudioOptions): UseEnhancedA
   // Fetch comprehensive space weather data
   const { data: comprehensiveData, error: dataError } = useQuery<ComprehensiveSpaceWeatherData>({
     queryKey: ['/api/space-weather/comprehensive'],
-    queryFn: () => apiRequest('GET', '/api/space-weather/comprehensive'),
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/space-weather/comprehensive');
+      return (await response.json()) as ComprehensiveSpaceWeatherData;
+    },
     refetchInterval: 60000, // Update every minute
     enabled: enabled, // Only fetch when audio is enabled
   });
@@ -140,7 +143,8 @@ export function useEnhancedAudio(options: UseEnhancedAudioOptions): UseEnhancedA
     
     try {
       // Fetch latest data
-      const data = await apiRequest('GET', '/api/space-weather/comprehensive');
+      const response = await apiRequest('GET', '/api/space-weather/comprehensive');
+      const data = (await response.json()) as ComprehensiveSpaceWeatherData;
       
       // Map to audio
       const audioMapping = mapSpaceWeatherToAudio(data);
@@ -234,7 +238,10 @@ export function useDashboardAudio() {
 export function useAudioPreview() {
   const { data: comprehensiveData } = useQuery<ComprehensiveSpaceWeatherData>({
     queryKey: ['/api/space-weather/comprehensive-preview'],
-    queryFn: () => apiRequest('GET', '/api/space-weather/comprehensive'),
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/space-weather/comprehensive');
+      return (await response.json()) as ComprehensiveSpaceWeatherData;
+    },
     enabled: false, // Don't auto-fetch
   });
 
@@ -246,7 +253,8 @@ export function useAudioPreview() {
   }, [comprehensiveData]);
 
   const previewMapping = useCallback(async () => {
-    const data = await apiRequest('GET', '/api/space-weather/comprehensive');
+    const response = await apiRequest('GET', '/api/space-weather/comprehensive');
+    const data = (await response.json()) as ComprehensiveSpaceWeatherData;
     return mapSpaceWeatherToAudio(data);
   }, []);
 

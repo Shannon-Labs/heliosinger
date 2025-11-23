@@ -5,12 +5,14 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import Dashboard from "@/pages/dashboard-heliosinger";
+import StreamView from "@/pages/stream-view";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
+      <Route path="/stream" component={StreamView} />
       <Route component={NotFound} />
     </Switch>
   );

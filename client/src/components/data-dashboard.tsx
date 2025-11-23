@@ -15,12 +15,17 @@ export function DataDashboard() {
   });
 
   // Fetch system status for connection info
-  const { data: systemStatus } = useQuery({
-    queryKey: ["/api/system/status"]
+  const { data: systemStatus } = useQuery<Array<{ component: string; status: string; details?: string; id?: string; last_update?: string }>>({
+    queryKey: ["/api/system/status"],
+    queryFn: async ({ queryKey }) => {
+      const response = await fetch(queryKey.join("/"));
+      if (!response.ok) throw new Error("Failed to fetch system status");
+      return response.json();
+    }
   });
 
-  const dataStreamStatus = systemStatus?.find(s => s.component === 'data_stream');
-  const networkStatus = systemStatus?.find(s => s.component === 'network');
+  const dataStreamStatus = systemStatus?.find((s: { component: string; status: string }) => s.component === 'data_stream');
+  const networkStatus = systemStatus?.find((s: { component: string; status: string }) => s.component === 'network');
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleString('en-US', {
@@ -33,11 +38,11 @@ export function DataDashboard() {
     });
   };
 
-  const getParameterTrend = (data: any[], parameter: string) => {
+  const getParameterTrend = (data: Array<{ velocity?: number; density?: number; bz?: number }> | undefined, parameter: string) => {
     if (!data || data.length < 2) return 'stable';
     
     const recent = data.slice(-3);
-    const values = recent.map(d => d[parameter]);
+    const values = recent.map((d: { velocity?: number; density?: number; bz?: number }) => d[parameter as keyof typeof d] as number);
     const trend = values[values.length - 1] - values[0];
     
     if (Math.abs(trend) < (values[0] * 0.1)) return 'stable';
@@ -205,7 +210,7 @@ export function DataDashboard() {
                 </div>
                 <div className="text-xs text-muted-foreground font-mono">
                   Range: {historyData && historyData.length > 0 ? 
-                    `${Math.min(...historyData.map(d => d.velocity)).toFixed(0)} - ${Math.max(...historyData.map(d => d.velocity)).toFixed(0)} km/s` 
+                    `${Math.min(...historyData.map((d: { velocity: number }) => d.velocity)).toFixed(0)} - ${Math.max(...historyData.map((d: { velocity: number }) => d.velocity)).toFixed(0)} km/s` 
                     : 'N/A'}
                 </div>
               </div>
@@ -239,7 +244,7 @@ export function DataDashboard() {
                 </div>
                 <div className="text-xs text-muted-foreground font-mono">
                   Range: {historyData && historyData.length > 0 ? 
-                    `${Math.min(...historyData.map(d => d.density)).toFixed(1)} - ${Math.max(...historyData.map(d => d.density)).toFixed(1)} p/cm³` 
+                    `${Math.min(...historyData.map((d: { density: number }) => d.density)).toFixed(1)} - ${Math.max(...historyData.map((d: { density: number }) => d.density)).toFixed(1)} p/cm³` 
                     : 'N/A'}
                 </div>
               </div>
@@ -285,7 +290,7 @@ export function DataDashboard() {
                 </div>
                 <div className="text-xs text-muted-foreground font-mono">
                   Range: {historyData && historyData.length > 0 ? 
-                    `${Math.min(...historyData.map(d => d.bz)).toFixed(1)} - ${Math.max(...historyData.map(d => d.bz)).toFixed(1)} nT` 
+                    `${Math.min(...historyData.map((d: { bz: number }) => d.bz)).toFixed(1)} - ${Math.max(...historyData.map((d: { bz: number }) => d.bz)).toFixed(1)} nT` 
                     : 'N/A'}
                 </div>
               </div>

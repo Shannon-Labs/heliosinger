@@ -87,7 +87,7 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
     refetchInterval: (query) => {
       // Calculate adaptive interval based on current and previous data
       const currentData = query.state.data;
-      const interval = calculateRefetchInterval(currentData, previousDataRef.current);
+      const interval = calculateRefetchInterval(currentData ?? undefined, previousDataRef.current ?? undefined);
       // Update previous data ref for next calculation
       if (currentData) {
         previousDataRef.current = currentData;
@@ -360,7 +360,7 @@ export function useHeliosingerPreview() {
     if (!comprehensiveData) {
       return createDefaultHeliosingerMapping();
     }
-    return mapSpaceWeatherToHeliosinger(comprehensiveData);
+    return mapSpaceWeatherToHeliosinger(comprehensiveData ?? undefined);
   }, [comprehensiveData]);
 
   const previewMapping = useCallback(async () => {

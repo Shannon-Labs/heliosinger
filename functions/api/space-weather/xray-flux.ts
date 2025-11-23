@@ -10,6 +10,16 @@ export async function onRequestOptions(): Promise<Response> {
 
 export async function onRequestGet(): Promise<Response> {
   try {
+    // Helper function to calculate flare class from X-ray flux (W/m²)
+    // NOAA classification: A < 1e-7, B: 1e-7-1e-6, C: 1e-6-1e-5, M: 1e-5-1e-4, X: >= 1e-4
+    const calculateFlareClass = (shortWave: number): string => {
+      if (shortWave >= 1e-4) return 'X';
+      if (shortWave >= 1e-5) return 'M';
+      if (shortWave >= 1e-6) return 'C';
+      if (shortWave >= 1e-7) return 'B';
+      return 'A';
+    };
+
     // Try multiple possible endpoints for X-ray flux
     let xrayData = null;
     let error = null;
@@ -19,8 +29,57 @@ export async function onRequestGet(): Promise<Response> {
       const response = await fetch('https://services.swpc.noaa.gov/json/goes/goes-xrs-report.json');
       if (response.ok) {
         const data = await response.json();
-        if (data && Array.isArray(data) && data.length > 0) {
-          xrayData = data;
+        if (data) {
+          let shortWave = 0;
+          let longWave = 0;
+          let timestamp = new Date().toISOString();
+          let providedFlareClass: string | undefined;
+
+          if (Array.isArray(data) && data.length > 0) {
+            const latest = data[data.length - 1];
+            
+            if (Array.isArray(latest)) {
+              // Array format: [timestamp, short_wave, long_wave, ...]
+              timestamp = latest[0] ? new Date(latest[0]).toISOString() : timestamp;
+              shortWave = parseFloat(latest[1]) || parseFloat(latest[2]) || 0;
+              longWave = parseFloat(latest[2]) || parseFloat(latest[3]) || 0;
+            } else if (typeof latest === 'object') {
+              timestamp = latest.timestamp ? new Date(latest.timestamp).toISOString() : timestamp;
+              shortWave = parseFloat(latest.short_wave) || 
+                         parseFloat(latest['0.05-0.4nm']) || 
+                         parseFloat(latest.xrsa) || 
+                         parseFloat(latest.xrs_short) || 0;
+              longWave = parseFloat(latest.long_wave) || 
+                        parseFloat(latest['0.1-0.8nm']) || 
+                        parseFloat(latest.xrsb) || 
+                        parseFloat(latest.xrs_long) || 0;
+              providedFlareClass = latest.flare_class;
+            }
+          } else if (typeof data === 'object') {
+            timestamp = data.timestamp ? new Date(data.timestamp).toISOString() : timestamp;
+            shortWave = parseFloat(data.short_wave) || 
+                       parseFloat(data['0.05-0.4nm']) || 
+                       parseFloat(data.xrsa) || 
+                       parseFloat(data.xrs_short) || 
+                       parseFloat(data.current) || 0;
+            longWave = parseFloat(data.long_wave) || 
+                      parseFloat(data['0.1-0.8nm']) || 
+                      parseFloat(data.xrsb) || 
+                      parseFloat(data.xrs_long) || 0;
+            providedFlareClass = data.flare_class;
+          }
+
+          const calculatedFlareClass = calculateFlareClass(shortWave);
+          const flareClass = providedFlareClass && ['A', 'B', 'C', 'M', 'X'].includes(providedFlareClass[0]) 
+            ? providedFlareClass 
+            : calculatedFlareClass;
+
+          xrayData = {
+            timestamp,
+            short_wave: shortWave,
+            long_wave: longWave,
+            flare_class: flareClass
+          };
         }
       }
     } catch (e) {
@@ -39,8 +98,16 @@ export async function onRequestGet(): Promise<Response> {
           if (lines.length > 0) {
             const latest = lines[lines.length - 1].trim().split(/\s+/);
             if (latest.length >= 7) {
+              // Parse max_flux which is typically in scientific notation like "1.2e-05"
+              const maxFlux = parseFloat(latest[7]) || 0;
+              const timestamp = `${latest[0]}-${latest[1]}-${latest[2]} ${latest[3].slice(0,2)}:${latest[3].slice(2,4)}:00`;
+              const flareClass = calculateFlareClass(maxFlux);
+              
               xrayData = {
-                timestamp: `${latest[0]}-${latest[1]}-${latest[2]} ${latest[3].slice(0,2)}:${latest[3].slice(2,4)}:00`,
+                timestamp,
+                short_wave: maxFlux,
+                long_wave: 0,
+                flare_class: flareClass,
                 begin: latest[4],
                 current: latest[5],
                 end: latest[6],

@@ -36,8 +36,28 @@ export function MappingAlgorithm() {
   const queryClient = useQueryClient();
 
   // Fetch active mapping configuration
-  const { data: activeMapping, isLoading } = useQuery({
-    queryKey: ["/api/mapping/active"]
+  const { data: activeMapping, isLoading } = useQuery<{
+    id: string;
+    name: string;
+    velocity_min: number;
+    velocity_max: number;
+    midi_note_min: number;
+    midi_note_max: number;
+    density_min: number;
+    density_max: number;
+    decay_time_min: number;
+    decay_time_max: number;
+    bz_detune_cents: number;
+    bz_threshold: number;
+    created_at: string;
+    is_active?: string;
+  }>({
+    queryKey: ["/api/mapping/active"],
+    queryFn: async ({ queryKey }) => {
+      const response = await fetch(queryKey.join("/"));
+      if (!response.ok) throw new Error("Failed to fetch active mapping");
+      return response.json();
+    }
   });
 
   // Test condition mutation

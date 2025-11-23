@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "tsc"
+    "check": "tsc",
+    "stream:launch": "./scripts/helio-stream.sh",
+    "stream:setup": "python3 scripts/obs_setup_helper.py",
+    "stream:health": "python3 scripts/check_stream_health.py",
+    "stream:prevent-sleep": "./scripts/prevent_sleep.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -63,6 +67,7 @@
     "recharts": "^2.15.2",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
+    "three": "^0.169.0",
     "tw-animate-css": "^1.2.5",
     "vaul": "^1.1.2",
     "vexflow": "^5.0.0",
@@ -78,6 +83,7 @@
     "@types/node": "20.16.11",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
+    "@types/three": "^0.181.0",
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",

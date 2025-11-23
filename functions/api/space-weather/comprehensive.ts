@@ -11,7 +11,6 @@ export async function onRequestOptions(): Promise<Response> {
 export async function onRequestGet(): Promise<Response> {
   try {
     // Fetch all data sources in parallel
-    const baseUrl = 'https://heliosinger.pages.dev'; // Use relative paths in production
     const [solarWind, kIndex, xrayFlux, protonFlux, electronFlux, magnetometer] = await Promise.allSettled([
       fetch('https://services.swpc.noaa.gov/products/solar-wind/plasma-2-hour.json').then(r => r.json()),
       fetch('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json').then(r => r.json()),
@@ -76,20 +75,74 @@ export async function onRequestGet(): Promise<Response> {
       };
     }
 
+    // Helper function to calculate flare class from X-ray flux (W/m²)
+    // NOAA classification: A < 1e-7, B: 1e-7-1e-6, C: 1e-6-1e-5, M: 1e-5-1e-4, X: >= 1e-4
+    const calculateFlareClass = (shortWave: number): string => {
+      if (shortWave >= 1e-4) return 'X';
+      if (shortWave >= 1e-5) return 'M';
+      if (shortWave >= 1e-6) return 'C';
+      if (shortWave >= 1e-7) return 'B';
+      return 'A';
+    };
+
     // Process X-ray flux
     let xrayData = null;
     if (xrayFlux.status === 'fulfilled' && xrayFlux.value) {
+      let shortWave = 0;
+      let longWave = 0;
+      let timestamp = new Date().toISOString();
+      let providedFlareClass: string | undefined;
+
       if (Array.isArray(xrayFlux.value) && xrayFlux.value.length > 0) {
+        // Handle array format - could be array of objects or array of arrays
         const latest = xrayFlux.value[xrayFlux.value.length - 1];
-        xrayData = {
-          timestamp: latest.timestamp || new Date().toISOString(),
-          short_wave: latest.short_wave || latest['0.05-0.4nm'] || 0,
-          long_wave: latest.long_wave || latest['0.1-0.8nm'] || 0,
-          flare_class: latest.flare_class || 'A'
-        };
+        
+        if (Array.isArray(latest)) {
+          // Array format: [timestamp, short_wave, long_wave, ...] or similar
+          timestamp = latest[0] ? new Date(latest[0]).toISOString() : timestamp;
+          shortWave = parseFloat(latest[1]) || parseFloat(latest[2]) || 0;
+          longWave = parseFloat(latest[2]) || parseFloat(latest[3]) || 0;
+        } else if (typeof latest === 'object') {
+          // Object format
+          timestamp = latest.timestamp ? new Date(latest.timestamp).toISOString() : timestamp;
+          shortWave = parseFloat(latest.short_wave) || 
+                     parseFloat(latest['0.05-0.4nm']) || 
+                     parseFloat(latest.xrsa) || 
+                     parseFloat(latest.xrs_short) || 0;
+          longWave = parseFloat(latest.long_wave) || 
+                    parseFloat(latest['0.1-0.8nm']) || 
+                    parseFloat(latest.xrsb) || 
+                    parseFloat(latest.xrs_long) || 0;
+          providedFlareClass = latest.flare_class;
+        }
       } else if (typeof xrayFlux.value === 'object') {
-        xrayData = xrayFlux.value;
+        // Single object format
+        const data = xrayFlux.value;
+        timestamp = data.timestamp ? new Date(data.timestamp).toISOString() : timestamp;
+        shortWave = parseFloat(data.short_wave) || 
+                   parseFloat(data['0.05-0.4nm']) || 
+                   parseFloat(data.xrsa) || 
+                   parseFloat(data.xrs_short) || 
+                   parseFloat(data.current) || 0;
+        longWave = parseFloat(data.long_wave) || 
+                  parseFloat(data['0.1-0.8nm']) || 
+                  parseFloat(data.xrsb) || 
+                  parseFloat(data.xrs_long) || 0;
+        providedFlareClass = data.flare_class;
       }
+
+      // Calculate flare class from flux value if not provided or if provided value seems incorrect
+      const calculatedFlareClass = calculateFlareClass(shortWave);
+      const flareClass = providedFlareClass && ['A', 'B', 'C', 'M', 'X'].includes(providedFlareClass[0]) 
+        ? providedFlareClass 
+        : calculatedFlareClass;
+
+      xrayData = {
+        timestamp,
+        short_wave: shortWave,
+        long_wave: longWave,
+        flare_class: flareClass
+      };
     }
 
     // Process proton flux

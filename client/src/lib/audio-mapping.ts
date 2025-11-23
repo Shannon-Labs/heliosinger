@@ -7,6 +7,9 @@ import { midiNoteToFrequency } from "./midi-mapping";
 // ============================================================================
 
 interface EnhancedChordData extends ChordData {
+  // Additional base properties
+  velocity: number; // Solar wind velocity (km/s)
+  
   // Spatial parameters
   stereoSpread: number; // 0-1 (0=mono, 1=full stereo)
   leftGain: number; // 0-1
@@ -417,7 +420,8 @@ export function createDefaultAudioMapping(): EnhancedChordData {
     tremoloDepth: 0.1,
     filterFrequency: 800,
     filterQ: 1,
-    shimmerGain: 0
+    shimmerGain: 0,
+    rumbleGain: 0
   };
 }
 
