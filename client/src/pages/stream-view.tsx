@@ -1,6 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEffect, useState, useRef } from "react";
 import { SolarHologram } from "@/components/SolarHologram";
+import { SonificationTrainer } from "@/components/SonificationTrainer";
 import { EventsTicker } from "@/components/EventsTicker";
 import { BrutalistLogo } from "@/components/BrutalistLogo";
 import { SystemTerminal } from "@/components/SystemTerminal";
@@ -150,12 +151,12 @@ export default function StreamView() {
              {heliosinger.isSinging ? (
                <>
                  <Volume2 className="w-4 h-4 mr-2" />
-                 AUDIO ON
+                 MUTE AUDIO
                </>
              ) : (
                <>
                  <VolumeX className="w-4 h-4 mr-2" />
-                 AUDIO OFF
+                 ENABLE AUDIO
                </>
              )}
            </Button>
@@ -166,9 +167,9 @@ export default function StreamView() {
         </div>
       </div>
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden">
         {/* Left Column: Visuals (8 cols) */}
-        <div className="lg:col-span-8 relative border-r-4 border-primary bg-black flex flex-col overflow-hidden h-full">
+        <div className="lg:col-span-8 relative border-r-4 border-primary bg-black flex flex-col h-full overflow-hidden">
           <EventOverlay current={comprehensiveData} previous={previousComprehensiveDataRef.current} />
           {/* Hologram takes up most space */}
           <div className="flex-1 relative min-h-0">
@@ -193,21 +194,42 @@ export default function StreamView() {
 
         {/* Right Column: Data & Training (4 cols) */}
         <div className="lg:col-span-4 bg-black flex flex-col h-full overflow-hidden border-l-4 border-primary">
-          {/* Header for Log */}
-          <div className="p-4 border-b-2 border-white/20 bg-primary/10">
-            <h3 className="font-black text-primary uppercase tracking-widest">
-              SYSTEM LOG // OPERATIONS
-            </h3>
+          
+          {/* Top 1/3: Educational / Trainer */}
+          <div className="flex-[1] border-b-4 border-primary overflow-y-auto bg-black/90">
+             <div className="p-4 sticky top-0 bg-black/95 backdrop-blur z-10 border-b border-white/10">
+               <h3 className="font-black text-white uppercase tracking-widest flex items-center gap-2">
+                 <span className="w-2 h-2 bg-primary rounded-full" />
+                 Training Module
+               </h3>
+             </div>
+             <div className="p-4 pt-0">
+               {heliosinger.currentData && (
+                  <SonificationTrainer 
+                    currentData={heliosinger.currentData}
+                    comprehensiveData={comprehensiveData}
+                  />
+                )}
+             </div>
           </div>
 
-          {/* System Terminal (Expanded) */}
-          <div className="flex-1 overflow-hidden p-0">
-            <SystemTerminal />
+          {/* Bottom 2/3: System Log */}
+          <div className="flex-[2] flex flex-col min-h-0">
+            <div className="p-2 border-b-2 border-white/20 bg-primary/10 shrink-0">
+              <h3 className="font-black text-primary uppercase tracking-widest text-xs">
+                SYSTEM LOG // OPERATIONS
+              </h3>
+            </div>
+            <div className="flex-1 overflow-hidden relative">
+              <div className="absolute inset-0">
+                <SystemTerminal data={comprehensiveData} />
+              </div>
+            </div>
           </div>
           
           {/* Footer Info */}
-          <div className="border-t-2 border-white/20 p-4 bg-black">
-            <p className="text-xs font-mono text-muted-foreground text-center uppercase">
+          <div className="border-t-2 border-white/20 p-2 bg-black shrink-0">
+            <p className="text-[10px] font-mono text-muted-foreground text-center uppercase">
               Powered by NOAA DSCOVR • Heliosinger Engine v2.0
             </p>
           </div>

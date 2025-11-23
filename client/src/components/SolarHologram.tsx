@@ -176,7 +176,7 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 100);
-    camera.position.set(0, 0, 5.5); // Moved back to give breathing room
+    camera.position.set(0, 0, 6.5); // Zoomed out slightly more
 
     // Lights
     const keyLight = new THREE.PointLight(0xffffff, 2.6, 50);
@@ -257,17 +257,19 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
           vec3 colMid = vec3(0.85, 0.1, 0.1);    // Vibrant Persona Red
           vec3 colHigh = vec3(1.0, 0.95, 0.0);   // Bright Yellow
           
-          // Shift towards "Tension" Palette (Purples/Cyans for dissonance)
-          if (uChordTension > 0.1) {
-             colShadow = mix(colShadow, vec3(0.1, 0.0, 0.2), uChordTension);
-             colMid = mix(colMid, vec3(0.6, 0.0, 0.8), uChordTension); // Red -> Purple
-             colHigh = mix(colHigh, vec3(0.8, 0.9, 1.0), uChordTension); // Yellow -> Cyan/White
-          }
+          // Blend towards "Tension" Palette (Purples/Cyans for dissonance)
+          vec3 tensionColShadow = vec3(0.1, 0.0, 0.2);
+          vec3 tensionColMid = vec3(0.6, 0.0, 0.8); // Red -> Purple
+          vec3 tensionColHigh = vec3(0.8, 0.9, 1.0); // Yellow -> Cyan/White
           
-          // Adjust colors based on Bz (Magnetic field)
-          if (uBz < -5.0) {
-             colMid = mix(colMid, vec3(0.9, 0.0, 0.0), 0.5); // More pure red
-          }
+          colShadow = mix(colShadow, tensionColShadow, uChordTension);
+          colMid = mix(colMid, tensionColMid, uChordTension);
+          colHigh = mix(colHigh, tensionColHigh, uChordTension);
+
+          // Adjust colors based on Bz (Magnetic field) - smooth mix
+          // Southward (negative uBz) -> more pure red
+          // Positive uBz -> no strong effect, keep tension blend
+          colMid = mix(colMid, vec3(0.9, 0.0, 0.0), max(0.0, -uBz / 5.0)); // Blends in for uBz < 0
 
           // 3-Step Cel Shade
           vec3 finalColor;
@@ -333,12 +335,12 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
             uActivity
           );
 
-          // Blend with Bz for magnetic influence (more red for southward, slight blue for northward)
-          vec3 bzColor = mix(baseCoronaColor, vec3(1.0, 0.2, 0.0), max(0.0, -uBz * 0.8)); // Redder for negative Bz
-          bzColor = mix(bzColor, vec3(0.8, 0.9, 1.0), max(0.0, uBz * 0.5)); // Bluer for positive Bz
+          // Smooth Blend with Bz for magnetic influence
+          vec3 bzInfluenceColor = mix(baseCoronaColor, vec3(1.0, 0.2, 0.0), max(0.0, -uBz / 5.0)); // Redder for negative Bz
+          bzInfluenceColor = mix(bzInfluenceColor, vec3(0.8, 0.9, 1.0), max(0.0, uBz / 5.0)); // Bluer for positive Bz
 
-          // Blend with circadian for diurnal shift (e.g., more orange/red during "day", deeper reds during "night")
-          vec3 finalColor = mix(bzColor, vec3(0.8, 0.3, 0.0), 1.0 - uCircadian); // Deeper red for lower circadian
+          // Smooth Blend with circadian for diurnal shift
+          vec3 finalColor = mix(bzInfluenceColor, vec3(0.8, 0.3, 0.0), 1.0 - uCircadian); // Deeper red for lower circadian
 
           gl_FragColor = vec4(finalColor, glow);
         }
@@ -413,8 +415,14 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
     };
 
     const animate = () => {
-      if (!rendererRef.current || !sceneRef.current) return;
+      if (!rendererRef.current || !sceneRef.current || !uniformsRef.current) return; // Added uniformsRef.current check
+      
       uniforms.uTime.value += 0.008 + dynamicsRef.current.windSpeed * 0.6;
+      
+      // Smoothly interpolate uniform values
+      uniformsRef.current.uChordTension.value = THREE.MathUtils.lerp(uniformsRef.current.uChordTension.value, targetChordTensionRef.current, 0.08);
+      uniformsRef.current.uBz.value = THREE.MathUtils.lerp(uniformsRef.current.uBz.value, targetBzRef.current, 0.08);
+      
       updateParticles();
       
       // Auto-rotate the entire group if playing (cinematic effect)
@@ -474,8 +482,12 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
     const isMinor = heliosingerData?.chordQuality?.name?.includes("Minor") ?? false;
     const isDissonant = heliosingerData?.chordQuality?.name?.includes("Dissonant") ?? false;
     const tension = isDissonant ? 1.0 : isMinor ? 0.6 : 0.0;
-    
-    uniformsRef.current.uChordTension.value = tension;
+    targetChordTensionRef.current = tension;
+    uniformsRef.current.uChordTension.value = tension; // Keep immediate for visual debugging, will lerp later
+
+    // Update BZ target as well
+    targetBzRef.current = bzNormalized;
+    uniformsRef.current.uBz.value = bzNormalized; // Keep immediate for now, will lerp later
     
     // Pulse strength from tremolo or Kp
     const pulse = heliosingerData?.tremoloDepth ? heliosingerData.tremoloDepth * 2.0 : 0.0;
@@ -607,7 +619,7 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
         <div className="absolute inset-0 pointer-events-none opacity-5 bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:20px_20px] z-0" />
 
         {/* Stream Overlay: Active Effects (RPG Buffs) */}
-        <div className="absolute top-32 right-6 flex flex-col gap-2 items-end z-10 pointer-events-none">
+        <div className="absolute top-64 right-6 flex flex-col gap-2 items-end z-10 pointer-events-none">
            {heliosingerData?.vibratoDepth && heliosingerData.vibratoDepth > 0 ? (
              <div className="bg-black/80 text-white px-3 py-0.5 skew-x-12 border-r-4 border-white flex items-center gap-2 animate-in slide-in-from-right-4 fade-in">
                <span className="text-[10px] font-black tracking-widest -skew-x-12 text-primary">VIBRATO</span>
