@@ -176,7 +176,7 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(55, width / height, 0.1, 100);
-    camera.position.set(0, 0, 4.5); // Closer camera for bigger sun
+    camera.position.set(0, 0, 5.5); // Moved back to give breathing room
 
     // Lights
     const keyLight = new THREE.PointLight(0xffffff, 2.6, 50);
@@ -700,27 +700,64 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
             </div>
           </div>
 
-          {/* Metric Bars */}
+          {/* Custom Semantic Widgets (Replacing generic bars) */}
           <div className="space-y-4">
-            {mappingRows.map((row) => (
-              <div key={row.label} className="group">
-                <div className="flex items-end justify-between mb-1">
-                  <span className="text-xs font-bold text-primary uppercase tracking-wider">{row.label}</span>
-                  <span className="text-sm font-mono font-bold text-white">{row.value}</span>
+            
+            {/* Audio Core Grid */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Pitch Widget */}
+              <div className="bg-white/5 border-l-4 border-white p-2 -skew-x-6">
+                <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-1 skew-x-6">SONIC BASE</p>
+                <div className="flex items-baseline gap-2 skew-x-6">
+                  <span className="text-2xl font-black text-white font-mono">{heliosingerData?.baseNote ?? "--"}</span>
+                  <span className="text-[10px] text-white/50 font-mono">{(heliosingerData?.frequency ?? 0).toFixed(0)}HZ</span>
                 </div>
-                <div className="h-3 bg-white/10 w-full -skew-x-12 border border-white/10 overflow-hidden relative">
-                   <div 
-                     className="h-full bg-gradient-to-r from-primary to-destructive origin-left transition-all duration-700" 
-                     style={{ width: `${row.amount}%` }} 
-                   />
-                   {/* Striped overlay on bar */}
-                   <div className="absolute inset-0 bg-[repeating-linear-gradient(90deg,transparent,transparent_2px,black_2px,black_3px)] opacity-20" />
-                </div>
-                <p className="text-[10px] text-white/40 mt-1 font-mono uppercase tracking-tight group-hover:text-white/80 transition-colors">
-                  {row.helper}
-                </p>
               </div>
-            ))}
+              
+              {/* Vowel Widget */}
+              <div className="bg-white/5 border-r-4 border-destructive p-2 -skew-x-6 text-right">
+                <p className="text-[10px] font-black text-destructive uppercase tracking-widest mb-1 skew-x-6">FORMANT</p>
+                <div className="skew-x-6">
+                  <span className="text-2xl font-black text-white font-mono">"{vowelName}"</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Harmony Widget */}
+            <div className="bg-white text-black p-3 -skew-x-6 border-l-8 border-black shadow-[4px_4px_0px_rgba(255,255,255,0.2)]">
+               <div className="skew-x-6">
+                 <div className="flex justify-between items-center mb-1">
+                   <span className="text-[10px] font-black tracking-[0.2em] uppercase">CHORD STRUCTURE</span>
+                   <span className="text-[10px] font-bold bg-black text-white px-1">{(heliosingerData?.chordVoicing?.length ?? 0)} TONES</span>
+                 </div>
+                 <div className="text-2xl font-black font-mono leading-none tracking-tight">
+                   {heliosingerData?.chordQuality?.symbol ?? "..."}
+                 </div>
+                 <div className="text-xs font-bold font-mono opacity-70 uppercase truncate">
+                   {heliosingerData?.chordQuality?.name ?? "Scanning..."}
+                 </div>
+               </div>
+            </div>
+
+            {/* Stress/Activity Widget (Bar makes sense here) */}
+            <div className="group">
+                <div className="flex items-end justify-between mb-1">
+                  <span className="text-xs font-bold text-destructive uppercase tracking-wider">GEOMAGNETIC STRESS</span>
+                  <span className="text-sm font-mono font-bold text-white">Kp {stats.kp.toFixed(1)}</span>
+                </div>
+                <div className="h-4 bg-white/10 w-full -skew-x-12 border border-white/10 overflow-hidden relative">
+                   <div 
+                     className="h-full bg-gradient-to-r from-primary via-white to-destructive origin-left transition-all duration-700" 
+                     style={{ width: `${normalize(stats.kp, 0, 9) * 100}%` }} 
+                   />
+                   {/* Hazard stripes */}
+                   <div className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,transparent,transparent_4px,rgba(0,0,0,0.5)_4px,rgba(0,0,0,0.5)_8px)]" />
+                </div>
+                <p className="text-[10px] text-white/40 mt-1 font-mono uppercase tracking-tight">
+                  Planetary K-Index Load
+                </p>
+            </div>
+
           </div>
 
           {/* Director Cues (Compact) */}
