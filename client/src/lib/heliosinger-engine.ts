@@ -554,7 +554,8 @@ class HeliosingerEngine {
         this.modulationLayer.tremoloLfo.start();
         console.log(`Started tremolo LFO at ${this.modulationLayer.tremoloLfo.frequency.value.toFixed(2)}Hz`);
       } catch (error) {
-      console.error(`Failed to start tremolo LFO:`, error);
+        console.error(`Failed to start tremolo LFO:`, error);
+      }
     }
   }
 
@@ -606,7 +607,6 @@ class HeliosingerEngine {
     try { rightOsc.start(); } catch (e) { console.error('Failed to start right binaural osc', e); }
 
     this.binauralLayer = { leftOsc, rightOsc, leftGain, rightGain, leftPan, rightPan };
-  }
   }
   
   /**
