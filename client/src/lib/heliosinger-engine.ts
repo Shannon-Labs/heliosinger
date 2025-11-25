@@ -708,25 +708,31 @@ class HeliosingerEngine {
    */
   public updateSinging(heliosingerData: HeliosingerData): void {
     if (!this.isSinging || !this.audioContext || !this.heliosingerLayer) return;
-    
+
+    // Verify audio context is in a valid state
+    if (this.audioContext.state !== 'running') {
+      console.warn('AudioContext not running during update, state:', this.audioContext.state);
+      return;
+    }
+
     const now = this.audioContext.currentTime;
     const smoothingTime = 0.1; // 100ms smooth transitions
-    
+
     // Update chord tone frequencies and formant filters
     heliosingerData.chordVoicing.forEach((chordTone, toneIndex) => {
       if (toneIndex >= this.heliosingerLayer!.chordToneLayers.length) return;
-      
+
       const toneLayer = this.heliosingerLayer!.chordToneLayers[toneIndex];
-      
+
       // Update chord tone frequency
       toneLayer.osc.frequency.exponentialRampToValueAtTime(
         Math.max(20, chordTone.frequency),
         now + smoothingTime
       );
-      
-      // Update chord tone gain
+
+      // Update chord tone gain (use same multiplier as startSinging: 0.7)
       toneLayer.oscGain.gain.exponentialRampToValueAtTime(
-        Math.max(0.001, chordTone.amplitude * 0.4),
+        Math.max(0.001, chordTone.amplitude * 0.7),
         now + smoothingTime
       );
       
@@ -791,21 +797,24 @@ class HeliosingerEngine {
     );
     
     // Update reverb and delay
+    // Note: exponentialRampToValueAtTime can't ramp to 0, so use minimum of 0.001
     if (this.delayNode && this.delayGain && this.delayFeedbackGain && this.reverbGain) {
-      this.delayNode.delayTime.exponentialRampToValueAtTime(
-        Math.max(0.1, Math.min(1.0, heliosingerData.delayTime)),
+      // delayTime uses linearRamp since it's not a gain value
+      this.delayNode.delayTime.linearRampToValueAtTime(
+        Math.max(0.05, Math.min(1.0, heliosingerData.delayTime)),
         now + smoothingTime
       );
       this.delayGain.gain.exponentialRampToValueAtTime(
-        Math.max(0.1, Math.min(0.4, heliosingerData.delayGain)),
+        Math.max(0.001, Math.min(0.4, heliosingerData.delayGain)),
         now + smoothingTime
       );
+      // Delay feedback can be 0, so use minimum of 0.001 for exponential ramp
       this.delayFeedbackGain.gain.exponentialRampToValueAtTime(
-        Math.max(0, Math.min(0.5, heliosingerData.delayFeedback)),
+        Math.max(0.001, Math.min(0.5, heliosingerData.delayFeedback)),
         now + smoothingTime
       );
       this.reverbGain.gain.exponentialRampToValueAtTime(
-        Math.max(0.05, Math.min(0.5, heliosingerData.reverbRoomSize * 0.3)),
+        Math.max(0.001, Math.min(0.5, heliosingerData.reverbRoomSize * 0.3)),
         now + smoothingTime
       );
     }
@@ -898,57 +907,103 @@ class HeliosingerEngine {
   
   /**
    * Stop the sun from singing
+   * Properly disconnects all audio nodes to prevent memory leaks
    */
   public stopSinging(): void {
     if (!this.isSinging) return;
-    
+
     this.isSinging = false;
-    
-    // Stop Heliosinger layer
+
+    // Stop Heliosinger layer with proper disconnect
     if (this.heliosingerLayer) {
-      // Stop all chord tone oscillators
+      // Stop and disconnect all chord tone oscillators
       this.heliosingerLayer.chordToneLayers.forEach(toneLayer => {
-        try { toneLayer.osc.stop(); } catch (e) {}
+        try {
+          toneLayer.osc.stop();
+          toneLayer.osc.disconnect();
+          toneLayer.oscGain.disconnect();
+          toneLayer.panner.disconnect();
+          toneLayer.formantFilters.forEach(filter => filter.disconnect());
+          toneLayer.formantGains.forEach(gain => gain.disconnect());
+        } catch (e) { /* Node may already be disconnected */ }
       });
-      // Stop harmonic oscillators
-      this.heliosingerLayer.harmonicOscs.forEach(osc => {
-        try { osc.stop(); } catch (e) {}
+      // Stop and disconnect harmonic oscillators
+      this.heliosingerLayer.harmonicOscs.forEach((osc, i) => {
+        try {
+          osc.stop();
+          osc.disconnect();
+          this.heliosingerLayer!.harmonicGains[i]?.disconnect();
+        } catch (e) { /* Node may already be disconnected */ }
       });
+      // Disconnect master panner
+      try { this.heliosingerLayer.masterPanner.disconnect(); } catch (e) {}
       this.heliosingerLayer = null;
     }
-    
-    // Stop modulation layer
+
+    // Stop modulation layer with proper disconnect
     if (this.modulationLayer.vibratoLfo) {
-      try { this.modulationLayer.vibratoLfo.stop(); } catch (e) {}
+      try {
+        this.modulationLayer.vibratoLfo.stop();
+        this.modulationLayer.vibratoLfo.disconnect();
+        this.modulationLayer.vibratoGain?.disconnect();
+      } catch (e) {}
     }
     if (this.modulationLayer.tremoloLfo) {
-      try { this.modulationLayer.tremoloLfo.stop(); } catch (e) {}
+      try {
+        this.modulationLayer.tremoloLfo.stop();
+        this.modulationLayer.tremoloLfo.disconnect();
+        this.modulationLayer.tremoloGain?.disconnect();
+      } catch (e) {}
     }
     this.modulationLayer = {};
-    
-    // Stop texture layer
+
+    // Stop texture layer with proper disconnect
     if (this.textureLayer.windSource) {
-      try { this.textureLayer.windSource.stop(); } catch (e) {}
+      try {
+        this.textureLayer.windSource.stop();
+        this.textureLayer.windSource.disconnect();
+        this.textureLayer.windFilter?.disconnect();
+        this.textureLayer.windGain?.disconnect();
+      } catch (e) {}
     }
     if (this.textureLayer.noiseSource) {
-      try { this.textureLayer.noiseSource.stop(); } catch (e) {}
+      try {
+        this.textureLayer.noiseSource.stop();
+        this.textureLayer.noiseSource.disconnect();
+        this.textureLayer.noiseFilter?.disconnect();
+        this.textureLayer.noiseGain?.disconnect();
+      } catch (e) {}
     }
     if (this.textureLayer.rumbleOsc) {
-      try { this.textureLayer.rumbleOsc.stop(); } catch (e) {}
+      try {
+        this.textureLayer.rumbleOsc.stop();
+        this.textureLayer.rumbleOsc.disconnect();
+        this.textureLayer.rumbleGain?.disconnect();
+      } catch (e) {}
     }
     this.textureLayer = {};
 
-    // Stop binaural layer
+    // Stop binaural layer with proper disconnect
     if (this.binauralLayer.leftOsc) {
-      try { this.binauralLayer.leftOsc.stop(); } catch (e) {}
+      try {
+        this.binauralLayer.leftOsc.stop();
+        this.binauralLayer.leftOsc.disconnect();
+        this.binauralLayer.leftGain?.disconnect();
+        this.binauralLayer.leftPan?.disconnect();
+      } catch (e) {}
     }
     if (this.binauralLayer.rightOsc) {
-      try { this.binauralLayer.rightOsc.stop(); } catch (e) {}
+      try {
+        this.binauralLayer.rightOsc.stop();
+        this.binauralLayer.rightOsc.disconnect();
+        this.binauralLayer.rightGain?.disconnect();
+        this.binauralLayer.rightPan?.disconnect();
+      } catch (e) {}
     }
     this.binauralLayer = {};
-    
+
     this.currentData = null;
-    
+
     console.log('🌞 The sun has stopped singing');
   }
   
