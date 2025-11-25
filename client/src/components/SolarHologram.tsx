@@ -572,114 +572,47 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
   ];
 
   if (mode === "stream") {
+    // Stream mode: Clean visualization canvas - telemetry shown in parent stream-view
     return (
-      <div className="relative w-full h-full min-h-[500px] bg-black overflow-hidden group font-sans selection:bg-primary selection:text-black">
+      <div className="relative w-full h-full min-h-[500px] bg-black overflow-hidden font-sans">
+        {/* 3D Canvas */}
         <div
           ref={mountRef}
-          className="absolute inset-0 bg-black/90"
+          className="absolute inset-0"
           aria-label="3D solar visualization"
         />
-        
-        {/* Cinematic Vignette & Grain */}
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,black_120%)] opacity-80" />
-        
-        {/* Top Left: Solar Telemetry (Persona Style) */}
-        <div className="absolute top-8 left-8 flex flex-col gap-1 items-start z-10 pointer-events-none">
-           <div className="bg-white text-black px-4 py-0.5 -skew-x-12 border-l-8 border-primary shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-1">
-             <span className="block text-lg font-black uppercase tracking-tighter skew-x-12">
-               Solar Telemetry
-             </span>
-           </div>
-           <div className="flex flex-col gap-2">
-             {[
-               { label: "VEL", val: stats.velocity.toFixed(0), unit: "KM/S" },
-               { label: "DEN", val: stats.density.toFixed(1), unit: "P/CM³" },
-               { label: "BZ", val: stats.bz.toFixed(1), unit: "nT", alert: stats.bz < -5 },
-               { label: "KP", val: stats.kp.toFixed(1), unit: "", alert: stats.kp >= 5 }
-             ].map((item) => (
-               <div key={item.label} className={`
-                 flex items-center gap-4 px-4 py-1
-                 ${item.alert ? 'bg-destructive text-white' : 'bg-black/90 text-white border border-white/20'}
-                 -skew-x-12 border-l-4 border-white shadow-[4px_4px_0px_rgba(0,0,0,0.5)]
-               `}>
-                 <span className="text-[10px] font-black tracking-widest skew-x-12 text-primary w-6">{item.label}</span>
-                 <span className="text-xl font-black skew-x-12 font-mono tracking-tighter">{item.val}</span>
-                 {item.unit && <span className="text-[10px] font-bold skew-x-12 opacity-60">{item.unit}</span>}
-               </div>
-             ))}
-           </div>
-        </div>
 
-        {/* Top Right: Audio Synthesis (Persona Style) */}
-        <div className="absolute top-8 right-8 flex flex-col gap-1 items-end z-10 pointer-events-none">
-            <div className="bg-primary text-white px-4 py-0.5 skew-x-12 border-r-8 border-white shadow-[4px_4px_0px_rgba(0,0,0,1)] mb-1">
-             <span className="block text-lg font-black uppercase tracking-tighter -skew-x-12">
-               Audio Synthesis
-             </span>
-           </div>
-           <div className="flex flex-col gap-2 items-end">
-              <div className="bg-black/90 text-white px-6 py-1 skew-x-12 border-r-4 border-primary flex items-baseline gap-4">
-                <span className="text-[10px] font-black tracking-widest -skew-x-12 text-primary">PITCH</span>
-                <span className="text-xl font-black -skew-x-12 font-mono">{heliosingerData?.baseNote ?? "--"}</span>
-              </div>
-              <div className="bg-white/90 text-black px-6 py-1 skew-x-12 border-r-4 border-black flex items-baseline gap-4">
-                <span className="text-[10px] font-black tracking-widest -skew-x-12 text-black/70">CHORD</span>
-                <span className="text-xl font-black -skew-x-12 font-mono">
-                  {heliosingerData?.chordQuality?.symbol ?? "..."}
-                </span>
-              </div>
-              <div className="bg-destructive/90 text-white px-6 py-1 skew-x-12 border-r-4 border-black flex items-baseline gap-4">
-                <span className="text-[10px] font-black tracking-widest -skew-x-12 text-white/70">VOWEL</span>
-                <span className="text-xl font-black -skew-x-12 font-mono uppercase">{vowelName}</span>
-              </div>
-           </div>
-           
-           {/* Data -> Sound Legend */}
-           <div className="mt-4 flex flex-col items-end gap-1 opacity-80">
-             <div className="text-[9px] font-mono uppercase text-white/50 mb-1">Signal Mapping</div>
-             <div className="flex flex-col items-end gap-1 text-[10px] font-bold text-white/80">
-               <div className="flex items-center gap-2">
-                 <span>VELOCITY</span> <span className="text-primary">→</span> <span>BASE PITCH</span>
-               </div>
-               <div className="flex items-center gap-2">
-                 <span>DENSITY</span> <span className="text-primary">→</span> <span>HARMONY</span>
-               </div>
-               <div className="flex items-center gap-2">
-                 <span>Bz / Kp</span> <span className="text-primary">→</span> <span>TEXTURE</span>
-               </div>
-             </div>
-           </div>
-        </div>
+        {/* Cinematic Vignette */}
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_40%,black_110%)] opacity-70" />
 
-        {/* Background Pattern (Halftone/Dots) */}
-        <div className="absolute inset-0 pointer-events-none opacity-5 bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:20px_20px] z-0" />
+        {/* Subtle background pattern */}
+        <div className="absolute inset-0 pointer-events-none opacity-[0.02] bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:32px_32px] z-0" />
 
-        {/* Stream Overlay: Active Effects (RPG Buffs) */}
-        <div className="absolute top-64 right-6 flex flex-col gap-2 items-end z-10 pointer-events-none">
-           {heliosingerData?.vibratoDepth && heliosingerData.vibratoDepth > 0 ? (
-             <div className="bg-black/80 text-white px-3 py-0.5 skew-x-12 border-r-4 border-white flex items-center gap-2 animate-in slide-in-from-right-4 fade-in">
-               <span className="text-[10px] font-black tracking-widest -skew-x-12 text-primary">VIBRATO</span>
-               <span className="text-xs font-bold -skew-x-12 text-white/80">LVL {heliosingerData.vibratoDepth}</span>
-             </div>
-           ) : null}
-           {heliosingerData?.tremoloDepth && heliosingerData.tremoloDepth > 0.1 ? (
-             <div className="bg-black/80 text-white px-3 py-0.5 skew-x-12 border-r-4 border-destructive flex items-center gap-2 animate-in slide-in-from-right-4 fade-in delay-75">
-               <span className="text-[10px] font-black tracking-widest -skew-x-12 text-destructive">TREMOLO</span>
-               <span className="text-xs font-bold -skew-x-12 text-white/80">{(heliosingerData.tremoloRate).toFixed(1)}HZ</span>
-             </div>
-           ) : null}
-           {heliosingerData?.reverbRoomSize && heliosingerData.reverbRoomSize > 0.4 ? (
-             <div className="bg-black/80 text-white px-3 py-0.5 skew-x-12 border-r-4 border-white flex items-center gap-2 animate-in slide-in-from-right-4 fade-in delay-100">
-               <span className="text-[10px] font-black tracking-widest -skew-x-12 text-white/70">REVERB</span>
-               <span className="text-xs font-bold -skew-x-12 text-white/80">{(heliosingerData.reverbRoomSize * 100).toFixed(0)}%</span>
-             </div>
-           ) : null}
-           {heliosingerData?.binauralMix && heliosingerData.binauralMix > 0.05 ? (
-             <div className="bg-white/90 text-black px-3 py-0.5 skew-x-12 border-r-4 border-black flex items-center gap-2 animate-in slide-in-from-right-4 fade-in delay-150">
-               <span className="text-[10px] font-black tracking-widest -skew-x-12 text-black/70">BINAURAL</span>
-               <span className="text-xs font-bold -skew-x-12">ACTIVE</span>
-             </div>
-           ) : null}
+        {/* Active Audio Effects - minimal, positioned to not overlap with educational content */}
+        <div className="absolute top-4 right-4 flex gap-1 items-center z-10 pointer-events-none">
+          {heliosingerData?.vibratoDepth && heliosingerData.vibratoDepth > 0 && (
+            <div className="bg-black/70 border border-primary/30 px-2 py-0.5 flex items-center gap-1.5 animate-in fade-in">
+              <span className="text-[8px] font-black text-primary tracking-wider">VIBRATO</span>
+              <span className="text-[10px] font-bold text-white/60">LVL {heliosingerData.vibratoDepth}</span>
+            </div>
+          )}
+          {heliosingerData?.tremoloDepth && heliosingerData.tremoloDepth > 0.1 && (
+            <div className="bg-black/70 border border-destructive/30 px-2 py-0.5 flex items-center gap-1.5 animate-in fade-in">
+              <span className="text-[8px] font-black text-destructive tracking-wider">TREMOLO</span>
+              <span className="text-[10px] font-bold text-white/60">{(heliosingerData.tremoloRate).toFixed(1)}Hz</span>
+            </div>
+          )}
+          {heliosingerData?.reverbRoomSize && heliosingerData.reverbRoomSize > 0.5 && (
+            <div className="bg-black/70 border border-white/20 px-2 py-0.5 flex items-center gap-1.5 animate-in fade-in">
+              <span className="text-[8px] font-black text-white/50 tracking-wider">REVERB</span>
+              <span className="text-[10px] font-bold text-white/60">{(heliosingerData.reverbRoomSize * 100).toFixed(0)}%</span>
+            </div>
+          )}
+          {heliosingerData?.binauralMix && heliosingerData.binauralMix > 0.05 && (
+            <div className="bg-white/90 text-black px-2 py-0.5 flex items-center gap-1 animate-in fade-in">
+              <span className="text-[8px] font-black tracking-wider">BINAURAL</span>
+            </div>
+          )}
         </div>
       </div>
     );

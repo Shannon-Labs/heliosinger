@@ -3,15 +3,15 @@ import { useEffect, useState, useRef } from "react";
 import { SolarHologram } from "@/components/SolarHologram";
 import { BrutalistLogo } from "@/components/BrutalistLogo";
 import { SystemTerminal } from "@/components/SystemTerminal";
-import { EventsTicker } from "@/components/EventsTicker";
 import { BreakingNewsBanner } from "@/components/stream-enhancements/BreakingNewsBanner";
 import { StreamIntro } from "@/components/stream-enhancements/StreamIntro";
 import { EventOverlay } from "@/components/stream-enhancements/EventOverlay";
+import { EducationalInsight } from "@/components/stream-enhancements/EducationalInsight";
 import { apiRequest } from "@/lib/queryClient";
 import { useHeliosinger } from "@/hooks/use-heliosinger";
+import { useEducationalNarrator } from "@/hooks/use-educational-narrator";
 import { calculateRefetchInterval } from "@/lib/adaptive-refetch";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Volume2, VolumeX } from "lucide-react";
 import type { ComprehensiveSpaceWeatherData } from "@shared/schema";
 
@@ -19,16 +19,44 @@ export default function StreamView() {
   // Show intro on first load
   const [showIntro, setShowIntro] = useState(true);
   const [introComplete, setIntroComplete] = useState(false);
-  const [showTicker, setShowTicker] = useState(true);
 
   // Heliosinger hook - auto-enabled
   const [isHeliosingerEnabled, setIsHeliosingerEnabled] = useState(true);
-  
+
   const heliosinger = useHeliosinger({
     enabled: isHeliosingerEnabled,
     volume: 0.6, // Louder for stream
     backgroundMode: true, // Always background mode for stream
     onError: (error) => console.error("Stream Audio Error:", error)
+  });
+
+  // Data fetching logic
+  const [updateFrequency, setUpdateFrequency] = useState(60000);
+  const previousComprehensiveDataRef = useRef<ComprehensiveSpaceWeatherData | undefined>(undefined);
+
+  const { data: comprehensiveData } = useQuery<ComprehensiveSpaceWeatherData>({
+    queryKey: ["/api/space-weather/comprehensive"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/space-weather/comprehensive");
+      return (await response.json()) as ComprehensiveSpaceWeatherData;
+    },
+    refetchInterval: (query) => {
+      const currentData = query.state.data;
+      const interval = calculateRefetchInterval(currentData, previousComprehensiveDataRef.current);
+      setUpdateFrequency(interval);
+      if (currentData) {
+        previousComprehensiveDataRef.current = currentData;
+      }
+      return interval;
+    },
+  });
+
+  // Educational Narrator - provides contextual teaching moments
+  const narrator = useEducationalNarrator({
+    currentData: comprehensiveData,
+    previousData: previousComprehensiveDataRef.current,
+    heliosingerData: heliosinger.currentData,
+    enabled: introComplete, // Only start narrating after intro
   });
 
   // Auto-start audio on mount (might need interaction policy check, but for stream setup usually user interacts once)
@@ -73,27 +101,6 @@ export default function StreamView() {
     }
   };
 
-  // Data fetching logic (same as dashboard)
-  const [updateFrequency, setUpdateFrequency] = useState(60000);
-  const previousComprehensiveDataRef = useRef<ComprehensiveSpaceWeatherData | undefined>(undefined);
-
-  const { data: comprehensiveData } = useQuery<ComprehensiveSpaceWeatherData>({
-    queryKey: ["/api/space-weather/comprehensive"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/space-weather/comprehensive");
-      return (await response.json()) as ComprehensiveSpaceWeatherData;
-    },
-    refetchInterval: (query) => {
-      const currentData = query.state.data;
-      const interval = calculateRefetchInterval(currentData, previousComprehensiveDataRef.current);
-      setUpdateFrequency(interval);
-      if (currentData) {
-        previousComprehensiveDataRef.current = currentData;
-      }
-      return interval;
-    },
-  });
-
   const fetchDataMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/solar-wind/fetch"),
     onSuccess: () => {
@@ -119,32 +126,6 @@ export default function StreamView() {
   const kIndex = comprehensiveData?.k_index?.kp ?? null;
   const currentVowel = heliosinger.currentData?.currentVowel;
   const chordQuality = heliosinger.currentData?.chordQuality;
-
-  // Auto-hide ticker after each data refresh cycle
-  useEffect(() => {
-    if (!comprehensiveData) return;
-    setShowTicker(true);
-    const timer = setTimeout(() => setShowTicker(false), 12000);
-    return () => clearTimeout(timer);
-  }, [comprehensiveData]);
-
-  const vowelCue = (() => {
-    if (!currentVowel || !solarWind) return "Training mode listening for live changes.";
-    switch (currentVowel.displayName) {
-      case "I":
-        return "Fast, hot wind or southward Bz pushes the voice bright (\"ee\").";
-      case "E":
-        return "Moderate activity leans into a focused \"eh\" timbre.";
-      case "A":
-        return "Open plasma and calm field widen the vowel toward \"ah\".";
-      case "O":
-        return "Northward or rising density rounds toward \"oh\".";
-      case "U":
-        return "Slow or dense wind dampens into \"oo\" darkness.";
-      default:
-        return "The sun shifts vowels as data flexes.";
-    }
-  })();
 
   return (
     <div className="min-h-screen bg-black text-foreground overflow-hidden flex flex-col">
@@ -235,6 +216,7 @@ export default function StreamView() {
             </div>
           </div>
 
+          {/* Audio synthesis row - simplified */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="bg-black/70 border-2 border-white px-4 py-3 -skew-x-6 shadow-[6px_6px_0px_rgba(0,0,0,0.5)]">
               <div className="skew-x-6 flex items-center justify-between">
@@ -251,18 +233,16 @@ export default function StreamView() {
             <div className="bg-white text-black border-2 border-black px-4 py-3 -skew-x-6 shadow-[6px_6px_0px_rgba(0,0,0,0.5)]">
               <div className="skew-x-6 flex items-center justify-between">
                 <div className="space-y-1">
-                  <p className="text-[11px] uppercase text-black/70 font-bold">Chord // Training</p>
+                  <p className="text-[11px] uppercase text-black/70 font-bold">Chord</p>
                   <p className="text-xl font-black tracking-tight">
                     {chordQuality?.symbol ?? "..."} {chordQuality?.name ? `(${chordQuality.name})` : ""}
                   </p>
                 </div>
-                <Badge variant="secondary" className="skew-x-0 bg-black text-white border-2 border-black rounded-none">
-                  Training
-                </Badge>
+                <div className="text-right">
+                  <p className="text-[11px] uppercase text-black/50 font-bold">Vowel</p>
+                  <p className="text-lg font-black">{currentVowel?.displayName ?? "—"}</p>
+                </div>
               </div>
-              <p className="skew-x-6 text-[11px] uppercase text-black/70 mt-2 truncate">
-                Vowel {currentVowel?.displayName ?? "—"} · {vowelCue}
-              </p>
             </div>
 
             <div className="bg-primary text-black border-2 border-black px-4 py-3 -skew-x-6 shadow-[6px_6px_0px_rgba(0,0,0,0.5)]">
@@ -281,9 +261,12 @@ export default function StreamView() {
           </div>
         </div>
 
-        {/* Middle band: open canvas with hologram + overlays */}
+        {/* Middle band: visualization canvas + educational overlays */}
         <div className="flex-1 relative bg-black border-y-4 border-primary overflow-hidden">
+          {/* Event alerts (storms, surges, etc.) */}
           <EventOverlay current={comprehensiveData} previous={previousComprehensiveDataRef.current} />
+
+          {/* 3D Solar Hologram */}
           <div className="absolute inset-0">
             <SolarHologram
               data={comprehensiveData}
@@ -292,10 +275,15 @@ export default function StreamView() {
               mode="stream"
             />
           </div>
+
+          {/* Educational Narrator - contextual insights */}
+          {introComplete && (
+            <EducationalInsight narratorState={narrator.state} />
+          )}
         </div>
 
-        {/* Bottom band ~1/5: system log */}
-        <div className="basis-[22vh] min-h-[200px] border-t-4 border-primary bg-black flex flex-col">
+        {/* Bottom band: system log */}
+        <div className="basis-[18vh] min-h-[160px] border-t-4 border-primary bg-black flex flex-col">
           <div className="p-3 border-b-2 border-white/20 bg-primary/20 flex items-center justify-between">
             <h3 className="font-black text-primary uppercase tracking-widest text-xs">
               System Log // Operations
@@ -305,16 +293,9 @@ export default function StreamView() {
             </span>
           </div>
 
-          {/* Chyron atop the log */}
-          {comprehensiveData && showTicker && (
-            <div className="border-b-2 border-white/20 bg-black/80 px-3 py-2">
-              <EventsTicker currentData={comprehensiveData} previousData={previousComprehensiveDataRef.current} />
-            </div>
-          )}
-
           <div className="flex-1 overflow-hidden relative">
             <div className="absolute inset-0">
-              <SystemTerminal data={comprehensiveData} />
+              <SystemTerminal data={comprehensiveData} heliosingerData={heliosinger.currentData} />
             </div>
           </div>
         </div>
