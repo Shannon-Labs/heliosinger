@@ -212,7 +212,10 @@ export function getSolarMoodDescription(
     'extreme': ['roars', 'thunders', 'blazes', 'crashes'],
     'super_extreme': ['screams', 'shatters', 'erupts', 'howls']
   };
-  const verb = verbs[condition][Math.floor(Math.random() * verbs[condition].length)];
+  
+  // Use time-based index to cycle verbs slowly (every minute) instead of random flickering
+  const timeIndex = Math.floor(Date.now() / 60000);
+  const verb = verbs[condition][timeIndex % verbs[condition].length];
 
   // 2. Sonic Quality (based on vowel & condition)
   const qualities = {
@@ -248,16 +251,16 @@ export function getSolarMoodDescription(
     if (dominant.score > 0.4) { // Only add cause if it's significant
       switch (dominant.name) {
         case 'velocity':
-          cause = velocity > 600 ? "driven by fast wind" : "as plasma streams accelerate";
+          cause = "driven by fast solar wind";
           break;
         case 'density':
-          cause = density > 15 ? "as density thickens" : "under heavy particle load";
+          cause = "under heavy particle load";
           break;
         case 'bz':
-          cause = bz < 0 ? "due to southward magnetic tilt" : "amidst magnetic turbulence";
+          cause = "amidst magnetic turbulence";
           break;
         case 'kp':
-          cause = kp > 5 ? "during geomagnetic storm" : "as the field unsettles";
+          cause = "during geomagnetic storm";
           break;
       }
     } else {

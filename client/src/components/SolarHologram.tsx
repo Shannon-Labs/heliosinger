@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -43,7 +43,7 @@ type SunUniforms = {
  * inputs to a 3D sun, corona, and particle stream so users can *see* the same
  * signals they're hearing from Heliosinger.
  */
-export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }: SolarHologramProps) {
+export const SolarHologram = memo(function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }: SolarHologramProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -677,7 +677,7 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
           {/* Status Header */}
           <div className="border-l-4 border-primary pl-4 py-1">
             <p className="text-xs font-black uppercase tracking-widest text-white/50 mb-1">System Mood</p>
-            <div className="text-2xl font-black text-white uppercase leading-none tracking-tight">
+            <div className="text-lg font-black text-white uppercase leading-none tracking-tight">
                {heliosingerData?.solarMood ?? "CALIBRATING..."}
             </div>
           </div>
@@ -760,4 +760,4 @@ export function SolarHologram({ data, heliosingerData, isPlaying, mode = "app" }
       </div>
     </div>
   );
-}
+});

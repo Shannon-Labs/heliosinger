@@ -1,12 +1,13 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useEffect, useState, useRef } from "react";
-import { SolarHologram } from "@/components/SolarHologram";
+import { useEffect, useState, useRef, lazy, Suspense } from "react";
 import { BrutalistLogo } from "@/components/BrutalistLogo";
 import { SystemTerminal } from "@/components/SystemTerminal";
-import { BreakingNewsBanner } from "@/components/stream-enhancements/BreakingNewsBanner";
-import { StreamIntro } from "@/components/stream-enhancements/StreamIntro";
 import { EventOverlay } from "@/components/stream-enhancements/EventOverlay";
-import { EducationalInsight } from "@/components/stream-enhancements/EducationalInsight";
+
+const SolarHologram = lazy(() => import("@/components/SolarHologram").then(m => ({ default: m.SolarHologram })));
+const BreakingNewsBanner = lazy(() => import("@/components/stream-enhancements/BreakingNewsBanner").then(m => ({ default: m.BreakingNewsBanner })));
+const StreamIntro = lazy(() => import("@/components/stream-enhancements/StreamIntro").then(m => ({ default: m.StreamIntro })));
+const EducationalInsight = lazy(() => import("@/components/stream-enhancements/EducationalInsight").then(m => ({ default: m.EducationalInsight })));
 import { apiRequest } from "@/lib/queryClient";
 import { useHeliosinger } from "@/hooks/use-heliosinger";
 import { useEducationalNarrator } from "@/hooks/use-educational-narrator";
@@ -131,11 +132,17 @@ export default function StreamView() {
     <div className="min-h-screen bg-black text-foreground overflow-hidden flex flex-col">
       {/* Stream Intro Animation */}
       {showIntro && (
-        <StreamIntro onComplete={handleIntroComplete} />
+        <Suspense fallback={null}>
+          <StreamIntro onComplete={handleIntroComplete} />
+        </Suspense>
       )}
 
       {/* Breaking News Banner for major events */}
-      {introComplete && <BreakingNewsBanner data={comprehensiveData} />}
+      {introComplete && (
+        <Suspense fallback={null}>
+          <BreakingNewsBanner data={comprehensiveData} />
+        </Suspense>
+      )}
 
       <div className="flex-1 flex flex-col">
         {/* Top band ~1/5: logo + telemetry + audio/training info */}
@@ -268,17 +275,21 @@ export default function StreamView() {
 
           {/* 3D Solar Hologram */}
           <div className="absolute inset-0">
-            <SolarHologram
-              data={comprehensiveData}
-              heliosingerData={heliosinger.currentData}
-              isPlaying={true}
-              mode="stream"
-            />
+            <Suspense fallback={<div className="w-full h-full bg-black" />}>
+              <SolarHologram
+                data={comprehensiveData}
+                heliosingerData={heliosinger.currentData}
+                isPlaying={true}
+                mode="stream"
+              />
+            </Suspense>
           </div>
 
           {/* Educational Narrator - contextual insights */}
           {introComplete && (
-            <EducationalInsight narratorState={narrator.state} />
+            <Suspense fallback={null}>
+              <EducationalInsight narratorState={narrator.state} />
+            </Suspense>
           )}
         </div>
 

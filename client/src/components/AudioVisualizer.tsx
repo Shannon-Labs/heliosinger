@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { memo, useEffect, useRef } from "react";
 import type { HeliosingerData } from "@/lib/heliosinger-mapping";
 
 interface AudioVisualizerProps {
@@ -17,7 +17,7 @@ interface Particle {
   hue: number;
 }
 
-export function AudioVisualizer({ isPlaying, data }: AudioVisualizerProps) {
+export const AudioVisualizer = memo(function AudioVisualizer({ isPlaying, data }: AudioVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>();
   const particlesRef = useRef<Particle[]>([]);
@@ -272,7 +272,7 @@ export function AudioVisualizer({ isPlaying, data }: AudioVisualizerProps) {
       <canvas ref={canvasRef} className="w-full h-full" />
     </div>
   );
-}
+});
 
 function createParticle(width: number, height: number, data?: HeliosingerData | null): Particle {
   const velocity = data?.velocity || 350;

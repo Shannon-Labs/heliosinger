@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,8 +13,9 @@ import { EventsTicker } from "@/components/EventsTicker";
 import { MobilePlayer } from "@/components/MobilePlayer";
 import { MiniVowelChart } from "@/components/MiniVowelChart";
 import { BrutalistLogo } from "@/components/BrutalistLogo";
-import { SolarHologram } from "@/components/SolarHologram";
 import { SonificationTrainer } from "@/components/SonificationTrainer";
+
+const SolarHologram = lazy(() => import("@/components/SolarHologram").then(m => ({ default: m.SolarHologram })));
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getAmbientSettings, saveAmbientSettings } from "@/lib/localStorage";
@@ -380,11 +381,13 @@ export default function Dashboard() {
 
         {/* Data-driven 3D solar hologram */}
         <div className="mb-10">
-          <SolarHologram
-            data={comprehensiveData}
-            heliosingerData={heliosinger.currentData}
-            isPlaying={isHeliosingerEnabled && heliosinger.isSinging}
-          />
+          <Suspense fallback={<div className="w-full h-[320px] bg-black animate-pulse flex items-center justify-center"><span className="text-primary/50 font-mono">Loading visualization...</span></div>}>
+            <SolarHologram
+              data={comprehensiveData}
+              heliosingerData={heliosinger.currentData}
+              isPlaying={isHeliosingerEnabled && heliosinger.isSinging}
+            />
+          </Suspense>
         </div>
 
 
