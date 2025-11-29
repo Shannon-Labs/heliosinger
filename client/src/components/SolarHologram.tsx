@@ -582,8 +582,7 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
           aria-label="3D solar visualization"
         />
 
-        {/* Cinematic Vignette */}
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_40%,black_110%)] opacity-70" />
+        {/* Removed dark vignette for better visibility */}
 
         {/* Subtle background pattern */}
         <div className="absolute inset-0 pointer-events-none opacity-[0.02] bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:32px_32px] z-0" />

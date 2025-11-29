@@ -1,33 +1,23 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEffect, useState, useRef, lazy, Suspense } from "react";
 import { BrutalistLogo } from "@/components/BrutalistLogo";
-import { SystemTerminal } from "@/components/SystemTerminal";
-import { EventOverlay } from "@/components/stream-enhancements/EventOverlay";
 
 const SolarHologram = lazy(() => import("@/components/SolarHologram").then(m => ({ default: m.SolarHologram })));
-const BreakingNewsBanner = lazy(() => import("@/components/stream-enhancements/BreakingNewsBanner").then(m => ({ default: m.BreakingNewsBanner })));
-const StreamIntro = lazy(() => import("@/components/stream-enhancements/StreamIntro").then(m => ({ default: m.StreamIntro })));
-const EducationalInsight = lazy(() => import("@/components/stream-enhancements/EducationalInsight").then(m => ({ default: m.EducationalInsight })));
 import { apiRequest } from "@/lib/queryClient";
 import { useHeliosinger } from "@/hooks/use-heliosinger";
-import { useEducationalNarrator } from "@/hooks/use-educational-narrator";
 import { calculateRefetchInterval } from "@/lib/adaptive-refetch";
 import { Button } from "@/components/ui/button";
 import { Volume2, VolumeX } from "lucide-react";
 import type { ComprehensiveSpaceWeatherData } from "@shared/schema";
 
 export default function StreamView() {
-  // Show intro on first load
-  const [showIntro, setShowIntro] = useState(true);
-  const [introComplete, setIntroComplete] = useState(false);
-
   // Heliosinger hook - auto-enabled
   const [isHeliosingerEnabled, setIsHeliosingerEnabled] = useState(true);
 
   const heliosinger = useHeliosinger({
     enabled: isHeliosingerEnabled,
-    volume: 0.6, // Louder for stream
-    backgroundMode: true, // Always background mode for stream
+    volume: 0.4, // Aligned closer to dashboard (0.3) but slightly audible for stream
+    backgroundMode: true,
     onError: (error) => console.error("Stream Audio Error:", error)
   });
 
@@ -52,15 +42,7 @@ export default function StreamView() {
     },
   });
 
-  // Educational Narrator - provides contextual teaching moments
-  const narrator = useEducationalNarrator({
-    currentData: comprehensiveData,
-    previousData: previousComprehensiveDataRef.current,
-    heliosingerData: heliosinger.currentData,
-    enabled: introComplete, // Only start narrating after intro
-  });
-
-  // Auto-start audio on mount (might need interaction policy check, but for stream setup usually user interacts once)
+  // Auto-start audio on mount
   useEffect(() => {
     const startAudio = async () => {
       try {
@@ -73,10 +55,7 @@ export default function StreamView() {
       }
     };
     
-    // Only start audio after intro completes
-    if (introComplete) {
-      startAudio();
-    }
+    startAudio();
     
     // Add click listener to body to ensure unlock
     const unlockHandler = () => {
@@ -86,7 +65,7 @@ export default function StreamView() {
     document.addEventListener('click', unlockHandler);
     
     return () => document.removeEventListener('click', unlockHandler);
-  }, [introComplete, heliosinger]);
+  }, [heliosinger]);
 
   // Handle manual audio start
   const toggleAudio = async () => {
@@ -117,12 +96,6 @@ export default function StreamView() {
     return () => clearInterval(interval);
   }, [updateFrequency]);
 
-  // Handle intro completion
-  const handleIntroComplete = () => {
-    setIntroComplete(true);
-    setShowIntro(false);
-  };
-
   const solarWind = comprehensiveData?.solar_wind ?? null;
   const kIndex = comprehensiveData?.k_index?.kp ?? null;
   const currentVowel = heliosinger.currentData?.currentVowel;
@@ -130,58 +103,44 @@ export default function StreamView() {
 
   return (
     <div className="min-h-screen bg-black text-foreground overflow-hidden flex flex-col">
-      {/* Stream Intro Animation */}
-      {showIntro && (
-        <Suspense fallback={null}>
-          <StreamIntro onComplete={handleIntroComplete} />
-        </Suspense>
-      )}
-
-      {/* Breaking News Banner for major events */}
-      {introComplete && (
-        <Suspense fallback={null}>
-          <BreakingNewsBanner data={comprehensiveData} />
-        </Suspense>
-      )}
-
       <div className="flex-1 flex flex-col">
-        {/* Top band ~1/5: logo + telemetry + audio/training info */}
-        <div className="p-4 md:p-6 border-b-4 border-primary bg-black relative basis-[22vh] min-h-[220px] flex flex-col gap-4">
+        {/* Top band: Telemetry & Controls */}
+        <div className="p-4 border-b-4 border-primary bg-black relative flex flex-col gap-4 z-20 shadow-xl">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <BrutalistLogo className="h-12 w-auto" />
+              <BrutalistLogo className="h-10 w-auto" />
               <div className="flex flex-col">
-                <span className="text-xl md:text-2xl font-black uppercase tracking-tighter text-white leading-tight">
-                  Solar Telemetry + Audio Synthesis
+                <span className="text-lg font-black uppercase tracking-tighter text-white leading-tight">
+                  Solar Telemetry
                 </span>
-                <span className="text-xs md:text-sm font-mono text-primary uppercase tracking-widest">
-                  Live stream // NOAA DSCOVR feed
+                <span className="text-xs font-mono text-primary uppercase tracking-widest">
+                  Stream Mode
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-3">
               <div 
                 key={comprehensiveData?.timestamp || 'live'}
-                className="hidden md:flex items-center gap-2 px-3 py-2 bg-destructive text-white font-bold uppercase border-2 border-white animate-in fade-in zoom-in duration-500"
+                className="hidden md:flex items-center gap-2 px-3 py-1 bg-destructive text-white font-bold uppercase border border-white text-xs"
               >
-                <div className="w-3 h-3 bg-white rounded-full animate-pulse" />
+                <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
                 Live
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                className="h-10 px-4 border-2 border-white bg-black hover:bg-white hover:text-black font-black tracking-widest uppercase transition-colors"
+                className="h-9 px-4 border border-white bg-black hover:bg-white hover:text-black font-bold tracking-wider uppercase transition-colors text-xs"
                 onClick={toggleAudio}
               >
                 {heliosinger.isSinging ? (
                   <>
-                    <Volume2 className="w-4 h-4 mr-2" />
-                    MUTE AUDIO
+                    <Volume2 className="w-3 h-3 mr-2" />
+                    MUTE
                   </>
                 ) : (
                   <>
-                    <VolumeX className="w-4 h-4 mr-2" />
-                    ENABLE AUDIO
+                    <VolumeX className="w-3 h-3 mr-2" />
+                    ENABLE
                   </>
                 )}
               </Button>
@@ -189,90 +148,43 @@ export default function StreamView() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-black/70 border-2 border-primary px-3 py-2 -skew-x-6 shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
-              <div className="skew-x-6 flex items-center justify-between text-xs uppercase font-black text-primary">
+            <div className="bg-black/70 border border-primary px-3 py-2">
+              <div className="flex items-center justify-between text-xs uppercase font-black text-primary">
                 Vel
-                <span className="text-white text-lg">
-                  {solarWind ? `${solarWind.velocity.toFixed(0)} km/s` : "--"}
+                <span className="text-white text-base ml-2">
+                  {solarWind ? `${solarWind.velocity.toFixed(0)}` : "--"} <span className="text-[10px] opacity-50">km/s</span>
                 </span>
               </div>
             </div>
-            <div className="bg-white text-black border-2 border-black px-3 py-2 -skew-x-6 shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
-              <div className="skew-x-6 flex items-center justify-between text-xs uppercase font-black">
+            <div className="bg-white text-black border border-black px-3 py-2">
+              <div className="flex items-center justify-between text-xs uppercase font-black">
                 Density
-                <span className="text-lg">
-                  {solarWind ? `${solarWind.density.toFixed(1)} p/cc` : "--"}
+                <span className="text-base ml-2">
+                  {solarWind ? `${solarWind.density.toFixed(1)}` : "--"} <span className="text-[10px] opacity-50">p/cc</span>
                 </span>
               </div>
             </div>
-            <div className="bg-destructive text-white border-2 border-black px-3 py-2 -skew-x-6 shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
-              <div className="skew-x-6 flex items-center justify-between text-xs uppercase font-black">
+            <div className="bg-destructive text-white border border-black px-3 py-2">
+              <div className="flex items-center justify-between text-xs uppercase font-black">
                 Bz
-                <span className="text-lg">
-                  {solarWind ? `${solarWind.bz.toFixed(1)} nT` : "--"}
+                <span className="text-base ml-2">
+                  {solarWind ? `${solarWind.bz.toFixed(1)}` : "--"} <span className="text-[10px] opacity-50">nT</span>
                 </span>
               </div>
             </div>
-            <div className="bg-primary text-black border-2 border-black px-3 py-2 -skew-x-6 shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
-              <div className="skew-x-6 flex items-center justify-between text-xs uppercase font-black">
+            <div className="bg-primary text-black border border-black px-3 py-2">
+              <div className="flex items-center justify-between text-xs uppercase font-black">
                 Kp
-                <span className="text-lg">
+                <span className="text-base ml-2">
                   {kIndex !== null && kIndex !== undefined ? kIndex.toFixed(1) : "--"}
                 </span>
               </div>
             </div>
           </div>
-
-          {/* Audio synthesis row - simplified */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="bg-black/70 border-2 border-white px-4 py-3 -skew-x-6 shadow-[6px_6px_0px_rgba(0,0,0,0.5)]">
-              <div className="skew-x-6 flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-[11px] uppercase text-white/70 font-bold">Pitch // Base</p>
-                  <p className="text-xl font-black text-white tracking-tight">{heliosinger.currentData?.baseNote ?? "--"}</p>
-                </div>
-                <div className="text-right text-xs text-white/60 font-mono">
-                  {heliosinger.currentData ? `${heliosinger.currentData.frequency.toFixed(0)} Hz` : ""}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white text-black border-2 border-black px-4 py-3 -skew-x-6 shadow-[6px_6px_0px_rgba(0,0,0,0.5)]">
-              <div className="skew-x-6 flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-[11px] uppercase text-black/70 font-bold">Chord</p>
-                  <p className="text-xl font-black tracking-tight">
-                    {chordQuality?.symbol ?? "..."} {chordQuality?.name ? `(${chordQuality.name})` : ""}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[11px] uppercase text-black/50 font-bold">Vowel</p>
-                  <p className="text-lg font-black">{currentVowel?.displayName ?? "—"}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-primary text-black border-2 border-black px-4 py-3 -skew-x-6 shadow-[6px_6px_0px_rgba(0,0,0,0.5)]">
-              <div className="skew-x-6 flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-[11px] uppercase font-black">Mood</p>
-                  <p className="text-xl font-black tracking-tight">
-                    {heliosinger.currentData?.solarMood ?? "Calibrating"}
-                  </p>
-                </div>
-                <div className="text-right text-xs font-mono">
-                  {heliosinger.currentData?.condition ?? "—"}
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* Middle band: visualization canvas + educational overlays */}
-        <div className="flex-1 relative bg-black border-y-4 border-primary overflow-hidden">
-          {/* Event alerts (storms, surges, etc.) */}
-          <EventOverlay current={comprehensiveData} previous={previousComprehensiveDataRef.current} />
-
+        {/* Main visualization canvas */}
+        <div className="flex-1 relative bg-black overflow-hidden">
           {/* 3D Solar Hologram */}
           <div className="absolute inset-0">
             <Suspense fallback={<div className="w-full h-full bg-black" />}>
@@ -284,31 +196,12 @@ export default function StreamView() {
               />
             </Suspense>
           </div>
-
-          {/* Educational Narrator - contextual insights */}
-          {introComplete && (
-            <Suspense fallback={null}>
-              <EducationalInsight narratorState={narrator.state} />
-            </Suspense>
-          )}
         </div>
 
-        {/* Bottom band: system log */}
-        <div className="basis-[18vh] min-h-[160px] border-t-4 border-primary bg-black flex flex-col">
-          <div className="p-3 border-b-2 border-white/20 bg-primary/20 flex items-center justify-between">
-            <h3 className="font-black text-primary uppercase tracking-widest text-xs">
-              System Log // Operations
-            </h3>
-            <span className="text-[10px] font-mono text-white/70 uppercase">
-              NOAA • Heliosinger Engine v2.0
-            </span>
-          </div>
-
-          <div className="flex-1 overflow-hidden relative">
-            <div className="absolute inset-0">
-              <SystemTerminal data={comprehensiveData} heliosingerData={heliosinger.currentData} />
-            </div>
-          </div>
+        {/* Bottom minimal footer */}
+        <div className="p-2 bg-black border-t border-white/10 flex justify-between items-center text-[10px] uppercase font-mono text-white/40 z-20">
+           <span>Heliosinger v2.0 // Signal Processing</span>
+           <span>NOAA DSCOVR Feed // {new Date().toLocaleTimeString()}</span>
         </div>
       </div>
     </div>
