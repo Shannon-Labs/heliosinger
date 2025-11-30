@@ -587,29 +587,11 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
         {/* Subtle background pattern */}
         <div className="absolute inset-0 pointer-events-none opacity-[0.02] bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:32px_32px] z-0" />
 
-        {/* Active Audio Effects - minimal, positioned to not overlap with educational content */}
-        <div className="absolute top-4 right-4 flex gap-1 items-center z-10 pointer-events-none">
-          {heliosingerData?.vibratoDepth && heliosingerData.vibratoDepth > 0 && (
-            <div className="bg-black/70 border border-primary/30 px-2 py-0.5 flex items-center gap-1.5 animate-in fade-in">
-              <span className="text-[8px] font-black text-primary tracking-wider">VIBRATO</span>
-              <span className="text-[10px] font-bold text-white/60">LVL {heliosingerData.vibratoDepth}</span>
-            </div>
-          )}
-          {heliosingerData?.tremoloDepth && heliosingerData.tremoloDepth > 0.1 && (
-            <div className="bg-black/70 border border-destructive/30 px-2 py-0.5 flex items-center gap-1.5 animate-in fade-in">
-              <span className="text-[8px] font-black text-destructive tracking-wider">TREMOLO</span>
-              <span className="text-[10px] font-bold text-white/60">{(heliosingerData.tremoloRate).toFixed(1)}Hz</span>
-            </div>
-          )}
-          {heliosingerData?.reverbRoomSize && heliosingerData.reverbRoomSize > 0.5 && (
-            <div className="bg-black/70 border border-white/20 px-2 py-0.5 flex items-center gap-1.5 animate-in fade-in">
-              <span className="text-[8px] font-black text-white/50 tracking-wider">REVERB</span>
-              <span className="text-[10px] font-bold text-white/60">{(heliosingerData.reverbRoomSize * 100).toFixed(0)}%</span>
-            </div>
-          )}
-          {heliosingerData?.binauralMix && heliosingerData.binauralMix > 0.05 && (
-            <div className="bg-white/90 text-black px-2 py-0.5 flex items-center gap-1 animate-in fade-in">
-              <span className="text-[8px] font-black tracking-wider">BINAURAL</span>
+        {/* Audio Effects - hidden on mobile, minimal on desktop */}
+        <div className="hidden md:flex absolute top-4 right-4 gap-1 items-center z-10 pointer-events-none opacity-50 hover:opacity-100 transition-opacity">
+          {heliosingerData?.tremoloDepth && heliosingerData.tremoloDepth > 0.3 && (
+            <div className="bg-black/50 px-1.5 py-0.5 text-[8px] font-mono text-white/70">
+              ♪
             </div>
           )}
         </div>

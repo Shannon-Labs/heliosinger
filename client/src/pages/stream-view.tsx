@@ -104,81 +104,92 @@ export default function StreamView() {
   return (
     <div className="min-h-screen bg-black text-foreground overflow-hidden flex flex-col">
       <div className="flex-1 flex flex-col">
-        {/* Top band: Telemetry & Controls */}
-        <div className="p-4 border-b-4 border-primary bg-black relative flex flex-col gap-4 z-20 shadow-xl">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <BrutalistLogo className="h-10 w-auto" />
-              <div className="flex flex-col">
-                <span className="text-lg font-black uppercase tracking-tighter text-white leading-tight">
-                  Solar Telemetry
-                </span>
-                <span className="text-xs font-mono text-primary uppercase tracking-widest">
-                  Stream Mode
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div 
-                key={comprehensiveData?.timestamp || 'live'}
-                className="hidden md:flex items-center gap-2 px-3 py-1 bg-destructive text-white font-bold uppercase border border-white text-xs"
-              >
-                <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-                Live
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 px-4 border border-white bg-black hover:bg-white hover:text-black font-bold tracking-wider uppercase transition-colors text-xs"
-                onClick={toggleAudio}
-              >
-                {heliosinger.isSinging ? (
-                  <>
-                    <Volume2 className="w-3 h-3 mr-2" />
-                    MUTE
-                  </>
-                ) : (
-                  <>
-                    <VolumeX className="w-3 h-3 mr-2" />
-                    ENABLE
-                  </>
-                )}
-              </Button>
+        {/* Top band: Minimal Controls - Mobile Optimized */}
+        <div className="p-3 md:p-4 border-b-2 md:border-b-4 border-primary bg-black relative flex items-center justify-between gap-2 z-20">
+          <div className="flex items-center gap-2 md:gap-4">
+            <BrutalistLogo className="h-8 md:h-10 w-auto" />
+            <div className="hidden md:flex flex-col">
+              <span className="text-lg font-black uppercase tracking-tighter text-white leading-tight">
+                Solar Telemetry
+              </span>
+              <span className="text-xs font-mono text-primary uppercase tracking-widest">
+                Stream Mode
+              </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="bg-black/70 border border-primary px-3 py-2">
-              <div className="flex items-center justify-between text-xs uppercase font-black text-primary">
-                Vel
-                <span className="text-white text-base ml-2">
-                  {solarWind ? `${solarWind.velocity.toFixed(0)}` : "--"} <span className="text-[10px] opacity-50">km/s</span>
-                </span>
-              </div>
+          {/* Mobile: Just show Kp and audio toggle */}
+          <div className="flex items-center gap-2 md:gap-3">
+            {/* Kp indicator - always visible, compact on mobile */}
+            <div className="bg-primary text-black px-2 py-1 md:px-3 md:py-1.5 flex items-center gap-1.5">
+              <span className="text-[10px] md:text-xs font-black uppercase">Kp</span>
+              <span className="text-sm md:text-base font-black">
+                {kIndex !== null && kIndex !== undefined ? kIndex.toFixed(1) : "--"}
+              </span>
             </div>
-            <div className="bg-white text-black border border-black px-3 py-2">
-              <div className="flex items-center justify-between text-xs uppercase font-black">
-                Density
-                <span className="text-base ml-2">
-                  {solarWind ? `${solarWind.density.toFixed(1)}` : "--"} <span className="text-[10px] opacity-50">p/cc</span>
-                </span>
-              </div>
+
+            {/* Live indicator - desktop only */}
+            <div
+              key={comprehensiveData?.timestamp || 'live'}
+              className="hidden md:flex items-center gap-2 px-3 py-1 bg-destructive text-white font-bold uppercase border border-white text-xs"
+            >
+              <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+              Live
             </div>
-            <div className="bg-destructive text-white border border-black px-3 py-2">
-              <div className="flex items-center justify-between text-xs uppercase font-black">
-                Bz
-                <span className="text-base ml-2">
-                  {solarWind ? `${solarWind.bz.toFixed(1)}` : "--"} <span className="text-[10px] opacity-50">nT</span>
-                </span>
-              </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 md:h-9 px-3 md:px-4 border border-white bg-black hover:bg-white hover:text-black font-bold tracking-wider uppercase transition-colors text-[10px] md:text-xs"
+              onClick={toggleAudio}
+            >
+              {heliosinger.isSinging ? (
+                <>
+                  <Volume2 className="w-3 h-3 md:mr-2" />
+                  <span className="hidden md:inline">MUTE</span>
+                </>
+              ) : (
+                <>
+                  <VolumeX className="w-3 h-3 md:mr-2" />
+                  <span className="hidden md:inline">ENABLE</span>
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {/* Secondary telemetry bar - desktop only */}
+        <div className="hidden md:grid grid-cols-4 gap-3 p-4 bg-black/50 border-b border-white/10">
+          <div className="bg-black/70 border border-primary px-3 py-2">
+            <div className="flex items-center justify-between text-xs uppercase font-black text-primary">
+              Vel
+              <span className="text-white text-base ml-2">
+                {solarWind ? `${solarWind.velocity.toFixed(0)}` : "--"} <span className="text-[10px] opacity-50">km/s</span>
+              </span>
             </div>
-            <div className="bg-primary text-black border border-black px-3 py-2">
-              <div className="flex items-center justify-between text-xs uppercase font-black">
-                Kp
-                <span className="text-base ml-2">
-                  {kIndex !== null && kIndex !== undefined ? kIndex.toFixed(1) : "--"}
-                </span>
-              </div>
+          </div>
+          <div className="bg-white text-black border border-black px-3 py-2">
+            <div className="flex items-center justify-between text-xs uppercase font-black">
+              Density
+              <span className="text-base ml-2">
+                {solarWind ? `${solarWind.density.toFixed(1)}` : "--"} <span className="text-[10px] opacity-50">p/cc</span>
+              </span>
+            </div>
+          </div>
+          <div className="bg-destructive text-white border border-black px-3 py-2">
+            <div className="flex items-center justify-between text-xs uppercase font-black">
+              Bz
+              <span className="text-base ml-2">
+                {solarWind ? `${solarWind.bz.toFixed(1)}` : "--"} <span className="text-[10px] opacity-50">nT</span>
+              </span>
+            </div>
+          </div>
+          <div className="bg-primary text-black border border-black px-3 py-2">
+            <div className="flex items-center justify-between text-xs uppercase font-black">
+              Kp
+              <span className="text-base ml-2">
+                {kIndex !== null && kIndex !== undefined ? kIndex.toFixed(1) : "--"}
+              </span>
             </div>
           </div>
         </div>
@@ -198,8 +209,8 @@ export default function StreamView() {
           </div>
         </div>
 
-        {/* Bottom minimal footer */}
-        <div className="p-2 bg-black border-t border-white/10 flex justify-between items-center text-[10px] uppercase font-mono text-white/40 z-20">
+        {/* Bottom minimal footer - hidden on mobile for more screen space */}
+        <div className="hidden md:flex p-2 bg-black border-t border-white/10 justify-between items-center text-[10px] uppercase font-mono text-white/40 z-20">
            <span>Heliosinger v2.0 // Signal Processing</span>
            <span>NOAA DSCOVR Feed // {new Date().toLocaleTimeString()}</span>
         </div>
