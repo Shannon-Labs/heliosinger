@@ -37,8 +37,8 @@ export default function Dashboard() {
   
   // Heliosinger hook - primary sonification system
   const [isHeliosingerEnabled, setIsHeliosingerEnabled] = useState(true);
-  const [ambientVolume, setAmbientVolume] = useState(0.3);
-  const [backgroundMode, setBackgroundMode] = useState(false);
+  const [ambientVolume, setAmbientVolume] = useState(0.4);
+  const [backgroundMode, setBackgroundMode] = useState(true);
   
   const heliosinger = useHeliosinger({
     enabled: isHeliosingerEnabled,
@@ -136,8 +136,10 @@ export default function Dashboard() {
     const settings = ambientSettings || stored;
     
     if (settings && typeof settings === 'object') {
-      setAmbientVolume((settings as any).volume || 0.3);
-      setBackgroundMode((settings as any).background_mode === "true");
+      const volume = (settings as any).volume;
+      const bgMode = (settings as any).background_mode;
+      setAmbientVolume(typeof volume === 'number' ? volume : 0.4);
+      setBackgroundMode(bgMode === undefined ? true : bgMode === "true");
     }
   }, [ambientSettings]);
 
@@ -225,6 +227,34 @@ export default function Dashboard() {
       battery_min: 20.0
     });
   };
+
+  // Fallback: ensure unlock/start on user interaction (matches stream behavior, helps iOS)
+  useEffect(() => {
+    const startAudio = async () => {
+      if (!isHeliosingerEnabled) return;
+      try {
+        await heliosinger.unlock();
+        if (!heliosinger.isSinging && comprehensiveData) {
+          await heliosinger.start();
+        }
+      } catch (e) {
+        console.warn("Dashboard unlock/start fallback failed", e);
+      }
+    };
+
+    // Try once on mount
+    startAudio();
+
+    const unlockHandler = () => {
+      startAudio();
+      document.removeEventListener('click', unlockHandler);
+    };
+    document.addEventListener('click', unlockHandler);
+
+    return () => {
+      document.removeEventListener('click', unlockHandler);
+    };
+  }, [heliosinger, isHeliosingerEnabled, comprehensiveData]);
 
 
   // Volume change handler
@@ -576,50 +606,16 @@ export default function Dashboard() {
                   </>
                 )}
                 
-                {!heliosinger.currentData && currentData && typeof currentData === 'object' && 'velocity' in currentData ? (
-                  <>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Velocity:</span>
-                      <span className="font-mono" data-testid="text-velocity">
-                        {(currentData as any).velocity.toFixed(1)} km/s
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Density:</span>
-                      <span className="font-mono" data-testid="text-density">
-                        {(currentData as any).density.toFixed(1)} p/cm³
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Bz:</span>
-                      <span className="font-mono" data-testid="text-bz">
-                        {(currentData as any).bz.toFixed(1)} nT
-                      </span>
-                    </div>
-                  </>
-                ) : null}
+                {!heliosinger.currentData && (
+                  <div className="text-xs text-muted-foreground italic text-right">
+                    Heliosinger telemetry unavailable — enable to hear live mapping.
+                  </div>
+                )}
               </div>
 
             </CardContent>
           </Card>
         </section>
-
-        {/* Comprehensive Space Weather Display */}
-        {/* <div className="mb-8">
-          <ComprehensiveSpaceWeather />
-        </div> */}
-
-        {/* Change Tracker */}
-        {/* {comprehensiveData && (
-          <div className="mb-8">
-            <ChangeTracker data={comprehensiveData} enabled={true} />
-          </div>
-        )} */}
-
-        {/* Data Source Attribution */}
-        {/* <div className="mb-8">
-          <DataSourceAttribution />
-        </div> */}
 
         {/* Notification Settings */}
         {isNotificationSupported() && (

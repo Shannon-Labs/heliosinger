@@ -592,7 +592,7 @@ class HeliosingerEngine {
     leftOsc.frequency.value = base - offset;
     rightOsc.frequency.value = base + offset;
 
-    const mix = Math.max(0.01, data.binauralMix);
+    const mix = Math.max(0.02, data.binauralMix);
     leftGain.gain.value = mix;
     rightGain.gain.value = mix;
 
@@ -846,7 +846,7 @@ class HeliosingerEngine {
     if (this.binauralLayer.leftOsc && this.binauralLayer.rightOsc && this.binauralLayer.leftGain && this.binauralLayer.rightGain) {
       const base = Math.max(20, heliosingerData.binauralBaseHz);
       const offset = Math.max(0.5, heliosingerData.binauralBeatHz / 2);
-      const mix = Math.max(0.005, heliosingerData.binauralMix);
+      const mix = Math.max(0.02, heliosingerData.binauralMix);
       this.binauralLayer.leftOsc.frequency.exponentialRampToValueAtTime(
         Math.max(20, base - offset),
         now + smoothingTime
