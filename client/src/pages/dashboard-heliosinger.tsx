@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState, useRef, lazy, Suspense } from "react";
+import { useEffect, useState, useRef, useMemo, lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,15 +11,18 @@ import { SystemStatus } from "@/components/system-status";
 import { Footer } from "@/components/Footer";
 import { EventsTicker } from "@/components/EventsTicker";
 import { MobilePlayer } from "@/components/MobilePlayer";
-import { MiniVowelChart } from "@/components/MiniVowelChart";
 import { BrutalistLogo } from "@/components/BrutalistLogo";
 import { SonificationTrainer } from "@/components/SonificationTrainer";
+import { EducationalInsight } from "@/components/stream-enhancements/EducationalInsight";
+import { DataDashboard } from "@/components/data-dashboard";
 
 const SolarHologram = lazy(() => import("@/components/SolarHologram").then(m => ({ default: m.SolarHologram })));
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getAmbientSettings, saveAmbientSettings } from "@/lib/localStorage";
 import { useHeliosinger } from "@/hooks/use-heliosinger";
+import { useEducationalNarrator } from "@/hooks/use-educational-narrator";
+import { mapSpaceWeatherToHeliosinger } from "@/lib/heliosinger-mapping";
 import { 
   getNotificationSettings, 
   saveNotificationSettings, 
@@ -28,8 +31,16 @@ import {
   canSendNotifications
 } from "@/lib/notifications";
 import { calculateRefetchInterval, getUpdateFrequencyDescription } from "@/lib/adaptive-refetch";
-import { getChordQuality, getChordSelectionExplanation } from "@/lib/chord-utils";
+import { getChordQuality } from "@/lib/chord-utils";
 import type { AmbientSettings, ComprehensiveSpaceWeatherData, SolarWindReading, SystemStatus as SystemStatusType } from "@shared/schema";
+
+type ImplicationTone = "calm" | "watch" | "alert";
+type Implication = { title: string; detail: string; tone: ImplicationTone };
+const IMPLICATION_TONE_STYLES: Record<ImplicationTone, string> = {
+  calm: "border-emerald-400/40 text-emerald-200 bg-emerald-500/10",
+  watch: "border-amber-400/40 text-amber-200 bg-amber-500/10",
+  alert: "border-destructive/60 text-destructive bg-destructive/10",
+};
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -77,6 +88,136 @@ export default function Dashboard() {
       return interval;
     },
   });
+
+  const heliosingerPreviewData = useMemo(() => {
+    if (heliosinger.currentData) return heliosinger.currentData;
+    if (!comprehensiveData) return null;
+    try {
+      return mapSpaceWeatherToHeliosinger(comprehensiveData);
+    } catch (error) {
+      console.warn("Failed to map space weather for insights:", error);
+      return null;
+    }
+  }, [heliosinger.currentData, comprehensiveData]);
+
+  const narrator = useEducationalNarrator({
+    currentData: comprehensiveData,
+    previousData: previousComprehensiveDataRef.current,
+    heliosingerData: heliosingerPreviewData,
+    enabled: true,
+  });
+
+  const implications = useMemo<Implication[]>(() => {
+    if (!comprehensiveData?.solar_wind) return [];
+
+    const items: Implication[] = [];
+    const kp = comprehensiveData.k_index?.kp;
+    const bz = comprehensiveData.solar_wind.bz ?? 0;
+    const velocity = comprehensiveData.solar_wind.velocity ?? 0;
+    const density = comprehensiveData.solar_wind.density ?? 0;
+    const flareClass = comprehensiveData.xray_flux?.flare_class;
+    const proton10 = comprehensiveData.proton_flux?.flux_10mev;
+
+    if (kp !== undefined) {
+      if (kp >= 7) {
+        items.push({
+          title: "Severe geomagnetic storm",
+          detail: "Auroras can expand toward lower latitudes. Satellite drag and power grid impacts become more likely.",
+          tone: "alert",
+        });
+      } else if (kp >= 5) {
+        items.push({
+          title: "Geomagnetic storm",
+          detail: "Auroras likely at mid-latitudes. HF radio and satellite operations can be affected.",
+          tone: "watch",
+        });
+      } else if (kp >= 4) {
+        items.push({
+          title: "Active geomagnetic conditions",
+          detail: "Auroras possible at higher latitudes; the magnetosphere is unsettled.",
+          tone: "watch",
+        });
+      } else if (kp >= 2) {
+        items.push({
+          title: "Quiet geomagnetic conditions",
+          detail: "Stable magnetosphere with low disturbance risk.",
+          tone: "calm",
+        });
+      }
+    }
+
+    if (bz <= -10) {
+      items.push({
+        title: "Strong southward IMF",
+        detail: "Energy coupling is efficient; activity may intensify quickly.",
+        tone: "alert",
+      });
+    } else if (bz <= -5) {
+      items.push({
+        title: "Southward IMF",
+        detail: "Reconnection is favored; auroral activity becomes more likely.",
+        tone: "watch",
+      });
+    } else if (bz >= 5) {
+      items.push({
+        title: "Northward IMF",
+        detail: "Magnetic shielding is strong; conditions are typically calmer.",
+        tone: "calm",
+      });
+    }
+
+    if (velocity >= 650) {
+      items.push({
+        title: "High-speed solar wind",
+        detail: "Fast streams can sustain elevated activity for hours to days.",
+        tone: "watch",
+      });
+    } else if (velocity >= 550) {
+      items.push({
+        title: "Elevated solar wind speed",
+        detail: "Faster wind can increase coupling and build activity.",
+        tone: "watch",
+      });
+    }
+
+    if (density >= 20) {
+      items.push({
+        title: "Compression region",
+        detail: "High density can drive sudden impulses and short-term geomagnetic jolts.",
+        tone: "watch",
+      });
+    } else if (density <= 2) {
+      items.push({
+        title: "Rarefied plasma",
+        detail: "Sparse wind is usually less geoeffective and sounds more open.",
+        tone: "calm",
+      });
+    }
+
+    if (flareClass && (flareClass.startsWith("M") || flareClass.startsWith("X"))) {
+      items.push({
+        title: `${flareClass}-class flare`,
+        detail: "Stronger X-ray bursts can trigger shortwave radio fadeouts on the dayside.",
+        tone: "alert",
+      });
+    } else if (flareClass && flareClass.startsWith("C")) {
+      items.push({
+        title: `${flareClass}-class flare`,
+        detail: "Minor flare activity with limited expected impacts.",
+        tone: "calm",
+      });
+    }
+
+    if (proton10 !== undefined && proton10 >= 10) {
+      items.push({
+        title: "Elevated proton flux",
+        detail: "Radiation storm conditions are possible; spacecraft operators monitor closely.",
+        tone: "watch",
+      });
+    }
+
+    return items.slice(0, 5);
+  }, [comprehensiveData]);
 
   // Fetch current solar wind data (uses adaptive interval)
   const { data: currentData, isLoading: currentLoading, error: currentError } = useQuery<SolarWindReading>({
@@ -617,6 +758,78 @@ export default function Dashboard() {
           </Card>
         </section>
 
+        {/* Space Weather Implications + Live Narrator */}
+        <section className="mb-10 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <Card className="border-4 border-primary bg-black/80 shadow-[8px_8px_0px_rgba(0,0,0,0.6)]">
+            <CardHeader className="bg-primary text-black border-b-4 border-black skew-x-3">
+              <CardTitle className="flex items-center gap-3 -skew-x-3 uppercase tracking-widest font-black text-xl">
+                <i className="fas fa-satellite-dish text-black" />
+                Space Weather Implications
+                <Badge variant="secondary" className="ml-auto bg-black text-white border-2 border-black rounded-none">
+                  Live
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              {implications.length > 0 ? (
+                <div className="space-y-3">
+                  {implications.map((implication, index) => (
+                    <div
+                      key={`${implication.title}-${index}`}
+                      className="border-2 border-white/20 bg-black/60 px-4 py-3 -skew-x-3 shadow-[4px_4px_0px_rgba(0,0,0,0.5)]"
+                    >
+                      <div className="skew-x-3 flex items-start gap-3">
+                        <div
+                          className={`mt-1 h-2.5 w-2.5 rounded-full border ${IMPLICATION_TONE_STYLES[implication.tone]}`}
+                        />
+                        <div className="flex-1 space-y-1">
+                          <p className="text-sm font-black uppercase tracking-tight text-white">
+                            {implication.title}
+                          </p>
+                          <p className="text-xs text-white/70">{implication.detail}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-white/60 uppercase tracking-widest">
+                  Waiting for live space weather data...
+                </div>
+              )}
+              <div className="text-[11px] text-white/50">
+                Signals derived from NOAA live feeds, IMF orientation, and geomagnetic indices.
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-4 border-primary bg-black/80 shadow-[8px_8px_0px_rgba(0,0,0,0.6)] relative overflow-hidden">
+            <CardHeader className="bg-primary text-black border-b-4 border-black skew-x-3">
+              <CardTitle className="flex items-center gap-3 -skew-x-3 uppercase tracking-widest font-black text-xl">
+                <i className="fas fa-bolt text-black" />
+                Live Narrator
+                <Badge variant="secondary" className="ml-auto bg-black text-white border-2 border-black rounded-none">
+                  Auto
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="relative p-6">
+              <div className="relative min-h-[260px]">
+                <EducationalInsight narratorState={narrator.state} />
+                {!narrator.isShowingInsight && (
+                  <div className="absolute inset-0 flex items-center justify-center text-xs text-white/60 uppercase tracking-widest">
+                    Generating next insight...
+                  </div>
+                )}
+              </div>
+              <div className="mt-4 flex items-center justify-between text-[10px] text-white/50 uppercase tracking-widest">
+                <span>Queue: {narrator.queueLength}</span>
+                <span>Update: {getUpdateFrequencyDescription(updateFrequency)}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
         {/* Notification Settings */}
         {isNotificationSupported() && (
           <section className="mb-8">
@@ -779,7 +992,9 @@ export default function Dashboard() {
         </section> */}
 
         {/* Data Dashboard */}
-        {/* <DataDashboard /> */}
+        <section className="mb-10">
+          <DataDashboard />
+        </section>
 
         {/* System Status */}
         <section className="mb-10">

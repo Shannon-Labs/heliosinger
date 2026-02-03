@@ -6,7 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-const Dashboard = lazy(() => import("@/pages/dashboard-heliosinger"));
+const Dashboard = lazy(() => import("@/pages/dashboard"));
 const StreamView = lazy(() => import("@/pages/stream-view"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
