@@ -219,6 +219,14 @@ export default function Dashboard() {
     return items.slice(0, 5);
   }, [comprehensiveData]);
 
+  const leadTimeMinutes = useMemo(() => {
+    const velocity = comprehensiveData?.solar_wind?.velocity;
+    if (!velocity || velocity <= 0) return null;
+
+    const minutes = Math.round(1500000 / velocity / 60);
+    return Math.max(5, Math.min(90, minutes));
+  }, [comprehensiveData?.solar_wind?.velocity]);
+
   // Fetch current solar wind data (uses adaptive interval)
   const { data: currentData, isLoading: currentLoading, error: currentError } = useQuery<SolarWindReading>({
     queryKey: ["/api/solar-wind/current"],
@@ -771,6 +779,11 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-4">
+              {leadTimeMinutes && comprehensiveData?.solar_wind?.velocity ? (
+                <div className="text-[11px] text-white/70 uppercase tracking-widest">
+                  L1 lead time: ~{leadTimeMinutes} min at {comprehensiveData.solar_wind.velocity.toFixed(0)} km/s
+                </div>
+              ) : null}
               {implications.length > 0 ? (
                 <div className="space-y-3">
                   {implications.map((implication, index) => (
