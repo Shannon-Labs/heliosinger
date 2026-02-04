@@ -23,6 +23,7 @@ import { getAmbientSettings, saveAmbientSettings } from "@/lib/localStorage";
 import { useHeliosinger } from "@/hooks/use-heliosinger";
 import { useEducationalNarrator } from "@/hooks/use-educational-narrator";
 import { mapSpaceWeatherToHeliosinger } from "@/lib/heliosinger-mapping";
+import { debugLog, debugWarn } from "@/lib/debug";
 import { 
   getNotificationSettings, 
   saveNotificationSettings, 
@@ -95,7 +96,7 @@ export default function Dashboard() {
     try {
       return mapSpaceWeatherToHeliosinger(comprehensiveData);
     } catch (error) {
-      console.warn("Failed to map space weather for insights:", error);
+      debugWarn("Failed to map space weather for insights:", error);
       return null;
     }
   }, [heliosinger.currentData, comprehensiveData]);
@@ -219,12 +220,15 @@ export default function Dashboard() {
     return items.slice(0, 5);
   }, [comprehensiveData]);
 
-  const leadTimeMinutes = useMemo(() => {
+  const leadTimeSummary = useMemo(() => {
     const velocity = comprehensiveData?.solar_wind?.velocity;
     if (!velocity || velocity <= 0) return null;
 
     const minutes = Math.round(1500000 / velocity / 60);
-    return Math.max(5, Math.min(90, minutes));
+    return {
+      minutes: Math.max(5, Math.min(90, minutes)),
+      velocity: Math.round(velocity),
+    };
   }, [comprehensiveData?.solar_wind?.velocity]);
 
   // Fetch current solar wind data (uses adaptive interval)
@@ -259,7 +263,7 @@ export default function Dashboard() {
         await apiRequest("POST", "/api/settings/ambient", settings);
       } catch (error) {
         // Ignore API errors, localStorage is the source of truth
-        console.warn('Failed to save settings via API, using localStorage only:', error);
+        debugWarn('Failed to save settings via API, using localStorage only:', error);
       }
       return new Response(JSON.stringify(settings));
     },
@@ -334,20 +338,20 @@ export default function Dashboard() {
 
         // Start audio if we have data available now; otherwise hook will start once data arrives
         if (!heliosinger.isSinging && comprehensiveData) {
-          console.log("Starting Heliosinger on user interaction...");
+          debugLog("Starting Heliosinger on user interaction...");
           await heliosinger.start();
-          console.log("Heliosinger started successfully");
+          debugLog("Heliosinger started successfully");
           
           // Verify audio is actually playing
           setTimeout(() => {
             if (heliosinger.isSinging) {
-              console.log("✅ Heliosinger is singing");
+              debugLog("✅ Heliosinger is singing");
             } else {
-              console.warn("⚠️ Heliosinger state says singing but may not be audible");
+              debugWarn("⚠️ Heliosinger state says singing but may not be audible");
             }
           }, 500);
         }
-        console.log("Heliosinger mode enabled - the sun will sing");
+        debugLog("Heliosinger mode enabled - the sun will sing");
       } catch (error) {
         console.error("Failed to start Heliosinger:", error);
         const errorMessage = error instanceof Error ? error.message : "Could not start Heliosinger audio.";
@@ -365,7 +369,7 @@ export default function Dashboard() {
       if (heliosinger.isSinging) {
         heliosinger.stop();
       }
-      console.log("Heliosinger mode disabled");
+      debugLog("Heliosinger mode disabled");
     }
 
     updateAmbientMutation.mutate({
@@ -387,7 +391,7 @@ export default function Dashboard() {
           await heliosinger.start();
         }
       } catch (e) {
-        console.warn("Dashboard unlock/start fallback failed", e);
+        debugWarn("Dashboard unlock/start fallback failed", e);
       }
     };
 
@@ -606,7 +610,7 @@ export default function Dashboard() {
                 <Switch
                   id="heliosinger-toggle"
                   checked={isHeliosingerEnabled}
-                  onPointerDown={async () => { try { await heliosinger.unlock(); } catch (e) { console.warn('Pre-unlock failed:', e); } }}
+                  onPointerDown={async () => { try { await heliosinger.unlock(); } catch (e) { debugWarn('Pre-unlock failed:', e); } }}
                   onCheckedChange={handleHeliosingerToggle}
                   disabled={!comprehensiveData || ambientLoading}
                   data-testid="switch-heliosinger-toggle"
@@ -779,9 +783,14 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6 space-y-4">
-              {leadTimeMinutes && comprehensiveData?.solar_wind?.velocity ? (
-                <div className="text-[11px] text-white/70 uppercase tracking-widest">
-                  L1 lead time: ~{leadTimeMinutes} min at {comprehensiveData.solar_wind.velocity.toFixed(0)} km/s
+              {leadTimeSummary ? (
+                <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-widest text-white/70 font-mono">
+                  <span className="border border-white/20 bg-black/40 px-2 py-1">
+                    L1 lead time ~{leadTimeSummary.minutes} min
+                  </span>
+                  <span className="border border-white/20 bg-black/40 px-2 py-1">
+                    Wind {leadTimeSummary.velocity} km/s
+                  </span>
                 </div>
               ) : null}
               {implications.length > 0 ? (

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
+import { debugLog } from '@/lib/debug';
 import type { ChordTone } from '@/lib/heliosinger-mapping';
 
 interface MusicStaffProps {
@@ -51,7 +52,7 @@ export function MusicStaff({ chordVoicing, clef = 'treble' }: MusicStaffProps) {
       // Convert chord tones to VexFlow notes
       const notes = chordVoicing.map((tone, index) => {
         const vexFlowNote = convertToVexFlowNote(tone.noteName);
-        console.log(`Converting ${tone.noteName} to VexFlow format: ${vexFlowNote}`);
+        debugLog(`Converting ${tone.noteName} to VexFlow format: ${vexFlowNote}`);
         
         try {
           // Create note with appropriate styling
@@ -90,7 +91,7 @@ export function MusicStaff({ chordVoicing, clef = 'treble' }: MusicStaffProps) {
         
         // Draw notes
         voice.draw(ctx, stave);
-        console.log('Music staff rendered successfully');
+        debugLog('Music staff rendered successfully');
       } catch (error) {
         console.error('Failed to format or draw notes:', error);
       }

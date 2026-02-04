@@ -7,6 +7,7 @@
  */
 
 import type { HeliosingerData } from "./heliosinger-mapping";
+import { debugLog, debugWarn } from "./debug";
 
 interface ChordToneLayer {
   // Oscillator for this chord tone
@@ -110,7 +111,7 @@ class HeliosingerEngine {
 
       if (this.audioContext && !this.hasSetupStateHandler) {
         this.audioContext.onstatechange = () => {
-          console.log('AudioContext state:', this.audioContext?.state);
+          debugLog('AudioContext state:', this.audioContext?.state);
         };
         this.hasSetupStateHandler = true;
       }
@@ -120,7 +121,7 @@ class HeliosingerEngine {
         try {
           await this.audioContext.resume();
         } catch (e) {
-          console.warn('AudioContext resume() during unlock failed:', e);
+          debugWarn('AudioContext resume() during unlock failed:', e);
         }
       }
 
@@ -134,9 +135,9 @@ class HeliosingerEngine {
         source.start(now);
         source.stop(now + 0.001);
         this.hasTriedUnlock = true;
-        console.log('Played iOS unlock buffer (ensureUnlocked)');
+        debugLog('Played iOS unlock buffer (ensureUnlocked)');
       } catch (unlockError) {
-        console.warn('Unlock buffer failed (non-critical):', unlockError);
+        debugWarn('Unlock buffer failed (non-critical):', unlockError);
       }
     } catch (error) {
       console.error('ensureUnlocked failed:', error);
@@ -158,7 +159,7 @@ class HeliosingerEngine {
       // Attach state change logger once
       if (this.audioContext && !this.hasSetupStateHandler) {
         this.audioContext.onstatechange = () => {
-          console.log('AudioContext state:', this.audioContext?.state);
+          debugLog('AudioContext state:', this.audioContext?.state);
         };
         this.hasSetupStateHandler = true;
       }
@@ -228,12 +229,12 @@ class HeliosingerEngine {
           
           // Double-check state after resume
           if (this.audioContext.state === 'suspended') {
-            console.warn('Audio context still suspended after resume attempt');
+            debugWarn('Audio context still suspended after resume attempt');
             // Try one more time
             await this.audioContext.resume();
           }
           
-          console.log(`Audio context state: ${this.audioContext.state}`);
+          debugLog(`Audio context state: ${this.audioContext.state}`);
           
           // iOS unlock: Play a very short silent buffer to unlock audio
           // This is sometimes needed on iOS Safari
@@ -244,10 +245,10 @@ class HeliosingerEngine {
             source.connect(this.audioContext.destination);
             source.start(0);
             source.stop(0.001);
-            console.log('Played iOS unlock buffer');
+            debugLog('Played iOS unlock buffer');
           } catch (unlockError) {
             // Ignore unlock errors, not critical
-            console.warn('iOS unlock buffer failed (non-critical):', unlockError);
+            debugWarn('iOS unlock buffer failed (non-critical):', unlockError);
           }
         } catch (resumeError) {
           console.error('Failed to resume audio context:', resumeError);
@@ -261,11 +262,11 @@ class HeliosingerEngine {
       }
       
       // Log audio context state for debugging
-      console.log(`Audio context initialized: state=${this.audioContext.state}, sampleRate=${this.audioContext.sampleRate}Hz`);
+      debugLog(`Audio context initialized: state=${this.audioContext.state}, sampleRate=${this.audioContext.sampleRate}Hz`);
       
       // Verify master gain is connected and has correct volume
       if (this.masterGain) {
-        console.log(`Master gain: value=${this.masterGain.gain.value}, connected=${this.masterGain.numberOfOutputs > 0}`);
+        debugLog(`Master gain: value=${this.masterGain.gain.value}, connected=${this.masterGain.numberOfOutputs > 0}`);
       }
     } catch (error) {
       console.error('Failed to initialize audio:', error);
@@ -333,7 +334,7 @@ class HeliosingerEngine {
       const now = this.audioContext.currentTime;
       this.masterGain.gain.cancelScheduledValues(now);
       this.masterGain.gain.setValueAtTime(targetVol, now);
-      console.log(`Set master gain to ${(targetVol * 100).toFixed(0)}% before starting audio`);
+      debugLog(`Set master gain to ${(targetVol * 100).toFixed(0)}% before starting audio`);
     }
     
     // Configure reverb and delay
@@ -351,12 +352,12 @@ class HeliosingerEngine {
     // Create texture layer (shimmer, rumble, wind)
     this.createTextureLayer(heliosingerData);
     
-    console.log(`🌞 The sun is singing: "${heliosingerData.solarMood}"`);
-    console.log(`   Vowel: "${heliosingerData.currentVowel.displayName}" (${heliosingerData.currentVowel.description})`);
-    console.log(`   Note: ${heliosingerData.baseNote} at ${heliosingerData.frequency.toFixed(1)}Hz`);
-    console.log(`   Harmonics: ${heliosingerData.harmonicCount} partials`);
-    console.log(`   Condition: ${heliosingerData.condition}`);
-    console.log(`   Volume: ${(this.targetVolume * 100).toFixed(0)}%`);
+    debugLog(`🌞 The sun is singing: "${heliosingerData.solarMood}"`);
+    debugLog(`   Vowel: "${heliosingerData.currentVowel.displayName}" (${heliosingerData.currentVowel.description})`);
+    debugLog(`   Note: ${heliosingerData.baseNote} at ${heliosingerData.frequency.toFixed(1)}Hz`);
+    debugLog(`   Harmonics: ${heliosingerData.harmonicCount} partials`);
+    debugLog(`   Condition: ${heliosingerData.condition}`);
+    debugLog(`   Volume: ${(this.targetVolume * 100).toFixed(0)}%`);
   }
   
   /**
@@ -446,7 +447,7 @@ class HeliosingerEngine {
       // Start oscillator (must happen synchronously on iOS)
       try {
         toneLayer.osc.start();
-        console.log(`Started chord tone oscillator: ${chordTone.frequency}Hz, gain=${toneLayer.oscGain.gain.value}`);
+        debugLog(`Started chord tone oscillator: ${chordTone.frequency}Hz, gain=${toneLayer.oscGain.gain.value}`);
       } catch (error) {
         console.error(`Failed to start oscillator:`, error);
         throw error;
@@ -488,16 +489,16 @@ class HeliosingerEngine {
     layer.harmonicOscs.forEach(osc => {
       try {
         osc.start();
-        console.log(`Started harmonic oscillator at ${osc.frequency.value.toFixed(1)}Hz`);
+        debugLog(`Started harmonic oscillator at ${osc.frequency.value.toFixed(1)}Hz`);
       } catch (error) {
         console.error(`Failed to start harmonic oscillator:`, error);
       }
     });
     
     // Log audio graph for debugging (especially important for mobile)
-    console.log(`Created Heliosinger layer: ${layer.chordToneLayers.length} chord tones, ${layer.harmonicOscs.length} harmonics`);
-    console.log(`Master gain: value=${this.masterGain.gain.value.toFixed(3)}, connected=${this.masterGain.numberOfOutputs > 0}`);
-    console.log(`Audio context state: ${this.audioContext.state}, sampleRate: ${this.audioContext.sampleRate}Hz`);
+    debugLog(`Created Heliosinger layer: ${layer.chordToneLayers.length} chord tones, ${layer.harmonicOscs.length} harmonics`);
+    debugLog(`Master gain: value=${this.masterGain.gain.value.toFixed(3)}, connected=${this.masterGain.numberOfOutputs > 0}`);
+    debugLog(`Audio context state: ${this.audioContext.state}, sampleRate: ${this.audioContext.sampleRate}Hz`);
     
     return layer;
   }
@@ -530,7 +531,7 @@ class HeliosingerEngine {
       
       try {
         this.modulationLayer.vibratoLfo.start();
-        console.log(`Started vibrato LFO at ${this.modulationLayer.vibratoLfo.frequency.value.toFixed(2)}Hz`);
+        debugLog(`Started vibrato LFO at ${this.modulationLayer.vibratoLfo.frequency.value.toFixed(2)}Hz`);
       } catch (error) {
         console.error(`Failed to start vibrato LFO:`, error);
       }
@@ -555,7 +556,7 @@ class HeliosingerEngine {
       
       try {
         this.modulationLayer.tremoloLfo.start();
-        console.log(`Started tremolo LFO at ${this.modulationLayer.tremoloLfo.frequency.value.toFixed(2)}Hz`);
+        debugLog(`Started tremolo LFO at ${this.modulationLayer.tremoloLfo.frequency.value.toFixed(2)}Hz`);
       } catch (error) {
         console.error(`Failed to start tremolo LFO:`, error);
       }
@@ -674,7 +675,7 @@ class HeliosingerEngine {
       
       try {
         this.textureLayer.noiseSource.start();
-        console.log(`Started noise source for shimmer`);
+        debugLog(`Started noise source for shimmer`);
       } catch (error) {
         console.error(`Failed to start noise source:`, error);
       }
@@ -696,7 +697,7 @@ class HeliosingerEngine {
       
       try {
         this.textureLayer.rumbleOsc.start();
-        console.log(`Started rumble oscillator at ${this.textureLayer.rumbleOsc.frequency.value}Hz`);
+        debugLog(`Started rumble oscillator at ${this.textureLayer.rumbleOsc.frequency.value}Hz`);
       } catch (error) {
         console.error(`Failed to start rumble oscillator:`, error);
       }
@@ -711,7 +712,7 @@ class HeliosingerEngine {
 
     // Verify audio context is in a valid state
     if (this.audioContext.state !== 'running') {
-      console.warn('AudioContext not running during update, state:', this.audioContext.state);
+      debugWarn('AudioContext not running during update, state:', this.audioContext.state);
       return;
     }
 
@@ -898,8 +899,8 @@ class HeliosingerEngine {
     
     // Log vowel changes
     if (this.currentData && this.currentData.vowelName !== heliosingerData.vowelName) {
-      console.log(`🌞 Vowel change: "${this.currentData.vowelName}" → "${heliosingerData.vowelName}"`);
-      console.log(`   ${heliosingerData.solarMood}`);
+      debugLog(`🌞 Vowel change: "${this.currentData.vowelName}" → "${heliosingerData.vowelName}"`);
+      debugLog(`   ${heliosingerData.solarMood}`);
     }
     
     this.currentData = heliosingerData;
@@ -1004,7 +1005,7 @@ class HeliosingerEngine {
 
     this.currentData = null;
 
-    console.log('🌞 The sun has stopped singing');
+    debugLog('🌞 The sun has stopped singing');
   }
   
   /**
@@ -1023,10 +1024,10 @@ class HeliosingerEngine {
         Math.max(0.001, this.targetVolume),
         now + 0.1
       );
-      console.log(`🔊 Volume set to ${(this.targetVolume * 100).toFixed(0)}%`);
+      debugLog(`🔊 Volume set to ${(this.targetVolume * 100).toFixed(0)}%`);
     } else {
       // Volume will be applied when audio starts
-      console.log(`🔊 Volume queued: ${(this.targetVolume * 100).toFixed(0)}% (audio not initialized)`);
+      debugLog(`🔊 Volume queued: ${(this.targetVolume * 100).toFixed(0)}% (audio not initialized)`);
     }
   }
   

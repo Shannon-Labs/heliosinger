@@ -6,6 +6,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { getAmbientSettings } from '@/lib/localStorage';
 import { checkAndNotifyEvents, requestNotificationPermission, canSendNotifications } from '@/lib/notifications';
 import { calculateRefetchInterval } from '@/lib/adaptive-refetch';
+import { debugLog } from '@/lib/debug';
 import type { ComprehensiveSpaceWeatherData } from '@shared/schema';
 
 interface UseHeliosingerOptions {
@@ -42,7 +43,7 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
     if (enabled && !canSendNotifications()) {
       requestNotificationPermission().then(permission => {
         if (permission === 'granted') {
-          console.log('🔔 Notification permission granted');
+          debugLog('🔔 Notification permission granted');
         }
       });
     }
@@ -64,10 +65,10 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
       // When tab becomes hidden, ensure audio context stays active
       if (document.hidden && isSinging) {
         // Audio should continue playing - browsers allow this if audio is already playing
-        console.log('🌞 Tab hidden - audio continues in background mode');
+        debugLog('🌞 Tab hidden - audio continues in background mode');
       } else if (!document.hidden && isSinging) {
         // Tab visible again - ensure audio context is resumed
-        console.log('🌞 Tab visible - audio continues');
+        debugLog('🌞 Tab visible - audio continues');
       }
     };
     
@@ -125,7 +126,7 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
         // Set initial volume after starting
         setSingingVolume(volume);
         
-        console.log('🌞 Heliosinger started:', {
+        debugLog('🌞 Heliosinger started:', {
           note: heliosingerData.baseNote,
           frequency: heliosingerData.frequency.toFixed(1) + ' Hz',
           vowel: heliosingerData.currentVowel.displayName,
@@ -206,7 +207,7 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
           heliosingerData.condition !== previousData.condition ||
           heliosingerData.vowelName !== previousData.vowelName ||
           heliosingerData.harmonicCount !== previousData.harmonicCount) {
-        console.log('🌞 Heliosinger updated:', {
+        debugLog('🌞 Heliosinger updated:', {
           note: heliosingerData.baseNote,
           frequency: heliosingerData.frequency.toFixed(1) + ' Hz',
           vowel: heliosingerData.currentVowel.displayName,
