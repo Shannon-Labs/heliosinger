@@ -51,6 +51,12 @@ export default function Dashboard() {
   const [isHeliosingerEnabled, setIsHeliosingerEnabled] = useState(true);
   const [ambientVolume, setAmbientVolume] = useState(0.4);
   const [backgroundMode, setBackgroundMode] = useState(true);
+
+  // Robustness: prevent race conditions and track network state
+  const toggleInProgressRef = useRef(false);
+  const backgroundModeDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const volumeAudioDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
   
   const heliosinger = useHeliosinger({
     enabled: isHeliosingerEnabled,
@@ -65,6 +71,37 @@ export default function Dashboard() {
       setIsHeliosingerEnabled(false);
     }
   });
+
+  // Network offline/online detection for graceful degradation
+  useEffect(() => {
+    const handleOffline = () => {
+      setIsOffline(true);
+      toast({
+        title: "Connection Lost",
+        description: "Solar wind data stream interrupted. Reconnecting when online...",
+        variant: "destructive",
+      });
+    };
+
+    const handleOnline = () => {
+      setIsOffline(false);
+      // Invalidate queries to refetch fresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/space-weather"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/solar-wind"] });
+      toast({
+        title: "Back Online",
+        description: "Reconnected to solar wind data stream",
+      });
+    };
+
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [queryClient, toast]);
 
   // Local state for adaptive refetch interval (must be declared before queries that use it)
   const [updateFrequency, setUpdateFrequency] = useState(60000);
@@ -291,16 +328,20 @@ export default function Dashboard() {
   // Update ambient settings mutation (saves to localStorage for static site)
   const updateAmbientMutation = useMutation({
     mutationFn: async (settings: Partial<AmbientSettings & { background_mode?: string }>) => {
-      // Save to localStorage
+      // Save to localStorage immediately
       saveAmbientSettings(settings as any);
+      
       // Also try to save via API (for Cloudflare Functions)
       try {
-        await apiRequest("POST", "/api/settings/ambient", settings);
+        const response = await apiRequest("POST", "/api/settings/ambient", settings);
+        if (!response.ok) {
+          debugWarn('API update failed, but settings saved locally');
+        }
       } catch (error) {
         // Ignore API errors, localStorage is the source of truth
         debugWarn('Failed to save settings via API, using localStorage only:', error);
       }
-      return new Response(JSON.stringify(settings));
+      return settings;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/settings/ambient"] });
@@ -361,10 +402,18 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, [updateFrequency]);
 
-  // Heliosinger toggle
+  // Heliosinger toggle with race condition guard
   const handleHeliosingerToggle = async (enabled: boolean) => {
-    if (enabled) {
-      try {
+    // Guard: prevent re-entry during toggle operation
+    if (toggleInProgressRef.current) {
+      debugWarn("Toggle already in progress, ignoring");
+      return;
+    }
+
+    toggleInProgressRef.current = true;
+
+    try {
+      if (enabled) {
         // First, unlock audio synchronously within the gesture (iOS)
         await heliosinger.unlock();
 
@@ -376,7 +425,7 @@ export default function Dashboard() {
           debugLog("Starting Heliosinger on user interaction...");
           await heliosinger.start();
           debugLog("Heliosinger started successfully");
-          
+
           // Verify audio is actually playing
           setTimeout(() => {
             if (heliosinger.isSinging) {
@@ -387,24 +436,25 @@ export default function Dashboard() {
           }, 500);
         }
         debugLog("Heliosinger mode enabled - the sun will sing");
-      } catch (error) {
-        console.error("Failed to start Heliosinger:", error);
-        const errorMessage = error instanceof Error ? error.message : "Could not start Heliosinger audio.";
-        toast({
-          title: "Heliosinger Failed",
-          description: `${errorMessage} On iOS, make sure your device is not on silent mode and volume is up.`,
-          variant: "destructive",
-        });
+      } else {
         setIsHeliosingerEnabled(false);
-        return;
+        // Explicitly stop audio
+        if (heliosinger.isSinging) {
+          heliosinger.stop();
+        }
+        debugLog("Heliosinger mode disabled");
       }
-    } else {
+    } catch (error) {
+      console.error("Failed to toggle Heliosinger:", error);
+      const errorMessage = error instanceof Error ? error.message : "Could not start Heliosinger audio.";
+      toast({
+        title: "Heliosinger Failed",
+        description: `${errorMessage} On iOS, make sure your device is not on silent mode and volume is up.`,
+        variant: "destructive",
+      });
       setIsHeliosingerEnabled(false);
-      // Explicitly stop audio
-      if (heliosinger.isSinging) {
-        heliosinger.stop();
-      }
-      debugLog("Heliosinger mode disabled");
+    } finally {
+      toggleInProgressRef.current = false;
     }
 
     updateAmbientMutation.mutate({
@@ -445,49 +495,70 @@ export default function Dashboard() {
   }, [heliosinger, isHeliosingerEnabled, comprehensiveData]);
 
 
-  // Volume change handler
-  // Accepts either array (from desktop slider) or number (from mobile player)
+  // Volume change handler with debounced audio and mutation to prevent spam
+  const volumeDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingVolumeRef = useRef<number>(0.4);
+
   const handleVolumeChange = (value: number[] | number) => {
     const newVolume = Array.isArray(value) ? value[0] : value;
     const clampedVolume = Math.max(0, Math.min(1, newVolume));
-    
+
+    // Update UI state immediately for responsiveness
     setAmbientVolume(clampedVolume);
-    
-    if (isHeliosingerEnabled) {
-      heliosinger.setVolume(clampedVolume);
+    pendingVolumeRef.current = clampedVolume;
+
+    // Debounce the audio state update (prevents rapid-fire setVolume calls)
+    if (volumeAudioDebounceRef.current) {
+      clearTimeout(volumeAudioDebounceRef.current);
     }
-    
-    if (isHeliosingerEnabled) {
-      setTimeout(() => {
+
+    volumeAudioDebounceRef.current = setTimeout(() => {
+      if (isHeliosingerEnabled) {
+        heliosinger.setVolume(pendingVolumeRef.current);
+      }
+    }, 50); // 50ms debounce for smooth audio updates
+
+    // Debounce the mutation for settings persistence (longer delay)
+    if (volumeDebounceRef.current) {
+      clearTimeout(volumeDebounceRef.current);
+    }
+
+    volumeDebounceRef.current = setTimeout(() => {
+      if (isHeliosingerEnabled) {
         updateAmbientMutation.mutate({
-          volume: clampedVolume,
+          volume: pendingVolumeRef.current,
           enabled: "true"
         });
-      }, 500);
-    }
+      }
+    }, 1000); // 1 second debounce for settings persistence
   };
 
   const isDataStreamActive = Array.isArray(systemStatus) && systemStatus.find((s: any) => s.component === 'data_stream')?.status === 'active';
 
-  if (currentError && !currentData) {
+  // Show error state when offline or API error (without fallback data)
+  if ((currentError || isOffline) && !currentData) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Card className="w-full max-w-md mx-4">
           <CardContent className="pt-6 text-center">
             <div className="text-destructive mb-4">
-              <i className="fas fa-exclamation-triangle text-4xl mb-2" />
-              <h2 className="text-xl font-bold">Data Connection Error</h2>
+              <i className={`fas ${isOffline ? 'fa-wifi' : 'fa-exclamation-triangle'} text-4xl mb-2`} />
+              <h2 className="text-xl font-bold">
+                {isOffline ? "You're Offline" : "Data Connection Error"}
+              </h2>
             </div>
             <p className="text-muted-foreground mb-4">
-              Unable to connect to solar wind data stream. The NOAA DSCOVR service may be temporarily unavailable.
+              {isOffline
+                ? "Please check your internet connection. The sun will sing again once you're back online."
+                : "Unable to connect to solar wind data stream. The NOAA DSCOVR service may be temporarily unavailable."}
             </p>
-            <Button 
+            <Button
               onClick={() => fetchDataMutation.mutate()}
-              disabled={fetchDataMutation.isPending}
+              disabled={fetchDataMutation.isPending || isOffline}
               data-testid="button-retry-fetch"
             >
               <i className="fas fa-refresh mr-2" />
-              {fetchDataMutation.isPending ? "Retrying..." : "Retry Connection"}
+              {fetchDataMutation.isPending ? "Retrying..." : isOffline ? "Waiting for Connection..." : "Retry Connection"}
             </Button>
           </CardContent>
         </Card>
@@ -695,10 +766,19 @@ export default function Dashboard() {
                   id="background-mode-toggle"
                   checked={backgroundMode}
                   onCheckedChange={(checked) => {
+                    // Immediate UI feedback
                     setBackgroundMode(checked);
-                    updateAmbientMutation.mutate({
-                      background_mode: checked ? "true" : "false"
-                    });
+
+                    // Debounce the mutation to prevent rapid-fire API calls
+                    if (backgroundModeDebounceRef.current) {
+                      clearTimeout(backgroundModeDebounceRef.current);
+                    }
+
+                    backgroundModeDebounceRef.current = setTimeout(() => {
+                      updateAmbientMutation.mutate({
+                        background_mode: checked ? "true" : "false"
+                      });
+                    }, 300); // 300ms debounce
                   }}
                   disabled={!isHeliosingerEnabled}
                   data-testid="switch-background-mode"

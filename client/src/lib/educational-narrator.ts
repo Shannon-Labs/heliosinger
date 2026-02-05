@@ -344,8 +344,13 @@ export function analyzeConditions(
   const prevBz = previous?.solar_wind?.bz ?? 0;
   const kp = current.k_index?.kp ?? 0;
   const prevKp = previous?.k_index?.kp ?? 0;
+  // Dynamic pressure: Pdyn = 1.6726e-6 * n * v² (nPa) - NOAA standard formula
   const dynamicPressure = Math.max(0, 1.6726e-6 * density * vel * vel);
-  const standoff = dynamicPressure > 0 ? 10 * Math.pow(dynamicPressure, -1/6) : 10;
+  // Magnetopause standoff: Shue et al. (1998) formula with Bz correction
+  // R_mp = 10.22 × P_dyn^(-1/6) × (1 + 0.033 × Bz) Earth radii
+  const standoff = dynamicPressure > 0
+    ? 10.22 * Math.pow(dynamicPressure, -1/6) * (1 + 0.033 * (bz || 0))
+    : 10.22;
 
   const vowel = heliosingerData?.vowelName;
   const chordQuality = heliosingerData?.chordQuality?.name;

@@ -330,7 +330,7 @@ class SolarWindAudioEngine {
 
     sirenOsc.type = 'sawtooth';
     sirenGain.gain.value = 0;
-    
+
     sirenFilter.type = 'bandpass';
     sirenFilter.frequency.value = 800;
     sirenFilter.Q.value = 10;
@@ -347,13 +347,26 @@ class SolarWindAudioEngine {
     sirenOsc.frequency.exponentialRampToValueAtTime(frequency * 1.3, startTime + 1.2);
     sirenOsc.frequency.exponentialRampToValueAtTime(frequency * 0.7, startTime + decayTime);
 
-    // Siren volume envelope
+    // Siren volume envelope - two-step decay for smooth ending
     sirenGain.gain.setValueAtTime(0, startTime);
     sirenGain.gain.linearRampToValueAtTime(0.3, startTime + 0.1);
-    sirenGain.gain.exponentialRampToValueAtTime(0.001, startTime + decayTime);
+    sirenGain.gain.exponentialRampToValueAtTime(0.01, startTime + decayTime * 0.95);
+    sirenGain.gain.linearRampToValueAtTime(0, startTime + decayTime); // Linear to 0 prevents pop
 
     sirenOsc.start(startTime);
     sirenOsc.stop(startTime + decayTime);
+
+    // CRITICAL: Disconnect nodes after stop to prevent memory leaks
+    const cleanupDelay = (decayTime + 0.1) * 1000;
+    setTimeout(() => {
+      try {
+        sirenOsc.disconnect();
+        sirenFilter.disconnect();
+        sirenGain.disconnect();
+      } catch (e) {
+        // Node may already be disconnected
+      }
+    }, cleanupDelay);
   }
 
   private addBeatingEffect(
@@ -371,13 +384,13 @@ class SolarWindAudioEngine {
 
     // Calculate beating frequency (typically 1-5 Hz for audible beating)
     const beatFrequency = baseFrequency * (1 + (detuneCents * 0.5) / 1200);
-    
+
     beatOsc.type = 'sine';
     beatOsc.frequency.value = beatFrequency;
 
     beatFilter.type = 'lowpass';
     beatFilter.frequency.value = Math.min(4000, beatFrequency * 3);
-    
+
     beatGain.gain.value = 0;
 
     // Connect beating oscillator
@@ -385,14 +398,28 @@ class SolarWindAudioEngine {
     beatFilter.connect(beatGain);
     beatGain.connect(this.masterGain);
 
-    // Envelope for beating effect
+    // Envelope for beating effect - two-step decay for smooth ending
+    const effectEndTime = decayTime * 0.8;
     beatGain.gain.setValueAtTime(0, startTime);
     beatGain.gain.linearRampToValueAtTime(0.3, startTime + 0.1);
-    beatGain.gain.exponentialRampToValueAtTime(0.001, startTime + decayTime * 0.8);
+    beatGain.gain.exponentialRampToValueAtTime(0.01, startTime + effectEndTime * 0.95);
+    beatGain.gain.linearRampToValueAtTime(0, startTime + effectEndTime); // Linear to 0 prevents pop
 
     // Start and stop
     beatOsc.start(startTime);
     beatOsc.stop(startTime + decayTime);
+
+    // CRITICAL: Disconnect nodes after stop to prevent memory leaks
+    const cleanupDelay = (decayTime + 0.1) * 1000;
+    setTimeout(() => {
+      try {
+        beatOsc.disconnect();
+        beatFilter.disconnect();
+        beatGain.disconnect();
+      } catch (e) {
+        // Node may already be disconnected
+      }
+    }, cleanupDelay);
   }
 
   public async playChord(chordData: ChordData): Promise<void> {

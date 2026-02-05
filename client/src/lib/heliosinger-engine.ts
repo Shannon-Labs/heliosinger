@@ -417,7 +417,9 @@ class HeliosingerEngine {
         filter.type = 'bandpass';
         filter.frequency.value = formant.frequency;
         // Q value determines filter sharpness - higher Q = more focused on formant frequency
-        filter.Q.value = formant.frequency / formant.bandwidth;
+        // Clamp Q to 5-15 range to prevent excessive resonance while maintaining vowel character
+        const calculatedQ = formant.frequency / formant.bandwidth;
+        filter.Q.value = Math.min(15, Math.max(5, calculatedQ));
         
         const gain = this.audioContext!.createGain();
         // Use the gain from formant calculation (now boosted for clarity)
@@ -711,7 +713,12 @@ class HeliosingerEngine {
     if (!this.isSinging || !this.audioContext || !this.heliosingerLayer) return;
 
     // Verify audio context is in a valid state
-    if (this.audioContext.state !== 'running') {
+    if (this.audioContext.state === 'suspended') {
+      // Attempt to resume suspended context (common on iOS/Android during low activity)
+      debugWarn('AudioContext suspended during update, attempting resume...');
+      this.audioContext.resume().catch(e => debugWarn('Resume failed:', e));
+      return; // Wait for next update cycle after resume attempt
+    } else if (this.audioContext.state !== 'running') {
       debugWarn('AudioContext not running during update, state:', this.audioContext.state);
       return;
     }
@@ -856,8 +863,10 @@ class HeliosingerEngine {
         Math.max(20, base + offset),
         now + smoothingTime
       );
-      this.binauralLayer.leftGain.gain.exponentialRampToValueAtTime(mix, now + smoothingTime);
-      this.binauralLayer.rightGain.gain.exponentialRampToValueAtTime(mix, now + smoothingTime);
+      // Safety clamp: exponentialRampToValueAtTime cannot ramp to 0
+      const safeMix = Math.max(0.001, mix);
+      this.binauralLayer.leftGain.gain.exponentialRampToValueAtTime(safeMix, now + smoothingTime);
+      this.binauralLayer.rightGain.gain.exponentialRampToValueAtTime(safeMix, now + smoothingTime);
     }
     
     // Update texture layer
