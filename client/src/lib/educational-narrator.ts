@@ -271,13 +271,13 @@ const ELECTROMAGNETISM_INSIGHTS = {
     cooldownKey: "aurora",
   }),
 
-  magneticPressure: (density: number, vel: number, pressureNPa: number): EducationalInsight => ({
+  magneticPressure: (density: number, vel: number, pressureNPa: number, standoff: number): EducationalInsight => ({
     id: "em-pressure",
     track: "electromagnetism",
     priority: "notable",
     headline: "DYNAMIC PRESSURE",
-    explanation: "Solar wind exerts ram pressure on the magnetosphere (proportional to density x velocity squared). High pressure compresses Earth's magnetic field, pushing the magnetopause closer to Earth.",
-    dataConnection: `Dynamic pressure ~${pressureNPa.toFixed(2)} nPa (density ${density.toFixed(1)} p/cm3, speed ${vel.toFixed(0)} km/s).`,
+    explanation: `Solar wind ram pressure compresses Earth's magnetic shield. At ${pressureNPa.toFixed(2)} nPa, the magnetopause is pushed to ~${standoff.toFixed(1)} Earth radii.`,
+    dataConnection: `Pressure: ${pressureNPa.toFixed(2)} nPa. Standoff: ${standoff.toFixed(1)} Rₑ (Geosync: 6.6 Rₑ).`,
     soundConnection: "Compression events thicken the harmonic texture and add urgency.",
     duration: 10000,
     cooldownKey: "pressure",
@@ -345,6 +345,7 @@ export function analyzeConditions(
   const kp = current.k_index?.kp ?? 0;
   const prevKp = previous?.k_index?.kp ?? 0;
   const dynamicPressure = Math.max(0, 1.6726e-6 * density * vel * vel);
+  const standoff = dynamicPressure > 0 ? 10 * Math.pow(dynamicPressure, -1/6) : 10;
 
   const vowel = heliosingerData?.vowelName;
   const chordQuality = heliosingerData?.chordQuality?.name;
@@ -407,7 +408,7 @@ export function analyzeConditions(
 
   // Dynamic pressure
   if (dynamicPressure >= 3 && !isCoolingDown(state, "pressure")) {
-    insights.push(ELECTROMAGNETISM_INSIGHTS.magneticPressure(density, vel, dynamicPressure));
+    insights.push(ELECTROMAGNETISM_INSIGHTS.magneticPressure(density, vel, dynamicPressure, standoff));
   }
 
   // ========== ACOUSTICS INSIGHTS ==========

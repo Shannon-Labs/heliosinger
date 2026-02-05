@@ -257,8 +257,12 @@ export default function Dashboard() {
     const density = comprehensiveData?.solar_wind?.density;
     if (!velocity || !density) return null;
     const pressure = Math.max(0, 1.6726e-6 * density * velocity * velocity);
+    // Formula: Standoff distance (Re) = 10 * (pressure)^(-1/6)
+    const standoff = 10 * Math.pow(pressure, -1/6);
     return {
       pressure,
+      standoff,
+      isGeosyncAtRisk: standoff <= 6.6
     };
   }, [comprehensiveData?.solar_wind?.velocity, comprehensiveData?.solar_wind?.density]);
 
@@ -823,14 +827,27 @@ export default function Dashboard() {
                     Wind {leadTimeSummary.velocity} km/s
                   </span>
                   {dynamicPressureSummary ? (
-                    <span className="border border-white/20 bg-black/40 px-2 py-1">
-                      Pressure {dynamicPressureSummary.pressure.toFixed(2)} nPa
-                    </span>
+                    <>
+                      <span className="border border-white/20 bg-black/40 px-2 py-1">
+                        Pressure {dynamicPressureSummary.pressure.toFixed(2)} nPa
+                      </span>
+                      <span className={`border px-2 py-1 ${dynamicPressureSummary.isGeosyncAtRisk ? 'border-destructive bg-destructive/20 text-white animate-pulse' : 'border-white/20 bg-black/40'}`}>
+                        Standoff {dynamicPressureSummary.standoff.toFixed(1)} Rₑ
+                      </span>
+                    </>
                   ) : null}
                 </div>
               ) : null}
               {implications.length > 0 ? (
                 <div className="space-y-3">
+                  {dynamicPressureSummary && dynamicPressureSummary.isGeosyncAtRisk && (
+                    <div className="border-2 border-destructive bg-destructive/10 px-4 py-2 -skew-x-3 text-[11px] font-mono text-destructive-foreground animate-pulse">
+                      <div className="skew-x-3 flex items-center gap-2">
+                        <i className="fas fa-exclamation-triangle" />
+                        <span>MAGNETOPAUSE COMPRESSION: Geosynchronous orbit (~6.6 Rₑ) is exposed to raw solar wind.</span>
+                      </div>
+                    </div>
+                  )}
                   {implications.map((implication, index) => (
                     <div
                       key={`${implication.title}-${index}`}
