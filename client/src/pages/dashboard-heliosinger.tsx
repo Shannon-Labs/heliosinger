@@ -116,6 +116,7 @@ export default function Dashboard() {
     const bz = comprehensiveData.solar_wind.bz ?? 0;
     const velocity = comprehensiveData.solar_wind.velocity ?? 0;
     const density = comprehensiveData.solar_wind.density ?? 0;
+    const dynamicPressure = Math.max(0, 1.6726e-6 * density * velocity * velocity);
     const flareClass = comprehensiveData.xray_flux?.flare_class;
     const proton10 = comprehensiveData.proton_flux?.flux_10mev;
 
@@ -195,6 +196,26 @@ export default function Dashboard() {
       });
     }
 
+    if (dynamicPressure >= 4) {
+      items.push({
+        title: "Strong solar wind pressure",
+        detail: "Magnetosphere is compressed; geosynchronous satellites can see enhanced exposure and drag effects.",
+        tone: "alert",
+      });
+    } else if (dynamicPressure >= 2) {
+      items.push({
+        title: "Elevated dynamic pressure",
+        detail: "Compression boosts geomagnetic response, especially if Bz turns south.",
+        tone: "watch",
+      });
+    } else if (dynamicPressure <= 0.5 && velocity > 0) {
+      items.push({
+        title: "Low dynamic pressure",
+        detail: "Magnetosphere expands outward; conditions are typically quieter.",
+        tone: "calm",
+      });
+    }
+
     if (flareClass && (flareClass.startsWith("M") || flareClass.startsWith("X"))) {
       items.push({
         title: `${flareClass}-class flare`,
@@ -230,6 +251,16 @@ export default function Dashboard() {
       velocity: Math.round(velocity),
     };
   }, [comprehensiveData?.solar_wind?.velocity]);
+
+  const dynamicPressureSummary = useMemo(() => {
+    const velocity = comprehensiveData?.solar_wind?.velocity;
+    const density = comprehensiveData?.solar_wind?.density;
+    if (!velocity || !density) return null;
+    const pressure = Math.max(0, 1.6726e-6 * density * velocity * velocity);
+    return {
+      pressure,
+    };
+  }, [comprehensiveData?.solar_wind?.velocity, comprehensiveData?.solar_wind?.density]);
 
   // Fetch current solar wind data (uses adaptive interval)
   const { data: currentData, isLoading: currentLoading, error: currentError } = useQuery<SolarWindReading>({
@@ -791,6 +822,11 @@ export default function Dashboard() {
                   <span className="border border-white/20 bg-black/40 px-2 py-1">
                     Wind {leadTimeSummary.velocity} km/s
                   </span>
+                  {dynamicPressureSummary ? (
+                    <span className="border border-white/20 bg-black/40 px-2 py-1">
+                      Pressure {dynamicPressureSummary.pressure.toFixed(2)} nPa
+                    </span>
+                  ) : null}
                 </div>
               ) : null}
               {implications.length > 0 ? (
