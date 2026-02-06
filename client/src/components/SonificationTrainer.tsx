@@ -78,44 +78,44 @@ export function SonificationTrainer({ currentData, comprehensiveData }: Sonifica
   }, []);
 
   return (
-    <div className="border-4 border-primary bg-black p-6 shadow-[8px_8px_0px_0px_hsl(var(--primary))] mb-8">
-      <div className="flex items-center justify-between mb-6 border-b-4 border-primary pb-2">
-        <h3 className="text-2xl font-black uppercase tracking-tighter text-primary">
+    <div className="border-2 md:border-4 border-primary bg-black p-3 md:p-6 shadow-[4px_4px_0px_0px_hsl(var(--primary))] md:shadow-[8px_8px_0px_0px_hsl(var(--primary))] mb-6 md:mb-8">
+      <div className="flex items-center justify-between mb-4 md:mb-6 border-b-2 md:border-b-4 border-primary pb-2 gap-2">
+        <h3 className="text-lg sm:text-2xl font-black uppercase tracking-tighter text-primary">
           Training Mode
         </h3>
-        <Badge variant="outline" className="border-2 border-primary text-primary font-bold rounded-none uppercase">
+        <Badge variant="outline" className="border-2 border-primary text-primary font-bold rounded-none uppercase text-[10px] sm:text-xs flex-shrink-0">
           Active Listening
         </Badge>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
         {/* Left: The Sound */}
-        <div className="space-y-4">
+        <div className="space-y-3 md:space-y-4">
           <div>
             <span className="block text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">You Are Hearing</span>
-            
-            <div className="mb-4 border-2 border-white/10">
-              <AudioVisualizer 
-                isPlaying={true} 
-                data={currentData} 
+
+            <div className="mb-3 md:mb-4 border-2 border-white/10">
+              <AudioVisualizer
+                isPlaying={true}
+                data={currentData}
               />
             </div>
 
-            <div className="flex items-baseline gap-4">
-              <span className="text-8xl font-black text-white leading-none">
+            <div className="flex items-baseline gap-2 sm:gap-4">
+              <span className="text-5xl sm:text-6xl md:text-8xl font-black text-white leading-none">
                 "{vowel}"
               </span>
-              <span className="text-xl font-mono text-primary uppercase">
+              <span className="text-base sm:text-xl font-mono text-primary uppercase">
                 /{currentData.currentVowel.ipaSymbol}/
               </span>
             </div>
-            <p className="text-lg font-bold text-white mt-2 uppercase">
+            <p className="text-base sm:text-lg font-bold text-white mt-2 uppercase">
               {currentData.currentVowel.displayName}
             </p>
           </div>
-          
-          <div className="bg-secondary/50 p-4 border-l-4 border-accent">
-            <p className="text-lg font-medium text-white italic leading-tight">
+
+          <div className="bg-secondary/50 p-3 md:p-4 border-l-2 md:border-l-4 border-accent">
+            <p className="text-sm sm:text-lg font-medium text-white italic leading-tight">
               "{getExplanation(vowel)}"
             </p>
           </div>

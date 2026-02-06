@@ -2,29 +2,29 @@ import { Card } from '@/components/ui/card';
 
 export function Footer() {
   return (
-    <footer className="border-t-4 border-primary bg-black text-white relative overflow-hidden">
+    <footer className="border-t-2 md:border-t-4 border-primary bg-black text-white relative overflow-hidden">
       <div className="pointer-events-none absolute inset-0 opacity-5 bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:22px_22px]" />
-      <div className="container mx-auto px-4 py-10 relative z-10">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="border-2 border-white/20 p-4 -skew-x-6 bg-black/70 shadow-[6px_6px_0px_rgba(0,0,0,0.6)]">
-            <h4 className="font-black mb-3 uppercase tracking-widest text-primary skew-x-6">Mission</h4>
-            <p className="text-sm text-white/70 skew-x-6">
+      <div className="container mx-auto px-3 md:px-4 py-6 md:py-10 relative z-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8">
+          <div className="border-2 border-white/20 p-3 md:p-4 -skew-x-0 sm:-skew-x-6 bg-black/70 shadow-[3px_3px_0px_rgba(0,0,0,0.6)] md:shadow-[6px_6px_0px_rgba(0,0,0,0.6)]">
+            <h4 className="font-black mb-2 md:mb-3 uppercase tracking-wider md:tracking-widest text-primary sm:skew-x-6">Mission</h4>
+            <p className="text-xs sm:text-sm text-white/70 sm:skew-x-6">
               The sun sings space weather in real-time—hear every surge and calm.
             </p>
           </div>
-          
-          <div className="border-2 border-white/20 p-4 -skew-x-6 bg-black/70 shadow-[6px_6px_0px_rgba(0,0,0,0.6)]">
-            <h4 className="font-black mb-3 uppercase tracking-widest text-primary skew-x-6">Data Sources</h4>
-            <ul className="text-sm text-white/70 space-y-1 skew-x-6">
+
+          <div className="border-2 border-white/20 p-3 md:p-4 -skew-x-0 sm:-skew-x-6 bg-black/70 shadow-[3px_3px_0px_rgba(0,0,0,0.6)] md:shadow-[6px_6px_0px_rgba(0,0,0,0.6)]">
+            <h4 className="font-black mb-2 md:mb-3 uppercase tracking-wider md:tracking-widest text-primary sm:skew-x-6">Data Sources</h4>
+            <ul className="text-xs sm:text-sm text-white/70 space-y-1 sm:skew-x-6">
               <li>NOAA Space Weather Prediction Center</li>
               <li>DSCOVR L1 Lagrange Point Observatory</li>
               <li>Real-time solar wind plasma data</li>
             </ul>
           </div>
-          
-          <div className="border-2 border-white/20 p-4 -skew-x-6 bg-black/70 shadow-[6px_6px_0px_rgba(0,0,0,0.6)]">
-            <h4 className="font-black mb-3 uppercase tracking-widest text-primary skew-x-6">Technology</h4>
-            <ul className="text-sm text-white/70 space-y-1 skew-x-6">
+
+          <div className="border-2 border-white/20 p-3 md:p-4 -skew-x-0 sm:-skew-x-6 bg-black/70 shadow-[3px_3px_0px_rgba(0,0,0,0.6)] md:shadow-[6px_6px_0px_rgba(0,0,0,0.6)]">
+            <h4 className="font-black mb-2 md:mb-3 uppercase tracking-wider md:tracking-widest text-primary sm:skew-x-6">Technology</h4>
+            <ul className="text-xs sm:text-sm text-white/70 space-y-1 sm:skew-x-6">
               <li>Web Audio API with formant filters</li>
               <li>Real-time data processing</li>
               <li>Vowel synthesis & harmonic series</li>
@@ -33,7 +33,7 @@ export function Footer() {
           </div>
         </div>
         
-        <div className="border-t-2 border-white/20 pt-8 mt-8 text-center text-sm text-white/60 space-y-2">
+        <div className="border-t-2 border-white/20 pt-4 md:pt-8 mt-4 md:mt-8 text-center text-xs sm:text-sm text-white/60 space-y-2">
           <div>© 2025 Heliosinger — Shannon Labs, Inc.</div>
           <div className="flex items-center justify-center gap-4 pt-2">
             <a
