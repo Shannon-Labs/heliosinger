@@ -1037,11 +1037,11 @@ export default function Dashboard() {
                 </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="relative p-3 md:p-6">
-              <div className="relative min-h-[180px] md:min-h-[260px]">
-                <EducationalInsight narratorState={narrator.state} />
+            <CardContent className="p-3 md:p-6">
+              <div className="min-h-[120px] md:min-h-[180px]">
+                <EducationalInsight narratorState={narrator.state} variant="inline" />
                 {!narrator.isShowingInsight && (
-                  <div className="absolute inset-0 flex items-center justify-center text-xs text-white/60 uppercase tracking-widest">
+                  <div className="flex items-center justify-center py-8 md:py-12 text-xs text-white/60 uppercase tracking-widest">
                     Generating next insight...
                   </div>
                 )}

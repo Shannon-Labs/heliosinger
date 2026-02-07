@@ -10,6 +10,8 @@ import { getCurrentInsight, getInsightProgress } from "@/lib/educational-narrato
 
 interface EducationalInsightProps {
   narratorState: NarratorState;
+  /** "overlay" (default) = absolute-positioned for stream, "inline" = flows in document for dashboard cards */
+  variant?: "overlay" | "inline";
 }
 
 const TRACK_CONFIG: Record<InsightTrack, { label: string; color: string; bgColor: string; icon: string }> = {
@@ -40,8 +42,9 @@ const PRIORITY_CONFIG: Record<InsightPriority, { scale: number; glow: boolean }>
   ambient: { scale: 0.98, glow: false },
 };
 
-export function EducationalInsight({ narratorState }: EducationalInsightProps) {
+export function EducationalInsight({ narratorState, variant = "overlay" }: EducationalInsightProps) {
   const [progress, setProgress] = useState(0);
+  const isInline = variant === "inline";
 
   // Update progress smoothly
   useEffect(() => {
@@ -60,18 +63,21 @@ export function EducationalInsight({ narratorState }: EducationalInsightProps) {
       {insight && trackConfig && priorityConfig && (
         <motion.div
           key={insight.id}
-          initial={{ opacity: 0, x: -40, scale: 0.95 }}
-          animate={{ opacity: 1, x: 0, scale: priorityConfig.scale }}
-          exit={{ opacity: 0, x: 40, scale: 0.95 }}
+          initial={isInline ? { opacity: 0, y: 12 } : { opacity: 0, x: -40, scale: 0.95 }}
+          animate={isInline ? { opacity: 1, y: 0 } : { opacity: 1, x: 0, scale: priorityConfig.scale }}
+          exit={isInline ? { opacity: 0, y: -12 } : { opacity: 0, x: 40, scale: 0.95 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          className="pointer-events-none absolute bottom-8 left-8 right-8 z-40 max-w-2xl"
+          className={isInline
+            ? "w-full"
+            : "pointer-events-none absolute bottom-8 left-8 right-8 z-40 max-w-2xl"
+          }
         >
           <div
             className={`
               relative overflow-hidden bg-black/95 backdrop-blur-sm
-              border-l-8 ${trackConfig.color.replace("text-", "border-")}
-              border-y-2 border-r-2 border-white/20
-              shadow-[8px_8px_0px_rgba(0,0,0,0.8)]
+              border-l-4 ${isInline ? '' : 'md:border-l-8'} ${trackConfig.color.replace("text-", "border-")}
+              border-y ${isInline ? '' : 'border-y-2'} border-r ${isInline ? '' : 'border-r-2'} border-white/20
+              ${isInline ? 'shadow-[4px_4px_0px_rgba(0,0,0,0.6)]' : 'shadow-[8px_8px_0px_rgba(0,0,0,0.8)]'}
               ${priorityConfig.glow ? "ring-1 ring-white/20" : ""}
             `}
           >
@@ -86,13 +92,13 @@ export function EducationalInsight({ narratorState }: EducationalInsightProps) {
             </div>
 
             {/* Track label */}
-            <div className="flex items-center gap-3 px-6 pt-5 pb-2">
-              <div className={`w-5 h-5 ${trackConfig.color}`}>
+            <div className={`flex items-center gap-2 ${isInline ? 'px-3 pt-3 pb-1 md:px-4' : 'gap-3 px-6 pt-5 pb-2'}`}>
+              <div className={`${isInline ? 'w-4 h-4' : 'w-5 h-5'} ${trackConfig.color}`}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d={trackConfig.icon} />
                 </svg>
               </div>
-              <span className={`text-[10px] font-black tracking-[0.3em] uppercase ${trackConfig.color}`}>
+              <span className={`font-black tracking-[0.3em] uppercase ${trackConfig.color} ${isInline ? 'text-[9px]' : 'text-[10px]'}`}>
                 {trackConfig.label}
               </span>
               {insight.priority === "breakthrough" && (
@@ -103,23 +109,23 @@ export function EducationalInsight({ narratorState }: EducationalInsightProps) {
             </div>
 
             {/* Headline */}
-            <div className="px-6 pb-2">
-              <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight leading-none">
+            <div className={isInline ? 'px-3 pb-1.5 md:px-4' : 'px-6 pb-2'}>
+              <h2 className={`font-black text-white uppercase tracking-tight leading-none ${isInline ? 'text-base md:text-xl' : 'text-2xl md:text-3xl'}`}>
                 {insight.headline}
               </h2>
             </div>
 
             {/* Explanation */}
-            <div className="px-6 pb-3">
-              <p className="text-sm md:text-base text-white/90 leading-relaxed">
+            <div className={isInline ? 'px-3 pb-2 md:px-4' : 'px-6 pb-3'}>
+              <p className={`text-white/90 leading-relaxed ${isInline ? 'text-xs md:text-sm' : 'text-sm md:text-base'}`}>
                 {insight.explanation}
               </p>
             </div>
 
             {/* Data Connection */}
-            <div className="px-6 pb-3 flex flex-wrap gap-3">
-              <div className="bg-white/10 border border-white/20 px-3 py-1.5 -skew-x-6">
-                <p className="text-xs font-mono text-white/80 skew-x-6">
+            <div className={`flex flex-wrap gap-2 ${isInline ? 'px-3 pb-2 md:px-4' : 'px-6 pb-3 gap-3'}`}>
+              <div className={`bg-white/10 border border-white/20 px-2 py-1 ${isInline ? '' : 'md:px-3 md:py-1.5 -skew-x-6'}`}>
+                <p className={`font-mono text-white/80 ${isInline ? 'text-[10px] md:text-xs' : 'text-xs skew-x-6'}`}>
                   <span className="text-primary font-bold">DATA:</span> {insight.dataConnection}
                 </p>
               </div>
@@ -127,12 +133,12 @@ export function EducationalInsight({ narratorState }: EducationalInsightProps) {
 
             {/* Sound Connection (if present) */}
             {insight.soundConnection && (
-              <div className="px-6 pb-5">
-                <div className={`border-l-4 ${trackConfig.color.replace("text-", "border-")} pl-4 py-2 bg-white/5`}>
-                  <p className="text-xs uppercase tracking-wider text-white/50 mb-1 font-bold">
+              <div className={isInline ? 'px-3 pb-3 md:px-4' : 'px-6 pb-5'}>
+                <div className={`border-l-4 ${trackConfig.color.replace("text-", "border-")} pl-3 py-1.5 bg-white/5 ${isInline ? '' : 'md:pl-4 md:py-2'}`}>
+                  <p className={`uppercase tracking-wider text-white/50 mb-0.5 font-bold ${isInline ? 'text-[9px]' : 'text-xs mb-1'}`}>
                     What You Hear
                   </p>
-                  <p className="text-sm text-white/90 italic">
+                  <p className={`text-white/90 italic ${isInline ? 'text-xs' : 'text-sm'}`}>
                     "{insight.soundConnection}"
                   </p>
                 </div>
@@ -140,8 +146,8 @@ export function EducationalInsight({ narratorState }: EducationalInsightProps) {
             )}
 
             {/* Decorative corner */}
-            <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-white/10" />
-            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-white/10" />
+            <div className="absolute top-0 right-0 w-6 h-6 md:w-8 md:h-8 border-t-2 border-r-2 border-white/10" />
+            <div className="absolute bottom-0 left-0 w-6 h-6 md:w-8 md:h-8 border-b-2 border-l-2 border-white/10" />
           </div>
         </motion.div>
       )}
