@@ -282,6 +282,30 @@ const ELECTROMAGNETISM_INSIGHTS = {
     duration: 10000,
     cooldownKey: "pressure",
   }),
+
+  convectionEfield: (vel: number, bz: number, ey: number): EducationalInsight => ({
+    id: "em-efield",
+    track: "electromagnetism",
+    priority: "significant",
+    headline: "CONVECTION ELECTRIC FIELD",
+    explanation: "The solar wind's velocity crossed with the southward IMF creates a dawn-to-dusk electric field (Ey = V × Bz). This field drives plasma convection inside the magnetosphere, energizing the ring current and feeding substorms.",
+    dataConnection: `V = ${vel.toFixed(0)} km/s, Bz = ${bz.toFixed(1)} nT → Ey ≈ ${ey.toFixed(1)} mV/m. Values above 2 mV/m signal meaningful energy input.`,
+    soundConnection: "Strong Ey correlates with harmonic tension and wider stereo — more energy pouring in.",
+    duration: 14000,
+    cooldownKey: "efield",
+  }),
+
+  radioBlackout: (rScale: number, rLabel: string, fluxWm2: number): EducationalInsight => ({
+    id: "em-radio-blackout",
+    track: "space-weather",
+    priority: rScale >= 3 ? "breakthrough" : "significant",
+    headline: `RADIO BLACKOUT — ${rLabel}`,
+    explanation: `Solar X-ray flares ionize Earth's dayside D-layer, absorbing HF radio waves. At ${rLabel} level, shortwave communications and low-frequency navigation can degrade or black out for minutes to hours.`,
+    dataConnection: `X-ray flux: ${(fluxWm2 * 1e6).toFixed(1)} µW/m² (0.1–0.8 nm). NOAA threshold: ${rLabel}.`,
+    soundConnection: "Flare-driven X-ray spikes add shimmer and brightness to the sonic texture.",
+    duration: 14000,
+    cooldownKey: "radio-blackout",
+  }),
 };
 
 // ============================================================================
@@ -414,6 +438,28 @@ export function analyzeConditions(
   // Dynamic pressure
   if (dynamicPressure >= 3 && !isCoolingDown(state, "pressure")) {
     insights.push(ELECTROMAGNETISM_INSIGHTS.magneticPressure(density, vel, dynamicPressure, standoff));
+  }
+
+  // Convection electric field
+  const bzSouth = Math.max(0, -bz);
+  const ey = vel * bzSouth * 0.001; // mV/m
+  if (ey >= 2 && !isCoolingDown(state, "efield")) {
+    insights.push(ELECTROMAGNETISM_INSIGHTS.convectionEfield(vel, bz, ey));
+  }
+
+  // R-scale radio blackout
+  const longWave = current.xray_flux?.long_wave;
+  if (longWave && longWave > 0) {
+    let rScale = 0;
+    let rLabel = "R0";
+    if (longWave >= 2e-3)      { rScale = 5; rLabel = "R5"; }
+    else if (longWave >= 1e-3) { rScale = 4; rLabel = "R4"; }
+    else if (longWave >= 1e-4) { rScale = 3; rLabel = "R3"; }
+    else if (longWave >= 5e-5) { rScale = 2; rLabel = "R2"; }
+    else if (longWave >= 1e-5) { rScale = 1; rLabel = "R1"; }
+    if (rScale >= 1 && !isCoolingDown(state, "radio-blackout")) {
+      insights.push(ELECTROMAGNETISM_INSIGHTS.radioBlackout(rScale, rLabel, longWave));
+    }
   }
 
   // ========== ACOUSTICS INSIGHTS ==========

@@ -618,38 +618,38 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
   }
 
   return (
-    <div className="w-full bg-black p-1 border-l-4 border-primary shadow-[8px_8px_0px_rgba(0,0,0,0.5)] relative overflow-hidden">
+    <div className="w-full bg-black p-1 border-l-2 md:border-l-4 border-primary shadow-[4px_4px_0px_rgba(0,0,0,0.5)] md:shadow-[8px_8px_0px_rgba(0,0,0,0.5)] relative overflow-hidden">
        {/* Background Pattern */}
        <div className="absolute inset-0 pointer-events-none opacity-5 bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:20px_20px] z-0" />
 
        {/* Header Block */}
-       <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6 px-4 pt-4">
-         <div className="flex items-center gap-3">
-           <div className="w-10 h-10 bg-primary text-black flex items-center justify-center -skew-x-12 border-2 border-white shadow-[4px_4px_0px_rgba(255,255,255,0.1)]">
-             <i className="fas fa-meteor text-xl skew-x-12" />
+       <div className="relative z-10 flex items-center justify-between gap-2 md:gap-4 mb-3 md:mb-6 px-2 md:px-4 pt-2 md:pt-4">
+         <div className="flex items-center gap-2 md:gap-3">
+           <div className="w-7 h-7 md:w-10 md:h-10 bg-primary text-black flex items-center justify-center md:-skew-x-12 border-2 border-white shadow-[2px_2px_0px_rgba(255,255,255,0.1)] flex-shrink-0">
+             <i className="fas fa-meteor text-sm md:text-xl md:skew-x-12" />
            </div>
-           <div className="flex flex-col">
-             <h2 className="text-2xl font-black uppercase tracking-tighter leading-none text-white">
+           <div className="flex flex-col min-w-0">
+             <h2 className="text-sm md:text-2xl font-black uppercase tracking-tighter leading-none text-white truncate">
                Solar Hologram
              </h2>
-             <span className="text-xs font-bold text-primary tracking-[0.2em] uppercase">
-               Visual Interface // {isPlaying ? "ONLINE" : "STANDBY"}
+             <span className="text-[9px] md:text-xs font-bold text-primary tracking-wider md:tracking-[0.2em] uppercase">
+               {isPlaying ? "ONLINE" : "STANDBY"}
              </span>
            </div>
          </div>
          <div className={`
-           px-4 py-1 -skew-x-12 border-2 border-white/20
+           px-2 py-0.5 md:px-4 md:py-1 md:-skew-x-12 border border-white/20 md:border-2 flex-shrink-0
            ${isPlaying ? 'bg-destructive/20 text-destructive' : 'bg-white/10 text-white/50'}
          `}>
-           <span className="block text-xs font-black tracking-widest skew-x-12 uppercase">
-             {isPlaying ? "Live Feed Active" : "Visual Mode Only"}
+           <span className="block text-[9px] md:text-xs font-black tracking-wider md:tracking-widest md:skew-x-12 uppercase">
+             {isPlaying ? "Live" : "Standby"}
            </span>
          </div>
        </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-8 relative z-10 px-4 pb-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 md:gap-8 relative z-10 px-2 md:px-4 pb-3 md:pb-4">
         {/* 3D Viewport */}
-        <div className="relative border-4 border-white/10 bg-black/50 h-[320px] sm:h-[420px] overflow-hidden group shadow-inner">
+        <div className="relative border-2 md:border-4 border-white/10 bg-black/50 h-[220px] sm:h-[320px] md:h-[420px] overflow-hidden group shadow-inner">
            <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-primary z-20" />
            <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-primary z-20" />
            
@@ -672,69 +672,68 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
         </div>
 
         {/* Stats Column */}
-        <div className="space-y-6">
+        <div className="space-y-3 md:space-y-6">
           {/* Status Header */}
-          <div className="border-l-4 border-primary pl-4 py-1">
-            <p className="text-xs font-black uppercase tracking-widest text-white/50 mb-1">System Mood</p>
-            <div className="text-lg font-black text-white uppercase leading-none tracking-tight">
+          <div className="border-l-2 md:border-l-4 border-primary pl-2 md:pl-4 py-1">
+            <p className="text-[10px] md:text-xs font-black uppercase tracking-widest text-white/50 mb-0.5 md:mb-1">System Mood</p>
+            <div className="text-sm md:text-lg font-black text-white uppercase leading-none tracking-tight truncate">
                {heliosingerData?.solarMood ?? "CALIBRATING..."}
             </div>
           </div>
 
-          {/* Custom Semantic Widgets (Replacing generic bars) */}
-          <div className="space-y-4">
-            
+          {/* Custom Semantic Widgets */}
+          <div className="space-y-3 md:space-y-4">
+
             {/* Audio Core Grid */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-2 md:gap-4">
               {/* Pitch Widget */}
-              <div className="bg-white/5 border-l-4 border-white p-2 -skew-x-6">
-                <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-1 skew-x-6">SONIC BASE</p>
-                <div className="flex items-baseline gap-2 skew-x-6">
-                  <span className="text-2xl font-black text-white font-mono">{heliosingerData?.baseNote ?? "--"}</span>
-                  <span className="text-[10px] text-white/50 font-mono">{(heliosingerData?.frequency ?? 0).toFixed(0)}HZ</span>
+              <div className="bg-white/5 border-l-2 md:border-l-4 border-white p-1.5 md:p-2 md:-skew-x-6">
+                <p className="text-[9px] md:text-[10px] font-black text-primary uppercase tracking-widest mb-0.5 md:mb-1 md:skew-x-6">SONIC BASE</p>
+                <div className="flex items-baseline gap-1 md:gap-2 md:skew-x-6">
+                  <span className="text-lg md:text-2xl font-black text-white font-mono">{heliosingerData?.baseNote ?? "--"}</span>
+                  <span className="text-[9px] md:text-[10px] text-white/50 font-mono">{(heliosingerData?.frequency ?? 0).toFixed(0)}HZ</span>
                 </div>
               </div>
-              
+
               {/* Vowel Widget */}
-              <div className="bg-white/5 border-r-4 border-destructive p-2 -skew-x-6 text-right">
-                <p className="text-[10px] font-black text-destructive uppercase tracking-widest mb-1 skew-x-6">FORMANT</p>
-                <div className="skew-x-6">
-                  <span className="text-2xl font-black text-white font-mono">"{vowelName}"</span>
+              <div className="bg-white/5 border-r-2 md:border-r-4 border-destructive p-1.5 md:p-2 md:-skew-x-6 text-right">
+                <p className="text-[9px] md:text-[10px] font-black text-destructive uppercase tracking-widest mb-0.5 md:mb-1 md:skew-x-6">FORMANT</p>
+                <div className="md:skew-x-6">
+                  <span className="text-lg md:text-2xl font-black text-white font-mono">"{vowelName}"</span>
                 </div>
               </div>
             </div>
 
             {/* Harmony Widget */}
-            <div className="bg-white text-black p-3 -skew-x-6 border-l-8 border-black shadow-[4px_4px_0px_rgba(255,255,255,0.2)]">
-               <div className="skew-x-6">
-                 <div className="flex justify-between items-center mb-1">
-                   <span className="text-[10px] font-black tracking-[0.2em] uppercase">CHORD STRUCTURE</span>
-                   <span className="text-[10px] font-bold bg-black text-white px-1">{(heliosingerData?.chordVoicing?.length ?? 0)} TONES</span>
+            <div className="bg-white text-black p-2 md:p-3 md:-skew-x-6 border-l-4 md:border-l-8 border-black shadow-[2px_2px_0px_rgba(255,255,255,0.2)] md:shadow-[4px_4px_0px_rgba(255,255,255,0.2)]">
+               <div className="md:skew-x-6">
+                 <div className="flex justify-between items-center mb-0.5 md:mb-1">
+                   <span className="text-[9px] md:text-[10px] font-black tracking-wider md:tracking-[0.2em] uppercase">CHORD</span>
+                   <span className="text-[9px] md:text-[10px] font-bold bg-black text-white px-1">{(heliosingerData?.chordVoicing?.length ?? 0)} TONES</span>
                  </div>
-                 <div className="text-2xl font-black font-mono leading-none tracking-tight">
+                 <div className="text-lg md:text-2xl font-black font-mono leading-none tracking-tight">
                    {heliosingerData?.chordQuality?.symbol ?? "..."}
                  </div>
-                 <div className="text-xs font-bold font-mono opacity-70 uppercase truncate">
+                 <div className="text-[10px] md:text-xs font-bold font-mono opacity-70 uppercase truncate">
                    {heliosingerData?.chordQuality?.name ?? "Scanning..."}
                  </div>
                </div>
             </div>
 
-            {/* Stress/Activity Widget (Bar makes sense here) */}
+            {/* Stress/Activity Widget */}
             <div className="group">
-                <div className="flex items-end justify-between mb-1">
-                  <span className="text-xs font-bold text-destructive uppercase tracking-wider">GEOMAGNETIC STRESS</span>
-                  <span className="text-sm font-mono font-bold text-white">Kp {stats.kp.toFixed(1)}</span>
+                <div className="flex items-end justify-between mb-0.5 md:mb-1">
+                  <span className="text-[10px] md:text-xs font-bold text-destructive uppercase tracking-wider">GEO STRESS</span>
+                  <span className="text-xs md:text-sm font-mono font-bold text-white">Kp {stats.kp.toFixed(1)}</span>
                 </div>
-                <div className="h-4 bg-white/10 w-full -skew-x-12 border border-white/10 overflow-hidden relative">
-                   <div 
-                     className="h-full bg-gradient-to-r from-primary via-white to-destructive origin-left transition-all duration-700" 
-                     style={{ width: `${normalize(stats.kp, 0, 9) * 100}%` }} 
+                <div className="h-3 md:h-4 bg-white/10 w-full md:-skew-x-12 border border-white/10 overflow-hidden relative">
+                   <div
+                     className="h-full bg-gradient-to-r from-primary via-white to-destructive origin-left transition-all duration-700"
+                     style={{ width: `${normalize(stats.kp, 0, 9) * 100}%` }}
                    />
-                   {/* Hazard stripes */}
                    <div className="absolute inset-0 bg-[repeating-linear-gradient(-45deg,transparent,transparent_4px,rgba(0,0,0,0.5)_4px,rgba(0,0,0,0.5)_8px)]" />
                 </div>
-                <p className="text-[10px] text-white/40 mt-1 font-mono uppercase tracking-tight">
+                <p className="text-[9px] md:text-[10px] text-white/40 mt-0.5 md:mt-1 font-mono uppercase tracking-tight">
                   Planetary K-Index Load
                 </p>
             </div>
@@ -742,15 +741,15 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
           </div>
 
           {/* Director Cues (Compact) */}
-          <div className="bg-white/5 border border-white/10 p-4 -skew-x-6 relative">
-             <div className="absolute top-0 right-0 bg-destructive text-white text-[10px] font-bold px-2 py-0.5">
-                LIVE CUES
+          <div className="bg-white/5 border border-white/10 p-2 md:p-4 md:-skew-x-6 relative">
+             <div className="absolute top-0 right-0 bg-destructive text-white text-[9px] md:text-[10px] font-bold px-1.5 py-0.5">
+                LIVE
              </div>
-             <div className="skew-x-6">
-                <div className="text-xs text-primary font-bold uppercase tracking-widest mb-2">
+             <div className="md:skew-x-6">
+                <div className="text-[10px] md:text-xs text-primary font-bold uppercase tracking-widest mb-1 md:mb-2">
                   {cinema.palette}
                 </div>
-                <div className="text-sm text-white/80 font-mono leading-tight uppercase">
+                <div className="text-xs md:text-sm text-white/80 font-mono leading-tight uppercase">
                   {cinema.directorLine}
                 </div>
              </div>

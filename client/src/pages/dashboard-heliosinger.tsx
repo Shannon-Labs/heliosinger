@@ -275,7 +275,40 @@ export default function Dashboard() {
       });
     }
 
-    return items.slice(0, 5);
+    // Convection electric field: Ey = V × |Bz_south| × 0.001 (mV/m)
+    const bzSouth = Math.max(0, -bz);
+    const ey = velocity * bzSouth * 0.001;
+    if (ey >= 5) {
+      items.push({
+        title: "Strong convection E-field",
+        detail: `Ey ≈ ${ey.toFixed(1)} mV/m — solar wind is driving substantial energy into the magnetosphere via V×B coupling.`,
+        tone: "alert",
+      });
+    } else if (ey >= 2) {
+      items.push({
+        title: "Elevated convection E-field",
+        detail: `Ey ≈ ${ey.toFixed(1)} mV/m — moderate energy transfer from solar wind to magnetosphere.`,
+        tone: "watch",
+      });
+    }
+
+    // R-scale radio blackout from X-ray flux
+    const longWave = comprehensiveData.xray_flux?.long_wave;
+    if (longWave && longWave >= 1e-4) {
+      items.push({
+        title: "Radio blackout — R3+",
+        detail: "X-ray flux exceeds X1 threshold; HF radio fadeouts on the sunlit side of Earth.",
+        tone: "alert",
+      });
+    } else if (longWave && longWave >= 1e-5) {
+      items.push({
+        title: "Radio degradation — R1+",
+        detail: "M-class X-ray flux can cause minor HF radio fadeouts for tens of minutes.",
+        tone: "watch",
+      });
+    }
+
+    return items.slice(0, 6);
   }, [comprehensiveData]);
 
   const leadTimeSummary = useMemo(() => {
@@ -302,6 +335,32 @@ export default function Dashboard() {
       isGeosyncAtRisk: standoff <= 6.6
     };
   }, [comprehensiveData?.solar_wind?.velocity, comprehensiveData?.solar_wind?.density]);
+
+  // Convection electric field: Ey = V (km/s) × |Bz| (nT) × 0.001 (mV/m)
+  // Only geoeffective when Bz is southward (negative)
+  const convectionEySummary = useMemo(() => {
+    const velocity = comprehensiveData?.solar_wind?.velocity;
+    const bz = comprehensiveData?.solar_wind?.bz;
+    if (!velocity || bz === undefined || bz === null) return null;
+    const bzSouth = Math.max(0, -bz); // Only count southward component
+    const ey = velocity * bzSouth * 0.001; // mV/m
+    return { ey, velocity: Math.round(velocity), bz: bz.toFixed(1) };
+  }, [comprehensiveData?.solar_wind?.velocity, comprehensiveData?.solar_wind?.bz]);
+
+  // R-scale radio blackout from X-ray flux (NOAA 0.1-0.8nm long wave)
+  const rScaleSummary = useMemo(() => {
+    const longWave = comprehensiveData?.xray_flux?.long_wave;
+    if (!longWave || longWave <= 0) return null;
+    let scale = 0;
+    let label = "R0";
+    let tone: ImplicationTone = "calm";
+    if (longWave >= 2e-3)      { scale = 5; label = "R5"; tone = "alert"; }
+    else if (longWave >= 1e-3) { scale = 4; label = "R4"; tone = "alert"; }
+    else if (longWave >= 1e-4) { scale = 3; label = "R3"; tone = "alert"; }
+    else if (longWave >= 5e-5) { scale = 2; label = "R2"; tone = "watch"; }
+    else if (longWave >= 1e-5) { scale = 1; label = "R1"; tone = "watch"; }
+    return { scale, label, tone, flux: longWave };
+  }, [comprehensiveData?.xray_flux?.long_wave]);
 
   // Fetch current solar wind data (uses adaptive interval)
   const { data: currentData, isLoading: currentLoading, error: currentError } = useQuery<SolarWindReading>({
@@ -611,40 +670,40 @@ export default function Dashboard() {
       </div>
 
       {/* Navigation Header */}
-      <nav 
+      <nav
         className="border-b-4 border-primary bg-black/95 sticky top-0 z-50 backdrop-blur"
         role="navigation"
         aria-label="Main navigation"
       >
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <BrutalistLogo className="h-10" />
+        <div className="container mx-auto px-3 py-3 md:px-4 md:py-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center space-x-3 flex-shrink-0">
+              <BrutalistLogo className="h-8 md:h-10" />
             </div>
-            <div className="flex items-center space-x-3">
-              <div className="flex items-center space-x-2 bg-primary text-black px-4 py-2 border-2 border-black -skew-x-6 shadow-[4px_4px_0px_rgba(0,0,0,0.6)]">
-                <div className={`w-3 h-3 ${isDataStreamActive ? 'bg-black animate-pulse' : 'bg-destructive'}`} />
-                <span className="text-sm font-black uppercase tracking-tight skew-x-6" data-testid="text-data-status">
-                  {isDataStreamActive ? 'Live Data' : 'Offline'}
+            <div className="flex items-center gap-2 md:space-x-3 flex-shrink-0">
+              <div className="flex items-center space-x-1.5 md:space-x-2 bg-primary text-black px-2 py-1.5 md:px-4 md:py-2 border-2 border-black md:-skew-x-6 shadow-[2px_2px_0px_rgba(0,0,0,0.6)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.6)]">
+                <div className={`w-2 h-2 md:w-3 md:h-3 ${isDataStreamActive ? 'bg-black animate-pulse' : 'bg-destructive'}`} />
+                <span className="text-[10px] md:text-sm font-black uppercase tracking-tight md:skew-x-6" data-testid="text-data-status">
+                  {isDataStreamActive ? 'Live' : 'Off'}
                 </span>
               </div>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => fetchDataMutation.mutate()}
                 disabled={fetchDataMutation.isPending}
                 data-testid="button-refresh-data"
-                className="border-2 border-white bg-black text-white hover:bg-white hover:text-black uppercase font-black tracking-tight"
+                className="border-2 border-white bg-black text-white hover:bg-white hover:text-black uppercase font-black tracking-tight h-8 w-8 md:h-auto md:w-auto p-0 md:p-2"
               >
-                <i className={`fas fa-sync-alt ${fetchDataMutation.isPending ? 'animate-spin' : ''}`} aria-hidden="true" />
+                <i className={`fas fa-sync-alt text-xs md:text-sm ${fetchDataMutation.isPending ? 'animate-spin' : ''}`} aria-hidden="true" />
               </Button>
               <Link href="/stream">
                 <Button
                   variant="default"
                   size="sm"
-                  className="bg-white text-black border-2 border-black -skew-x-6 font-black uppercase tracking-widest hover:bg-primary hover:text-black shadow-[4px_4px_0px_rgba(0,0,0,0.6)]"
+                  className="bg-white text-black border-2 border-black md:-skew-x-6 font-black uppercase tracking-wider md:tracking-widest hover:bg-primary hover:text-black shadow-[2px_2px_0px_rgba(0,0,0,0.6)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.6)] text-[10px] md:text-sm px-2 md:px-3"
                 >
-                  <span className="skew-x-6">Fullscreen Stream</span>
+                  <span className="md:skew-x-6"><i className="fas fa-expand md:hidden" aria-hidden="true" /><span className="hidden md:inline">Fullscreen Stream</span></span>
                 </Button>
               </Link>
             </div>
@@ -652,25 +711,25 @@ export default function Dashboard() {
         </div>
       </nav>
 
-      <main id="main" className="container mx-auto px-4 py-8 relative z-10">
+      <main id="main" className="container mx-auto px-3 py-4 md:px-4 md:py-8 relative z-10">
         {/* Hero Section */}
-        <section className="mb-12 text-center relative">
+        <section className="mb-6 md:mb-12 text-center relative">
           <div className="absolute inset-0 -z-10 bg-gradient-to-r from-primary/10 via-transparent to-primary/10 blur-3xl" />
-          <div className="flex justify-center mb-6">
-            <BrutalistLogo className="scale-150 shadow-[6px_6px_0px_rgba(0,0,0,0.5)]" />
+          <div className="flex justify-center mb-4 md:mb-6">
+            <BrutalistLogo className="scale-100 md:scale-150 shadow-[4px_4px_0px_rgba(0,0,0,0.5)] md:shadow-[6px_6px_0px_rgba(0,0,0,0.5)]" />
           </div>
-          <h1 className="text-4xl font-black mb-2 text-white uppercase tracking-tighter -skew-x-6 inline-block px-4 py-2 border-4 border-white/30 shadow-[6px_6px_0px_rgba(0,0,0,0.6)] bg-black/70">
+          <h1 className="text-xl sm:text-2xl md:text-4xl font-black mb-2 text-white uppercase tracking-tighter md:-skew-x-6 inline-block px-3 py-1.5 md:px-4 md:py-2 border-2 md:border-4 border-white/30 shadow-[3px_3px_0px_rgba(0,0,0,0.6)] md:shadow-[6px_6px_0px_rgba(0,0,0,0.6)] bg-black/70">
             Real-Time Space Weather Sonification
           </h1>
-          <p className="text-sm text-white/80 max-w-2xl mx-auto border-l-4 border-primary pl-4 text-left font-mono">
-            Experience space weather as the sun literally sings its story in real-time. 
+          <p className="text-xs md:text-sm text-white/80 max-w-2xl mx-auto border-l-4 border-primary pl-3 md:pl-4 text-left font-mono mt-3 md:mt-0">
+            Experience space weather as the sun literally sings its story in real-time.
             Each moment creates a unique vowel sound, pitch, and rhythm based on solar wind conditions.
           </p>
         </section>
 
         {/* Data-driven 3D solar hologram */}
-        <div className="mb-10">
-          <Suspense fallback={<div className="w-full h-[320px] bg-black animate-pulse flex items-center justify-center"><span className="text-primary/50 font-mono">Loading visualization...</span></div>}>
+        <div className="mb-6 md:mb-10">
+          <Suspense fallback={<div className="w-full h-[200px] md:h-[320px] bg-black animate-pulse flex items-center justify-center"><span className="text-primary/50 font-mono text-xs md:text-base">Loading visualization...</span></div>}>
             <SolarHologram
               data={comprehensiveData}
               heliosingerData={heliosinger.currentData}
@@ -682,7 +741,7 @@ export default function Dashboard() {
 
         {/* Recent Events Ticker */}
         {comprehensiveData && (
-          <div className="mb-6">
+          <div className="mb-4 md:mb-6">
             <EventsTicker 
               currentData={comprehensiveData} 
               previousData={previousComprehensiveDataRef.current}
@@ -691,13 +750,13 @@ export default function Dashboard() {
         )}
 
         {/* Heliosinger Mode Controls - Moved to Top */}
-        <section className="mb-8">
-          <Card className="bg-card border-4 border-primary shadow-none" aria-busy={comprehensiveLoading}>
-            <CardHeader className="border-b-4 border-primary bg-primary text-primary-foreground">
-              <CardTitle className="flex items-center uppercase font-black tracking-tighter text-2xl">
-                <div className={`w-4 h-4 mr-3 border-2 border-black ${isHeliosingerEnabled ? 'bg-accent animate-pulse' : 'bg-muted'}`} />
-                Heliosinger Mode
-                <Badge variant={isHeliosingerEnabled ? "default" : "secondary"} className="ml-auto border-2 border-black rounded-none text-lg">
+        <section className="mb-6 md:mb-8">
+          <Card className="bg-card border-2 md:border-4 border-primary shadow-none" aria-busy={comprehensiveLoading}>
+            <CardHeader className="border-b-2 md:border-b-4 border-primary bg-primary text-primary-foreground px-3 py-2 md:px-6 md:py-4">
+              <CardTitle className="flex items-center uppercase font-black tracking-tighter text-base md:text-2xl">
+                <div className={`w-3 h-3 md:w-4 md:h-4 mr-2 md:mr-3 border-2 border-black flex-shrink-0 ${isHeliosingerEnabled ? 'bg-accent animate-pulse' : 'bg-muted'}`} />
+                <span className="truncate">Heliosinger</span>
+                <Badge variant={isHeliosingerEnabled ? "default" : "secondary"} className="ml-auto border-2 border-black rounded-none text-xs md:text-lg flex-shrink-0">
                   {isHeliosingerEnabled ? "SINGING" : "SILENT"}
                 </Badge>
               </CardTitle>
@@ -886,62 +945,72 @@ export default function Dashboard() {
         </section>
 
         {/* Space Weather Implications + Live Narrator */}
-        <section className="mb-10 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <Card className="border-4 border-primary bg-black/80 shadow-[8px_8px_0px_rgba(0,0,0,0.6)]">
-            <CardHeader className="bg-primary text-black border-b-4 border-black skew-x-3">
-              <CardTitle className="flex items-center gap-3 -skew-x-3 uppercase tracking-widest font-black text-xl">
+        <section className="mb-6 md:mb-10 grid gap-4 md:gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <Card className="border-2 md:border-4 border-primary bg-black/80 shadow-[4px_4px_0px_rgba(0,0,0,0.6)] md:shadow-[8px_8px_0px_rgba(0,0,0,0.6)]">
+            <CardHeader className="bg-primary text-black border-b-2 md:border-b-4 border-black md:skew-x-3 px-3 py-2 md:px-6 md:py-4">
+              <CardTitle className="flex items-center gap-2 md:gap-3 md:-skew-x-3 uppercase tracking-wider md:tracking-widest font-black text-sm md:text-xl">
                 <i className="fas fa-satellite-dish text-black" />
-                Space Weather Implications
-                <Badge variant="secondary" className="ml-auto bg-black text-white border-2 border-black rounded-none">
+                <span className="truncate">Space Weather</span>
+                <Badge variant="secondary" className="ml-auto bg-black text-white border-2 border-black rounded-none text-[10px] md:text-xs flex-shrink-0">
                   Live
                 </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-6 space-y-4">
+            <CardContent className="p-3 md:p-6 space-y-3 md:space-y-4">
               {leadTimeSummary ? (
-                <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-widest text-white/70 font-mono">
-                  <span className="border border-white/20 bg-black/40 px-2 py-1">
-                    L1 lead time ~{leadTimeSummary.minutes} min
+                <div className="flex flex-wrap items-center gap-1.5 md:gap-2 text-[9px] md:text-[11px] uppercase tracking-wider md:tracking-widest text-white/70 font-mono">
+                  <span className="border border-white/20 bg-black/40 px-1.5 py-0.5 md:px-2 md:py-1">
+                    L1 ~{leadTimeSummary.minutes}m
                   </span>
-                  <span className="border border-white/20 bg-black/40 px-2 py-1">
-                    Wind {leadTimeSummary.velocity} km/s
+                  <span className="border border-white/20 bg-black/40 px-1.5 py-0.5 md:px-2 md:py-1">
+                    {leadTimeSummary.velocity} km/s
                   </span>
                   {dynamicPressureSummary ? (
                     <>
-                      <span className="border border-white/20 bg-black/40 px-2 py-1">
-                        Pressure {dynamicPressureSummary.pressure.toFixed(2)} nPa
+                      <span className="border border-white/20 bg-black/40 px-1.5 py-0.5 md:px-2 md:py-1">
+                        {dynamicPressureSummary.pressure.toFixed(2)} nPa
                       </span>
-                      <span className={`border px-2 py-1 ${dynamicPressureSummary.isGeosyncAtRisk ? 'border-destructive bg-destructive/20 text-white animate-pulse' : 'border-white/20 bg-black/40'}`}>
-                        Standoff {dynamicPressureSummary.standoff.toFixed(1)} Rₑ
+                      <span className={`border px-1.5 py-0.5 md:px-2 md:py-1 ${dynamicPressureSummary.isGeosyncAtRisk ? 'border-destructive bg-destructive/20 text-white animate-pulse' : 'border-white/20 bg-black/40'}`}>
+                        {dynamicPressureSummary.standoff.toFixed(1)} Rₑ
                       </span>
                     </>
+                  ) : null}
+                  {convectionEySummary ? (
+                    <span className={`border px-1.5 py-0.5 md:px-2 md:py-1 ${convectionEySummary.ey >= 5 ? 'border-destructive bg-destructive/20 text-white' : convectionEySummary.ey >= 2 ? 'border-amber-400/40 bg-amber-500/10 text-amber-200' : 'border-white/20 bg-black/40'}`}>
+                      Ey {convectionEySummary.ey.toFixed(1)}
+                    </span>
+                  ) : null}
+                  {rScaleSummary ? (
+                    <span className={`border px-1.5 py-0.5 md:px-2 md:py-1 ${rScaleSummary.scale >= 3 ? 'border-destructive bg-destructive/20 text-white animate-pulse' : rScaleSummary.scale >= 1 ? 'border-amber-400/40 bg-amber-500/10 text-amber-200' : 'border-white/20 bg-black/40'}`}>
+                      {rScaleSummary.label}
+                    </span>
                   ) : null}
                 </div>
               ) : null}
               {implications.length > 0 ? (
                 <div className="space-y-3">
                   {dynamicPressureSummary && dynamicPressureSummary.isGeosyncAtRisk && (
-                    <div className="border-2 border-destructive bg-destructive/10 px-4 py-2 -skew-x-3 text-[11px] font-mono text-destructive-foreground animate-pulse">
-                      <div className="skew-x-3 flex items-center gap-2">
-                        <i className="fas fa-exclamation-triangle" />
-                        <span>MAGNETOPAUSE COMPRESSION: Geosynchronous orbit (~6.6 Rₑ) is exposed to raw solar wind.</span>
+                    <div className="border-2 border-destructive bg-destructive/10 px-3 py-1.5 md:px-4 md:py-2 md:-skew-x-3 text-[10px] md:text-[11px] font-mono text-destructive-foreground animate-pulse">
+                      <div className="md:skew-x-3 flex items-center gap-2">
+                        <i className="fas fa-exclamation-triangle flex-shrink-0" />
+                        <span>MAGNETOPAUSE COMPRESSION: Geosync orbit exposed to raw solar wind.</span>
                       </div>
                     </div>
                   )}
                   {implications.map((implication, index) => (
                     <div
                       key={`${implication.title}-${index}`}
-                      className="border-2 border-white/20 bg-black/60 px-4 py-3 -skew-x-3 shadow-[4px_4px_0px_rgba(0,0,0,0.5)]"
+                      className="border-2 border-white/20 bg-black/60 px-3 py-2 md:px-4 md:py-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)]"
                     >
-                      <div className="skew-x-3 flex items-start gap-3">
+                      <div className="md:skew-x-3 flex items-start gap-2 md:gap-3">
                         <div
-                          className={`mt-1 h-2.5 w-2.5 rounded-full border ${IMPLICATION_TONE_STYLES[implication.tone]}`}
+                          className={`mt-1 h-2 w-2 md:h-2.5 md:w-2.5 rounded-full border flex-shrink-0 ${IMPLICATION_TONE_STYLES[implication.tone]}`}
                         />
-                        <div className="flex-1 space-y-1">
-                          <p className="text-sm font-black uppercase tracking-tight text-white">
+                        <div className="flex-1 space-y-0.5 md:space-y-1 min-w-0">
+                          <p className="text-xs md:text-sm font-black uppercase tracking-tight text-white">
                             {implication.title}
                           </p>
-                          <p className="text-xs text-white/70">{implication.detail}</p>
+                          <p className="text-[10px] md:text-xs text-white/70">{implication.detail}</p>
                         </div>
                       </div>
                     </div>
@@ -958,18 +1027,18 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="border-4 border-primary bg-black/80 shadow-[8px_8px_0px_rgba(0,0,0,0.6)] relative overflow-hidden">
-            <CardHeader className="bg-primary text-black border-b-4 border-black skew-x-3">
-              <CardTitle className="flex items-center gap-3 -skew-x-3 uppercase tracking-widest font-black text-xl">
+          <Card className="border-2 md:border-4 border-primary bg-black/80 shadow-[4px_4px_0px_rgba(0,0,0,0.6)] md:shadow-[8px_8px_0px_rgba(0,0,0,0.6)] relative overflow-hidden">
+            <CardHeader className="bg-primary text-black border-b-2 md:border-b-4 border-black md:skew-x-3 px-3 py-2 md:px-6 md:py-4">
+              <CardTitle className="flex items-center gap-2 md:gap-3 md:-skew-x-3 uppercase tracking-wider md:tracking-widest font-black text-sm md:text-xl">
                 <i className="fas fa-bolt text-black" />
                 Live Narrator
-                <Badge variant="secondary" className="ml-auto bg-black text-white border-2 border-black rounded-none">
+                <Badge variant="secondary" className="ml-auto bg-black text-white border-2 border-black rounded-none text-[10px] md:text-xs flex-shrink-0">
                   Auto
                 </Badge>
               </CardTitle>
             </CardHeader>
-            <CardContent className="relative p-6">
-              <div className="relative min-h-[260px]">
+            <CardContent className="relative p-3 md:p-6">
+              <div className="relative min-h-[180px] md:min-h-[260px]">
                 <EducationalInsight narratorState={narrator.state} />
                 {!narrator.isShowingInsight && (
                   <div className="absolute inset-0 flex items-center justify-center text-xs text-white/60 uppercase tracking-widest">
@@ -987,24 +1056,24 @@ export default function Dashboard() {
 
         {/* Notification Settings */}
         {isNotificationSupported() && (
-          <section className="mb-8">
-            <Card className="border-4 border-primary bg-black relative overflow-hidden shadow-[10px_10px_0px_rgba(0,0,0,0.5)]">
+          <section className="mb-6 md:mb-8">
+            <Card className="border-2 md:border-4 border-primary bg-black relative overflow-hidden shadow-[4px_4px_0px_rgba(0,0,0,0.5)] md:shadow-[10px_10px_0px_rgba(0,0,0,0.5)]">
               <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:22px_22px]" />
-              <CardHeader className="bg-primary text-black border-b-4 border-black skew-x-3">
-                <CardTitle className="flex items-center gap-3 -skew-x-3 uppercase tracking-widest font-black text-xl">
+              <CardHeader className="bg-primary text-black border-b-2 md:border-b-4 border-black md:skew-x-3 px-3 py-2 md:px-6 md:py-4">
+                <CardTitle className="flex items-center gap-2 md:gap-3 md:-skew-x-3 uppercase tracking-wider md:tracking-widest font-black text-sm md:text-xl">
                   <i className="fas fa-bell text-black" />
-                  Alert System
+                  Alerts
                   {!canSendNotifications() && (
-                    <Badge variant="secondary" className="ml-auto bg-black text-white border-2 border-black rounded-none">
+                    <Badge variant="secondary" className="ml-auto bg-black text-white border-2 border-black rounded-none text-[10px] md:text-xs flex-shrink-0">
                       Permission Needed
                     </Badge>
                   )}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="relative space-y-4 p-6">
+              <CardContent className="relative space-y-3 md:space-y-4 p-3 md:p-6">
                 {!canSendNotifications() && (
-                  <div className="bg-black/80 text-white border-2 border-primary px-4 py-3 -skew-x-3 shadow-[6px_6px_0px_rgba(0,0,0,0.6)]">
-                    <div className="flex items-center gap-3 skew-x-3">
+                  <div className="bg-black/80 text-white border-2 border-primary px-3 py-2 md:px-4 md:py-3 md:-skew-x-3 shadow-[3px_3px_0px_rgba(0,0,0,0.6)] md:shadow-[6px_6px_0px_rgba(0,0,0,0.6)]">
+                    <div className="flex items-center gap-2 md:gap-3 md:skew-x-3">
                       <i className="fas fa-bolt text-primary" />
                       <div>
                         <p className="text-sm font-bold uppercase tracking-tight">Enable Atlus Alerts</p>
@@ -1038,8 +1107,8 @@ export default function Dashboard() {
 
                 {canSendNotifications() && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between bg-white text-black px-4 py-3 -skew-x-3 border-2 border-black shadow-[6px_6px_0px_rgba(0,0,0,0.5)]">
-                      <div className="space-y-1 skew-x-3">
+                    <div className="flex items-center justify-between bg-white text-black px-3 py-2 md:px-4 md:py-3 md:-skew-x-3 border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,0.5)] md:shadow-[6px_6px_0px_rgba(0,0,0,0.5)]">
+                      <div className="space-y-1 md:skew-x-3">
                         <p className="text-xs font-black uppercase tracking-widest">Global Alerts</p>
                         <p className="text-[11px] opacity-70">High-contrast flashes when thresholds trip.</p>
                       </div>
@@ -1056,8 +1125,8 @@ export default function Dashboard() {
 
                     {notificationSettings.enabled && (
                       <div className="grid gap-3 sm:grid-cols-3">
-                        <div className="bg-black/80 text-white border-2 border-primary p-3 -skew-x-3 shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
-                          <div className="skew-x-3 flex items-center justify-between">
+                        <div className="bg-black/80 text-white border-2 border-primary p-2 md:p-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
+                          <div className="md:skew-x-3 flex items-center justify-between">
                             <div>
                               <p className="text-[11px] uppercase font-black tracking-widest">Kp Spikes</p>
                               <p className="text-[10px] text-white/70">Stormfront flashes</p>
@@ -1074,8 +1143,8 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        <div className="bg-white text-black border-2 border-black p-3 -skew-x-3 shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
-                          <div className="skew-x-3 flex items-center justify-between">
+                        <div className="bg-white text-black border-2 border-black p-2 md:p-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
+                          <div className="md:skew-x-3 flex items-center justify-between">
                             <div>
                               <p className="text-[11px] uppercase font-black tracking-widest">Bz Swings</p>
                               <p className="text-[10px] text-black/70">Southward alarms</p>
@@ -1092,8 +1161,8 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        <div className="bg-destructive text-white border-2 border-black p-3 -skew-x-3 shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
-                          <div className="skew-x-3 flex items-center justify-between">
+                        <div className="bg-destructive text-white border-2 border-black p-2 md:p-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
+                          <div className="md:skew-x-3 flex items-center justify-between">
                             <div>
                               <p className="text-[11px] uppercase font-black tracking-widest">Density Jumps</p>
                               <p className="text-[10px] text-white/80">Plasma surge pings</p>
@@ -1110,8 +1179,8 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        <div className="bg-primary text-black border-2 border-black p-3 -skew-x-3 shadow-[4px_4px_0px_rgba(0,0,0,0.5)] sm:col-span-3">
-                          <div className="skew-x-3 flex items-center justify-between">
+                        <div className="bg-primary text-black border-2 border-black p-2 md:p-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)] sm:col-span-3">
+                          <div className="md:skew-x-3 flex items-center justify-between">
                             <div>
                               <p className="text-[11px] uppercase font-black tracking-widest">Sound Notifications</p>
                               <p className="text-[10px] text-black/70">Cues sync with vocalizer</p>
@@ -1147,17 +1216,17 @@ export default function Dashboard() {
         </section> */}
 
         {/* Data Dashboard */}
-        <section className="mb-10">
+        <section className="mb-6 md:mb-10">
           <DataDashboard />
         </section>
 
         {/* System Status */}
-        <section className="mb-10">
-          <div className="border-4 border-primary bg-black/80 shadow-[8px_8px_0px_rgba(0,0,0,0.6)]">
-            <div className="px-4 py-3 border-b-4 border-white/20 bg-primary text-black -skew-x-6">
-              <h3 className="font-black uppercase tracking-widest text-lg skew-x-6">System Status</h3>
+        <section className="mb-6 md:mb-10">
+          <div className="border-2 md:border-4 border-primary bg-black/80 shadow-[4px_4px_0px_rgba(0,0,0,0.6)] md:shadow-[8px_8px_0px_rgba(0,0,0,0.6)]">
+            <div className="px-3 py-2 md:px-4 md:py-3 border-b-2 md:border-b-4 border-white/20 bg-primary text-black md:-skew-x-6">
+              <h3 className="font-black uppercase tracking-widest text-sm md:text-lg md:skew-x-6">System Status</h3>
             </div>
-            <div className="p-4">
+            <div className="p-3 md:p-4">
               <SystemStatus variant="atlus" showTitle={false} />
             </div>
           </div>

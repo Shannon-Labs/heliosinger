@@ -78,90 +78,90 @@ export function SonificationTrainer({ currentData, comprehensiveData }: Sonifica
   }, []);
 
   return (
-    <div className="border-4 border-primary bg-black p-6 shadow-[8px_8px_0px_0px_hsl(var(--primary))] mb-8">
-      <div className="flex items-center justify-between mb-6 border-b-4 border-primary pb-2">
-        <h3 className="text-2xl font-black uppercase tracking-tighter text-primary">
+    <div className="border-2 md:border-4 border-primary bg-black p-3 md:p-6 shadow-[4px_4px_0px_0px_hsl(var(--primary))] md:shadow-[8px_8px_0px_0px_hsl(var(--primary))] mb-4 md:mb-8">
+      <div className="flex items-center justify-between mb-3 md:mb-6 border-b-2 md:border-b-4 border-primary pb-2">
+        <h3 className="text-base md:text-2xl font-black uppercase tracking-tighter text-primary">
           Training Mode
         </h3>
-        <Badge variant="outline" className="border-2 border-primary text-primary font-bold rounded-none uppercase">
+        <Badge variant="outline" className="border-2 border-primary text-primary font-bold rounded-none uppercase text-[10px] md:text-xs">
           Active Listening
         </Badge>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
         {/* Left: The Sound */}
-        <div className="space-y-4">
+        <div className="space-y-3 md:space-y-4">
           <div>
-            <span className="block text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">You Are Hearing</span>
-            
-            <div className="mb-4 border-2 border-white/10">
-              <AudioVisualizer 
-                isPlaying={true} 
-                data={currentData} 
+            <span className="block text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">You Are Hearing</span>
+
+            <div className="mb-3 md:mb-4 border-2 border-white/10">
+              <AudioVisualizer
+                isPlaying={true}
+                data={currentData}
               />
             </div>
 
-            <div className="flex items-baseline gap-4">
-              <span className="text-8xl font-black text-white leading-none">
+            <div className="flex items-baseline gap-3 md:gap-4">
+              <span className="text-5xl md:text-8xl font-black text-white leading-none">
                 "{vowel}"
               </span>
-              <span className="text-xl font-mono text-primary uppercase">
+              <span className="text-base md:text-xl font-mono text-primary uppercase">
                 /{currentData.currentVowel.ipaSymbol}/
               </span>
             </div>
-            <p className="text-lg font-bold text-white mt-2 uppercase">
+            <p className="text-sm md:text-lg font-bold text-white mt-1 md:mt-2 uppercase">
               {currentData.currentVowel.displayName}
             </p>
           </div>
-          
-          <div className="bg-secondary/50 p-4 border-l-4 border-accent">
-            <p className="text-lg font-medium text-white italic leading-tight">
+
+          <div className="bg-secondary/50 p-3 md:p-4 border-l-4 border-accent">
+            <p className="text-sm md:text-lg font-medium text-white italic leading-tight">
               "{getExplanation(vowel)}"
             </p>
           </div>
         </div>
 
         {/* Right: The Data (The "Why") */}
-        <div className="space-y-4">
-           <span className="block text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Because Data Is</span>
-           
-           <div className="space-y-3 font-mono">
+        <div className="space-y-3 md:space-y-4">
+           <span className="block text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Because Data Is</span>
+
+           <div className="space-y-2 md:space-y-3 font-mono text-sm md:text-base">
              {/* Velocity -> Pitch/Brightness */}
              <div className="flex items-center justify-between border-b border-white/10 pb-2">
-               <span className="text-muted-foreground">VELOCITY</span>
+               <span className="text-muted-foreground text-xs md:text-sm">VELOCITY</span>
                <div className="text-right">
-                 <span className={`block font-bold ${velocity > 500 ? 'text-accent' : 'text-white'}`}>
+                 <span className={`block font-bold text-sm md:text-base ${velocity > 500 ? 'text-accent' : 'text-white'}`}>
                    {getVelocityDesc(velocity)}
                  </span>
-                 <span className="text-xs text-muted-foreground">{velocity.toFixed(1)} km/s</span>
+                 <span className="text-[10px] md:text-xs text-muted-foreground">{velocity.toFixed(1)} km/s</span>
                </div>
              </div>
 
              {/* Density -> Openness */}
              <div className="flex items-center justify-between border-b border-white/10 pb-2">
-               <span className="text-muted-foreground">DENSITY</span>
+               <span className="text-muted-foreground text-xs md:text-sm">DENSITY</span>
                <div className="text-right">
-                 <span className={`block font-bold ${density < 5 ? 'text-accent' : 'text-white'}`}>
+                 <span className={`block font-bold text-sm md:text-base ${density < 5 ? 'text-accent' : 'text-white'}`}>
                    {getDensityDesc(density)}
                  </span>
-                 <span className="text-xs text-muted-foreground">{density.toFixed(1)} p/cm³</span>
+                 <span className="text-[10px] md:text-xs text-muted-foreground">{density.toFixed(1)} p/cm³</span>
                </div>
              </div>
 
              {/* Bz -> Frontness */}
              <div className="flex items-center justify-between border-b border-white/10 pb-2">
-               <span className="text-muted-foreground">MAG FIELD</span>
+               <span className="text-muted-foreground text-xs md:text-sm">MAG FIELD</span>
                <div className="text-right">
-                 <span className={`block font-bold ${bz < 0 ? 'text-destructive' : 'text-success'}`}>
+                 <span className={`block font-bold text-sm md:text-base ${bz < 0 ? 'text-destructive' : 'text-success'}`}>
                    {getBzDesc(bz)}
                  </span>
-                 <span className="text-xs text-muted-foreground">{bz.toFixed(1)} nT</span>
+                 <span className="text-[10px] md:text-xs text-muted-foreground">{bz.toFixed(1)} nT</span>
                </div>
              </div>
            </div>
 
-           <div className="mt-4 pt-2">
-             <p className="text-xs text-muted-foreground uppercase animate-pulse">
+           <div className="mt-3 md:mt-4 pt-2">
+             <p className="text-[10px] md:text-xs text-muted-foreground uppercase animate-pulse">
                <span className="text-accent font-bold">TIP:</span> {TIPS[tipIndex]}
              </p>
            </div>
