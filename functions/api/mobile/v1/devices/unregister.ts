@@ -1,7 +1,11 @@
 import {
   corsOptionsResponse,
+  errorResponse,
+  getRequestId,
   jsonResponse,
+  parseJsonBody,
   unregisterDevice,
+  validateUnregisterPayload,
   type MobileEnv,
 } from "../_lib";
 
@@ -10,20 +14,35 @@ export async function onRequestOptions(): Promise<Response> {
 }
 
 export async function onRequestDelete(context: { request: Request; env: MobileEnv }): Promise<Response> {
+  const requestId = getRequestId(context.request);
   try {
-    const body = (await context.request.json().catch(() => ({}))) as { installId?: string };
-    if (!body.installId) {
-      return jsonResponse({ message: "installId is required" }, { status: 400 });
+    const parsed = await parseJsonBody<{ installId?: string }>(context.request, requestId);
+    if (!parsed.ok) {
+      return parsed.response as Response;
     }
 
-    const removed = await unregisterDevice(context.env, body.installId);
+    const validated = validateUnregisterPayload(parsed.value);
+    if (!validated.ok) {
+      return errorResponse(400, validated.failure.code, validated.failure.message, {
+        details: validated.failure.details,
+        requestId,
+      });
+    }
+
+    const removed = await unregisterDevice(context.env, validated.installId);
     if (!removed) {
-      return jsonResponse({ message: "Device not found" }, { status: 404 });
+      return errorResponse(404, "device_not_found", "Device not found", { requestId });
     }
 
-    return jsonResponse({ ok: true, installId: body.installId });
+    return jsonResponse({
+      ok: true,
+      installId: validated.installId,
+      meta: { requestId },
+    });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return jsonResponse({ message: "Failed to unregister device", error: message }, { status: 500 });
+    return errorResponse(500, "device_unregister_failed", "Failed to unregister device", {
+      details: error instanceof Error ? error.message : "Unknown error",
+      requestId,
+    });
   }
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -24,9 +24,11 @@ import {
   fetchLearningCards,
   fetchNow,
   registerDevice,
+  unregisterDevice,
   updatePreferences,
 } from "./src/lib/api";
 import {
+  clearPushToken,
   loadFlares,
   loadLearning,
   loadNow,
@@ -73,6 +75,29 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function shiftHour(hour: number, delta: number): number {
+  return (hour + delta + 24) % 24;
+}
+
+function formatSyncTimestamp(input: string | null): string {
+  if (!input) return "Never";
+  const date = new Date(input);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return date.toLocaleString();
+}
+
+function formatHour(hour: number): string {
+  return `${hour.toString().padStart(2, "0")}:00`;
+}
+
+function resolveTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
 function Badge({ label, tone = "muted" }: { label: string; tone?: "muted" | "alert" | "good" }) {
   return (
     <View
@@ -104,6 +129,41 @@ export default function App() {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.35);
+  const [lastSuccessfulSyncAt, setLastSuccessfulSyncAt] = useState<string | null>(null);
+  const [nextRetryAt, setNextRetryAt] = useState<number | null>(null);
+  const [clockTick, setClockTick] = useState(0);
+  const [registrationState, setRegistrationState] = useState<"idle" | "syncing" | "removed">("idle");
+
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryAttemptsRef = useRef(0);
+  const lastRegistrationSignatureRef = useRef<string | null>(null);
+  const registrationInFlightRef = useRef(false);
+
+  const platform = Platform.OS === "android" || Platform.OS === "ios" ? Platform.OS : null;
+
+  const clearRetrySchedule = useCallback(() => {
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+    setNextRetryAt(null);
+  }, []);
+
+  const scheduleRetry = useCallback(
+    (refresh: () => Promise<void>) => {
+      if (retryTimeoutRef.current) return;
+      const delayMs = Math.min(300000, 5000 * 2 ** retryAttemptsRef.current);
+      retryAttemptsRef.current += 1;
+      setNextRetryAt(Date.now() + delayMs);
+      retryTimeoutRef.current = setTimeout(() => {
+        retryTimeoutRef.current = null;
+        refresh().catch(() => undefined);
+      }, delayMs);
+    },
+    []
+  );
+
+  const timezone = resolveTimezone();
 
   const refreshData = useCallback(async () => {
     setSyncing(true);
@@ -119,9 +179,11 @@ export default function App() {
       setFlares(latestFlares);
       setLearning(latestLearning);
       setError(null);
+      setLastSuccessfulSyncAt(latestNow.lastUpdatedAt ?? new Date().toISOString());
+      retryAttemptsRef.current = 0;
+      clearRetrySchedule();
 
       await Promise.all([saveNow(latestNow), saveFlares(latestFlares), saveLearning(latestLearning)]);
-
     } catch {
       const [cachedNow, cachedFlares, cachedLearning] = await Promise.all([
         loadNow(),
@@ -132,16 +194,25 @@ export default function App() {
       if (cachedNow) {
         setNow({ ...cachedNow, source: "cached", stale: true });
         setError("Using cached space-weather data");
+        if (!lastSuccessfulSyncAt) {
+          setLastSuccessfulSyncAt(cachedNow.lastUpdatedAt);
+        }
       } else {
         setError("Unable to load space-weather data");
       }
       setFlares(cachedFlares);
       setLearning(cachedLearning);
+      scheduleRetry(refreshData);
     } finally {
       setSyncing(false);
       setLoading(false);
     }
-  }, []);
+  }, [clearRetrySchedule, lastSuccessfulSyncAt, scheduleRetry]);
+
+  const retryNow = useCallback(() => {
+    clearRetrySchedule();
+    refreshData().catch(() => undefined);
+  }, [clearRetrySchedule, refreshData]);
 
   useEffect(() => {
     let active = true;
@@ -151,7 +222,13 @@ export default function App() {
       if (!active) return;
       setInstallId(id);
 
-      const [cachedPrefs, cachedToken] = await Promise.all([loadPreferences(), loadPushToken()]);
+      const [cachedPrefs, cachedToken, cachedNow, cachedFlares, cachedLearning] = await Promise.all([
+        loadPreferences(),
+        loadPushToken(),
+        loadNow(),
+        loadFlares(),
+        loadLearning(),
+      ]);
       if (!active) return;
 
       if (cachedPrefs) {
@@ -166,39 +243,48 @@ export default function App() {
         setPushToken(cachedToken);
       }
 
+      if (cachedNow || cachedFlares.length > 0 || cachedLearning.length > 0) {
+        if (cachedNow) {
+          setNow({ ...cachedNow, source: "cached", stale: true });
+          setLastSuccessfulSyncAt(cachedNow.lastUpdatedAt);
+        }
+        if (cachedFlares.length > 0) {
+          setFlares(cachedFlares);
+        }
+        if (cachedLearning.length > 0) {
+          setLearning(cachedLearning);
+        }
+        setLoading(false);
+      }
+
       await refreshData();
 
-      const token = await requestPushToken();
-      if (!active || !token) return;
+      if (platform) {
+        const token = await requestPushToken();
+        if (!active || !token) return;
 
-      setPushToken(token);
-      await savePushToken(token);
-
-      const currentPrefs = cachedPrefs ?? DEFAULT_PREFERENCES(id);
-      try {
-        await registerDevice({
-          installId: id,
-          pushToken: token,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-          platform: Platform.OS === "android" ? "android" : "ios",
-          preferences: currentPrefs,
-        });
-      } catch {
-        // Non-fatal; app can still run without registration.
+        setPushToken(token);
+        await savePushToken(token);
       }
     };
 
     bootstrap();
 
     const interval = setInterval(() => {
-      refreshData();
+      refreshData().catch(() => undefined);
     }, 60000);
+
+    const clock = setInterval(() => {
+      setClockTick((value) => value + 1);
+    }, 1000);
 
     return () => {
       active = false;
       clearInterval(interval);
+      clearInterval(clock);
+      clearRetrySchedule();
     };
-  }, [refreshData]);
+  }, [clearRetrySchedule, platform, refreshData]);
 
   useEffect(() => {
     return () => {
@@ -240,21 +326,8 @@ export default function App() {
         await setBackgroundMode(next.backgroundAudioEnabled);
       }
 
-      if (installId && pushToken) {
-        try {
-          await registerDevice({
-            installId,
-            pushToken,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-            platform: Platform.OS === "android" ? "android" : "ios",
-            preferences: next,
-          });
-        } catch {
-          // Ignore registration refresh failures.
-        }
-      }
     },
-    [installId, isPlaying, pushToken]
+    [isPlaying]
   );
 
   const togglePlayback = useCallback(async () => {
@@ -279,6 +352,101 @@ export default function App() {
     },
     [persistPreferences, preferences]
   );
+
+  useEffect(() => {
+    if (!installId || !pushToken || !preferences || !platform) return;
+    if (registrationInFlightRef.current) return;
+
+    const signature = JSON.stringify({
+      installId,
+      pushToken,
+      timezone,
+      platform,
+      preferences,
+    });
+
+    if (lastRegistrationSignatureRef.current === signature) {
+      return;
+    }
+
+    let active = true;
+
+    const syncRegistration = async () => {
+      try {
+        registrationInFlightRef.current = true;
+        setRegistrationState("syncing");
+        await registerDevice({
+          installId,
+          pushToken,
+          timezone,
+          platform,
+          preferences,
+        });
+        if (!active) return;
+        lastRegistrationSignatureRef.current = signature;
+        setRegistrationState("idle");
+      } catch {
+        if (active) {
+          setRegistrationState("idle");
+        }
+      } finally {
+        registrationInFlightRef.current = false;
+      }
+    };
+
+    syncRegistration().catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [installId, platform, preferences, pushToken, timezone]);
+
+  const unregisterCurrentDevice = useCallback(async () => {
+    if (!installId) return;
+    setSyncing(true);
+
+    try {
+      await unregisterDevice(installId);
+    } catch {
+      // Best-effort cleanup.
+    } finally {
+      setPushToken(null);
+      await clearPushToken();
+      lastRegistrationSignatureRef.current = null;
+      setRegistrationState("removed");
+      setSyncing(false);
+      setError("Device registration removed. Alerts are disabled until you re-enable push permissions.");
+    }
+  }, [installId]);
+
+  const registerCurrentDevice = useCallback(async () => {
+    if (!platform) {
+      setError("Push registration is only available on iOS and Android.");
+      return;
+    }
+
+    setSyncing(true);
+    try {
+      const token = await requestPushToken();
+      if (!token) {
+        setError("Push permissions are not granted.");
+        return;
+      }
+      setPushToken(token);
+      await savePushToken(token);
+      setError(null);
+      setRegistrationState("idle");
+    } finally {
+      setSyncing(false);
+    }
+  }, [platform]);
+
+  const staleAgeSeconds = now?.lastUpdatedAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(now.lastUpdatedAt).getTime()) / 1000))
+    : null;
+  const retryCountdownSeconds =
+    nextRetryAt === null ? null : Math.max(0, Math.ceil((nextRetryAt - Date.now()) / 1000));
+  void clockTick;
 
   if (loading) {
     return (
@@ -305,9 +473,19 @@ export default function App() {
 
       {(error || now?.stale) && (
         <View style={styles.warningBanner}>
-          <Text style={styles.warningText}>
-            {error ?? `Data is stale (${now?.staleSeconds ?? 0}s old)`}
-          </Text>
+          <View style={styles.warningRow}>
+            <View style={styles.warningBody}>
+              <Text style={styles.warningText}>
+                {error ?? `Data is stale (${staleAgeSeconds ?? now?.staleSeconds ?? 0}s old)`}
+              </Text>
+              {retryCountdownSeconds !== null && retryCountdownSeconds > 0 ? (
+                <Text style={styles.warningSubtext}>Auto retry in {retryCountdownSeconds}s</Text>
+              ) : null}
+            </View>
+            <Pressable style={styles.warningRetryButton} onPress={retryNow}>
+              <Text style={styles.warningRetryText}>Retry now</Text>
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -337,7 +515,13 @@ export default function App() {
               <Text style={styles.keyText}>Density: {now?.solarWind?.density?.toFixed(1) ?? "--"} p/cm3</Text>
               <Text style={styles.keyText}>Bz: {now?.solarWind?.bz?.toFixed(1) ?? "--"} nT</Text>
               <Text style={styles.keyText}>Kp: {now?.geomagnetic?.kp?.toFixed(1) ?? "--"}</Text>
-              <Text style={styles.smallMutedText}>Last update: {now?.lastUpdatedAt ?? "unknown"}</Text>
+              <Text style={styles.smallMutedText}>
+                Last weather update: {now?.lastUpdatedAt ?? "unknown"}
+              </Text>
+              <Text style={styles.smallMutedText}>
+                Last successful sync: {formatSyncTimestamp(lastSuccessfulSyncAt)}
+              </Text>
+              <Text style={styles.smallMutedText}>Stale age: {staleAgeSeconds ?? 0}s</Text>
             </SectionCard>
 
             <SectionCard title="Binaural Tip">
@@ -502,8 +686,76 @@ export default function App() {
                 </Pressable>
               </View>
               <Text style={styles.smallMutedText}>
-                Window: {preferences.quietHours.startHour}:00 - {preferences.quietHours.endHour}:00
+                Window: {formatHour(preferences.quietHours.startHour)} - {formatHour(preferences.quietHours.endHour)}
               </Text>
+
+              <View style={styles.rowBetween}>
+                <Text style={styles.mutedText}>Quiet Start: {formatHour(preferences.quietHours.startHour)}</Text>
+                <View style={styles.inlineControls}>
+                  <Pressable
+                    style={styles.stepButton}
+                    onPress={() =>
+                      updatePreference((current) => ({
+                        ...current,
+                        quietHours: {
+                          ...current.quietHours,
+                          startHour: shiftHour(current.quietHours.startHour, -1),
+                        },
+                      }))
+                    }
+                  >
+                    <Text style={styles.stepButtonText}>-</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.stepButton}
+                    onPress={() =>
+                      updatePreference((current) => ({
+                        ...current,
+                        quietHours: {
+                          ...current.quietHours,
+                          startHour: shiftHour(current.quietHours.startHour, 1),
+                        },
+                      }))
+                    }
+                  >
+                    <Text style={styles.stepButtonText}>+</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={styles.rowBetween}>
+                <Text style={styles.mutedText}>Quiet End: {formatHour(preferences.quietHours.endHour)}</Text>
+                <View style={styles.inlineControls}>
+                  <Pressable
+                    style={styles.stepButton}
+                    onPress={() =>
+                      updatePreference((current) => ({
+                        ...current,
+                        quietHours: {
+                          ...current.quietHours,
+                          endHour: shiftHour(current.quietHours.endHour, -1),
+                        },
+                      }))
+                    }
+                  >
+                    <Text style={styles.stepButtonText}>-</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.stepButton}
+                    onPress={() =>
+                      updatePreference((current) => ({
+                        ...current,
+                        quietHours: {
+                          ...current.quietHours,
+                          endHour: shiftHour(current.quietHours.endHour, 1),
+                        },
+                      }))
+                    }
+                  >
+                    <Text style={styles.stepButtonText}>+</Text>
+                  </Pressable>
+                </View>
+              </View>
 
               <View style={styles.rowBetween}>
                 <Text style={styles.keyText}>Background Audio</Text>
@@ -520,8 +772,32 @@ export default function App() {
                 </Pressable>
               </View>
 
+              <Text style={styles.smallMutedText}>Timezone: {timezone}</Text>
               <Text style={styles.smallMutedText}>Install ID: {installId || "pending"}</Text>
-              <Text style={styles.smallMutedText}>Push token: {pushToken ? "registered" : "not granted"}</Text>
+              <Text style={styles.smallMutedText}>
+                Push token: {pushToken ? "registered" : "not granted"}
+              </Text>
+              <Text style={styles.smallMutedText}>Registration status: {registrationState}</Text>
+              {!pushToken && platform ? (
+                <Pressable
+                  style={styles.primaryButton}
+                  onPress={() => {
+                    registerCurrentDevice().catch(() => undefined);
+                  }}
+                >
+                  <Text style={styles.primaryButtonText}>Register Device for Alerts</Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                style={[styles.primaryButton, styles.destructiveButton]}
+                onPress={() => {
+                  unregisterCurrentDevice().catch(() => undefined);
+                }}
+              >
+                <Text style={[styles.primaryButtonText, styles.destructiveButtonText]}>
+                  Remove Device Registration
+                </Text>
+              </Pressable>
             </SectionCard>
           </>
         )}
@@ -602,10 +878,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
+  warningRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  warningBody: {
+    flex: 1,
+    gap: 3,
+  },
   warningText: {
     color: "#fecaca",
     fontSize: 12,
     fontWeight: "600",
+  },
+  warningSubtext: {
+    color: "#fca5a5",
+    fontSize: 11,
+  },
+  warningRetryButton: {
+    borderWidth: 1,
+    borderColor: "#fca5a5",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  warningRetryText: {
+    color: "#ffe4e6",
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
   },
   content: {
     flex: 1,
@@ -640,6 +943,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: "center",
+    marginTop: 8,
   },
   primaryButtonText: {
     color: "#00111a",
@@ -715,6 +1019,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
     letterSpacing: 1,
+  },
+  destructiveButton: {
+    backgroundColor: "#450a0a",
+    borderWidth: 1,
+    borderColor: "#7f1d1d",
+  },
+  destructiveButtonText: {
+    color: "#fecaca",
   },
   tabBar: {
     flexDirection: "row",

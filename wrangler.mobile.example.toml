@@ -1,11 +1,53 @@
-# Example Cloudflare bindings for mobile APIs + worker.
-# Copy values into your deployed wrangler config/environment.
+# Mobile backend binding template for Heliosinger.
+# Copy the relevant section into each real wrangler config.
+#
+# 1) Root Pages Functions config: /Volumes/VIXinSSD/Heliosinger/wrangler.toml
+# 2) Alerts worker config: /Volumes/VIXinSSD/Heliosinger/workers/alerts-dispatcher/wrangler.toml
+
+# -----------------------------------------------------------------------------
+# Pages Functions (root wrangler.toml)
+# -----------------------------------------------------------------------------
 
 [[d1_databases]]
 binding = "HELIOSINGER_DB"
 database_name = "heliosinger-mobile"
-database_id = "replace-with-d1-id"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
 
 [[kv_namespaces]]
 binding = "HELIOSINGER_KV"
-id = "replace-with-kv-id"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+# Optional preview environment override example:
+#
+# [env.preview]
+# [[env.preview.d1_databases]]
+# binding = "HELIOSINGER_DB"
+# database_name = "heliosinger-mobile-preview"
+# database_id = "REPLACE_WITH_PREVIEW_D1_ID"
+#
+# [[env.preview.kv_namespaces]]
+# binding = "HELIOSINGER_KV"
+# id = "REPLACE_WITH_PREVIEW_KV_ID"
+
+# -----------------------------------------------------------------------------
+# Alerts Dispatcher Worker (workers/alerts-dispatcher/wrangler.toml)
+# -----------------------------------------------------------------------------
+
+# name = "heliosinger-alerts-dispatcher"
+# main = "src/index.ts"
+# compatibility_date = "2024-01-01"
+#
+# [triggers]
+# crons = ["*/1 * * * *"]
+#
+# [[d1_databases]]
+# binding = "HELIOSINGER_DB"
+# database_name = "heliosinger-mobile"
+# database_id = "REPLACE_WITH_D1_DATABASE_ID"
+#
+# [[kv_namespaces]]
+# binding = "HELIOSINGER_KV"
+# id = "REPLACE_WITH_KV_NAMESPACE_ID"
+#
+# Worker secret (set via CLI, not in TOML):
+# npx wrangler secret put EXPO_PUSH_ACCESS_TOKEN

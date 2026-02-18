@@ -2,7 +2,7 @@ import type { SpaceWeatherNowResponse } from "@heliosinger/core";
 import {
   HeliosingerAudioModule,
   type HeliosingerAudioParams,
-} from "../../modules/heliosinger-audio/src";
+} from "heliosinger-audio";
 
 function conditionToBeat(condition: SpaceWeatherNowResponse["condition"]): number {
   switch (condition) {

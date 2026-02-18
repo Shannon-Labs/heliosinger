@@ -92,6 +92,75 @@ npm run test:core
 npm run mobile:start
 ```
 
+## Mobile Production Setup
+
+Use these steps to provision and deploy the mobile backend stack.
+
+1. Create D1 database
+
+```bash
+npx wrangler d1 create heliosinger-mobile
+```
+
+2. Create KV namespace
+
+```bash
+npx wrangler kv namespace create HELIOSINGER_KV
+```
+
+3. Copy binding ids into config
+- Root Pages config (for `/functions/api/mobile/v1/*`): `/Volumes/VIXinSSD/Heliosinger/wrangler.toml`
+- Worker config: `/Volumes/VIXinSSD/Heliosinger/workers/alerts-dispatcher/wrangler.toml`
+- Template: `/Volumes/VIXinSSD/Heliosinger/wrangler.mobile.example.toml`
+
+4. Apply D1 migrations in order
+
+```bash
+npx wrangler d1 execute heliosinger-mobile --file ./scripts/migrations/mobile/0001_initial.sql
+npx wrangler d1 execute heliosinger-mobile --file ./scripts/migrations/mobile/0002_notification_dedupe.sql
+```
+
+5. Configure secrets
+
+```bash
+cd /Volumes/VIXinSSD/Heliosinger/workers/alerts-dispatcher
+npx wrangler secret put EXPO_PUSH_ACCESS_TOKEN
+```
+
+6. Build + deploy Pages (web + API functions)
+
+```bash
+cd /Volumes/VIXinSSD/Heliosinger
+npm run build
+npx wrangler pages deploy dist --project-name=heliosinger
+```
+
+7. Deploy scheduled alerts worker
+
+```bash
+cd /Volumes/VIXinSSD/Heliosinger/workers/alerts-dispatcher
+npx wrangler deploy
+```
+
+### Required Bindings
+
+- `HELIOSINGER_DB` (D1)
+- `HELIOSINGER_KV` (KV)
+- `EXPO_PUSH_ACCESS_TOKEN` (worker secret; optional but recommended)
+
+### Validation Commands
+
+```bash
+npm run test:core
+npm run test:mobile-api
+npm run test:alerts-worker
+npm run check
+npm run build
+npx wrangler pages functions build functions --outdir /tmp/hs-pages-build-final
+npx wrangler deploy --dry-run --config ./workers/alerts-dispatcher/wrangler.toml
+npm --prefix ./mobile run typecheck
+```
+
 ## License
 
 MIT

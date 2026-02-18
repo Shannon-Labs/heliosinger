@@ -1,9 +1,12 @@
-import type { DeviceRegistrationRequest } from "../../../../../packages/core/src/index.ts";
 import {
   corsOptionsResponse,
+  errorResponse,
   getDefaultPreferences,
+  getRequestId,
   jsonResponse,
+  parseJsonBody,
   registerDevice,
+  validateRegistrationPayload,
   type MobileEnv,
 } from "../_lib";
 
@@ -12,29 +15,41 @@ export async function onRequestOptions(): Promise<Response> {
 }
 
 export async function onRequestPost(context: { request: Request; env: MobileEnv }): Promise<Response> {
+  const requestId = getRequestId(context.request);
   try {
-    const body = (await context.request.json()) as Partial<DeviceRegistrationRequest>;
-
-    if (!body.installId || !body.pushToken || !body.timezone || !body.platform) {
-      return jsonResponse(
-        { message: "installId, pushToken, timezone, and platform are required" },
-        { status: 400 }
-      );
+    const parsed = await parseJsonBody(context.request, requestId);
+    if (!parsed.ok) {
+      return parsed.response as Response;
     }
 
-    const payload: DeviceRegistrationRequest = {
-      installId: body.installId,
-      pushToken: body.pushToken,
-      timezone: body.timezone,
-      platform: body.platform,
-      appVersion: body.appVersion,
-      preferences: body.preferences ?? getDefaultPreferences(body.installId),
+    const validated = validateRegistrationPayload(parsed.value);
+    if (!validated.ok) {
+      return errorResponse(400, validated.failure.code, validated.failure.message, {
+        details: validated.failure.details,
+        requestId,
+      });
+    }
+
+    const payload = {
+      ...validated.payload,
+      preferences:
+        validated.payload.preferences ?? getDefaultPreferences(validated.payload.installId),
     };
 
     await registerDevice(context.env, payload);
-    return jsonResponse({ ok: true, installId: payload.installId, registeredAt: new Date().toISOString() }, { status: 201 });
+    return jsonResponse(
+      {
+        ok: true,
+        installId: payload.installId,
+        registeredAt: new Date().toISOString(),
+        meta: { requestId },
+      },
+      { status: 201 }
+    );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return jsonResponse({ message: "Failed to register device", error: message }, { status: 500 });
+    return errorResponse(500, "device_registration_failed", "Failed to register device", {
+      details: error instanceof Error ? error.message : "Unknown error",
+      requestId,
+    });
   }
 }

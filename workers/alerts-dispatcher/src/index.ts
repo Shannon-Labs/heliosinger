@@ -1,20 +1,24 @@
 import {
+  buildImpactBullets,
   classifyFlareClass,
+  computeStaleness,
   deriveRScale,
   deriveSpaceWeatherCondition,
   evaluateAlertEvents,
+  isValidTimezone,
   summarizeFlareImpact,
+  validateDevicePreferencesRequest,
   type DevicePreferencesRequest,
   type SpaceWeatherNowResponse,
-} from "../../../packages/core/src/index";
+} from "../../../packages/core/src/index.ts";
 
 interface D1Prepared {
   bind: (...values: unknown[]) => {
-    run: () => Promise<{ success?: boolean }>;
+    run: () => Promise<{ success?: boolean; meta?: { changes?: number } }>;
     first: <T = unknown>() => Promise<T | null>;
     all: <T = unknown>() => Promise<{ results: T[] }>;
   };
-  run: () => Promise<{ success?: boolean }>;
+  run: () => Promise<{ success?: boolean; meta?: { changes?: number } }>;
   first: <T = unknown>() => Promise<T | null>;
   all: <T = unknown>() => Promise<{ results: T[] }>;
 }
@@ -40,39 +44,119 @@ interface DeviceRow {
   timezone: string;
   preferences_json: string;
   last_notification_at: string | null;
+  alerts_enabled: number;
+  kp_threshold: number;
+  bz_south_threshold: number;
+  flare_classes: string;
+  quiet_hours_enabled: number;
+  quiet_start_hour: number;
+  quiet_end_hour: number;
+  background_audio_enabled: number;
 }
 
-async function fetchNow(): Promise<SpaceWeatherNowResponse> {
+const DEDUPE_TTL_SECONDS = 15 * 60;
+
+function parseNumber(input: unknown, fallback = 0): number {
+  const parsed = Number.parseFloat(String(input ?? ""));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeKpValue(raw: unknown): number {
+  return Math.max(0, Math.min(9, parseNumber(raw, 0)));
+}
+
+async function fetchJsonArray(url: string): Promise<unknown[] | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const parsed = await response.json();
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeCachedSnapshot(snapshot: SpaceWeatherNowResponse): SpaceWeatherNowResponse {
+  const staleness = computeStaleness(snapshot.lastUpdatedAt);
+  return {
+    ...snapshot,
+    source: "cached",
+    stale: true,
+    staleSeconds: staleness.staleSeconds,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+async function fetchNow(previous: SpaceWeatherNowResponse | null): Promise<SpaceWeatherNowResponse> {
   const [plasma, mag, kp, xray] = await Promise.all([
-    fetch("https://services.swpc.noaa.gov/products/solar-wind/plasma-2-hour.json").then((r) => r.json()),
-    fetch("https://services.swpc.noaa.gov/products/solar-wind/mag-2-hour.json").then((r) => r.json()),
-    fetch("https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json").then((r) => r.json()),
-    fetch("https://services.swpc.noaa.gov/json/goes/goes-xrs-report.json").then((r) => r.json()),
+    fetchJsonArray("https://services.swpc.noaa.gov/products/solar-wind/plasma-2-hour.json"),
+    fetchJsonArray("https://services.swpc.noaa.gov/products/solar-wind/mag-2-hour.json"),
+    fetchJsonArray("https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"),
+    fetchJsonArray("https://services.swpc.noaa.gov/json/goes/goes-xrs-report.json"),
   ]);
 
-  const plasmaRow = Array.isArray(plasma) && plasma.length > 1 ? plasma[plasma.length - 1] : null;
-  const magRow = Array.isArray(mag) && mag.length > 1 ? mag[mag.length - 1] : null;
-  const kpRow = Array.isArray(kp) && kp.length > 1 ? kp[kp.length - 1] : null;
-  const flareRow = Array.isArray(xray) && xray.length > 0 ? xray[xray.length - 1] : null;
+  const hasAnyLive = Boolean(
+    (Array.isArray(plasma) && plasma.length > 1) ||
+      (Array.isArray(mag) && mag.length > 1) ||
+      (Array.isArray(kp) && kp.length > 1) ||
+      (Array.isArray(xray) && xray.length > 0)
+  );
 
-  const velocity = Number.parseFloat(plasmaRow?.[2] ?? "0") || 0;
-  const density = Number.parseFloat(plasmaRow?.[1] ?? "0") || 0;
-  const temperature = Number.parseFloat(plasmaRow?.[3] ?? "0") || 0;
-  const bz = Number.parseFloat(magRow?.[3] ?? "0") || 0;
-  const kpValue = Number.parseFloat(kpRow?.[1] ?? "0") || 0;
+  if (!hasAnyLive) {
+    if (previous) {
+      return normalizeCachedSnapshot(previous);
+    }
+    throw new Error("No live NOAA datasets available and no cached snapshot exists");
+  }
 
-  const shortWave = Number.parseFloat(flareRow?.xrsa ?? flareRow?.short_wave ?? flareRow?.["0.05-0.4nm"] ?? "0") || 0;
-  const longWave = Number.parseFloat(flareRow?.xrsb ?? flareRow?.long_wave ?? flareRow?.["0.1-0.8nm"] ?? "0") || 0;
-  const flareClass = String(flareRow?.flare_class ?? classifyFlareClass(longWave || shortWave));
+  const plasmaRow = Array.isArray(plasma) && plasma.length > 1 ? (plasma[plasma.length - 1] as unknown[]) : null;
+  const magRow = Array.isArray(mag) && mag.length > 1 ? (mag[mag.length - 1] as unknown[]) : null;
+  const kpRow = Array.isArray(kp) && kp.length > 1 ? (kp[kp.length - 1] as unknown[]) : null;
+  const flareRow = Array.isArray(xray) && xray.length > 0 ? (xray[xray.length - 1] as Record<string, unknown>) : null;
+
+  const velocity = plasmaRow ? parseNumber(plasmaRow[2], previous?.solarWind?.velocity ?? 0) : (previous?.solarWind?.velocity ?? 0);
+  const density = plasmaRow ? parseNumber(plasmaRow[1], previous?.solarWind?.density ?? 0) : (previous?.solarWind?.density ?? 0);
+  const temperature = plasmaRow ? parseNumber(plasmaRow[3], previous?.solarWind?.temperature ?? 0) : (previous?.solarWind?.temperature ?? 0);
+
+  const bx = magRow ? parseNumber(magRow[1], 0) : 0;
+  const by = magRow ? parseNumber(magRow[2], 0) : 0;
+  const bz = magRow
+    ? parseNumber(magRow[3], previous?.solarWind?.bz ?? 0)
+    : (previous?.solarWind?.bz ?? 0);
+  const bt = magRow
+    ? parseNumber(magRow[4], Math.sqrt(bx * bx + by * by + bz * bz))
+    : (previous?.solarWind?.bt ?? Math.sqrt(bx * bx + by * by + bz * bz));
+
+  const kpValue = kpRow ? normalizeKpValue(kpRow[1]) : (previous?.geomagnetic?.kp ?? 0);
+  const aRunning = kpRow ? parseNumber(kpRow[2], previous?.geomagnetic?.aRunning ?? 0) : (previous?.geomagnetic?.aRunning ?? 0);
+
+  const shortWave = flareRow
+    ? parseNumber(flareRow.xrsa ?? flareRow.short_wave ?? flareRow["0.05-0.4nm"], previous?.flare?.shortWave ?? 0)
+    : (previous?.flare?.shortWave ?? 0);
+  const longWave = flareRow
+    ? parseNumber(flareRow.xrsb ?? flareRow.long_wave ?? flareRow["0.1-0.8nm"], previous?.flare?.longWave ?? 0)
+    : (previous?.flare?.longWave ?? 0);
+
+  const flareClass = flareRow
+    ? String(flareRow.flare_class ?? classifyFlareClass(longWave || shortWave))
+    : (previous?.flare?.flareClass ?? classifyFlareClass(longWave || shortWave));
   const rScale = deriveRScale(longWave || shortWave);
 
-  const condition = deriveSpaceWeatherCondition({ kp: kpValue, velocity, bz });
-  const sourceTs = new Date(plasmaRow?.[0] ?? Date.now()).toISOString();
+  const sourceTs = new Date(
+    (plasmaRow?.[0] as string | number | Date) ?? previous?.lastUpdatedAt ?? Date.now()
+  ).toISOString();
 
-  return {
+  const flareTimestamp = new Date(
+    (flareRow?.time_tag ?? flareRow?.timestamp ?? previous?.flare?.timestamp ?? Date.now()) as string | number
+  ).toISOString();
+
+  const condition = deriveSpaceWeatherCondition({ kp: kpValue, velocity, bz });
+  const staleness = computeStaleness(sourceTs);
+
+  const snapshot: SpaceWeatherNowResponse = {
     timestamp: new Date().toISOString(),
-    stale: false,
-    staleSeconds: 0,
+    stale: staleness.stale,
+    staleSeconds: staleness.staleSeconds,
     source: "live",
     condition,
     solarWind: {
@@ -81,11 +165,11 @@ async function fetchNow(): Promise<SpaceWeatherNowResponse> {
       density,
       bz,
       temperature,
-      bt: Number.parseFloat(magRow?.[4] ?? "0") || 0,
+      bt,
     },
     geomagnetic: {
       kp: kpValue,
-      aRunning: Number.parseFloat(kpRow?.[2] ?? "0") || 0,
+      aRunning,
     },
     flare: {
       flareClass,
@@ -93,17 +177,20 @@ async function fetchNow(): Promise<SpaceWeatherNowResponse> {
       longWave,
       rScale,
       impactSummary: summarizeFlareImpact(flareClass, rScale),
-      timestamp: new Date(flareRow?.time_tag ?? flareRow?.timestamp ?? Date.now()).toISOString(),
+      timestamp: flareTimestamp,
     },
     impacts: [],
     lastUpdatedAt: sourceTs,
   };
+
+  snapshot.impacts = buildImpactBullets(snapshot);
+  return snapshot;
 }
 
 async function loadPreviousSnapshot(env: Env): Promise<SpaceWeatherNowResponse | null> {
-  const raw = await env.HELIOSINGER_KV.get("mobile:latest-space-weather", "text");
-  if (!raw) return null;
   try {
+    const raw = await env.HELIOSINGER_KV.get("mobile:latest-space-weather", "text");
+    if (!raw) return null;
     return JSON.parse(raw) as SpaceWeatherNowResponse;
   } catch {
     return null;
@@ -154,7 +241,10 @@ async function saveSnapshot(env: Env, snapshot: SpaceWeatherNowResponse): Promis
     .run();
 
   if (snapshot.flare) {
-    const eventId = `${snapshot.flare.timestamp}-${snapshot.flare.flareClass}-${Math.round(snapshot.flare.longWave * 1e12)}`;
+    const eventId = `${snapshot.flare.timestamp}-${snapshot.flare.flareClass}-${Math.round(
+      snapshot.flare.longWave * 1e12
+    )}`;
+
     await env.HELIOSINGER_DB.prepare(
       `INSERT OR IGNORE INTO flare_events (
         event_id,
@@ -176,16 +266,72 @@ async function saveSnapshot(env: Env, snapshot: SpaceWeatherNowResponse): Promis
         snapshot.flare.longWave,
         snapshot.flare.rScale,
         snapshot.flare.impactSummary,
-        "derived",
+        snapshot.source === "live" ? "derived" : "goes",
         JSON.stringify(snapshot.flare)
       )
       .run();
   }
 }
 
+function parseDevicePreferences(row: DeviceRow): DevicePreferencesRequest | null {
+  try {
+    const parsed = JSON.parse(row.preferences_json) as unknown;
+    const validated = validateDevicePreferencesRequest(parsed, { installIdRequired: false });
+    if (validated.ok) {
+      return {
+        ...validated.value,
+        installId: row.install_id,
+      };
+    }
+  } catch {
+    // Continue to column fallback.
+  }
+
+  let flareClasses: string[] = ["M", "X"];
+  try {
+    const parsed = JSON.parse(row.flare_classes) as unknown;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      flareClasses = parsed.map((value) => String(value));
+    }
+  } catch {
+    // keep defaults
+  }
+
+  return {
+    installId: row.install_id,
+    alertsEnabled: row.alerts_enabled === 1,
+    thresholds: {
+      kp: Number.isFinite(row.kp_threshold) ? row.kp_threshold : 5,
+      bzSouth: Number.isFinite(row.bz_south_threshold) ? row.bz_south_threshold : 8,
+      flareClasses,
+    },
+    quietHours: {
+      enabled: row.quiet_hours_enabled === 1,
+      startHour: Number.isFinite(row.quiet_start_hour) ? row.quiet_start_hour : 22,
+      endHour: Number.isFinite(row.quiet_end_hour) ? row.quiet_end_hour : 7,
+    },
+    backgroundAudioEnabled: row.background_audio_enabled === 1,
+  };
+}
+
 async function loadDevices(env: Env): Promise<DeviceRow[]> {
   const rows = await env.HELIOSINGER_DB.prepare(
-    "SELECT install_id, push_token, timezone, preferences_json, last_notification_at FROM device_subscriptions WHERE push_token IS NOT NULL"
+    `SELECT
+      install_id,
+      push_token,
+      timezone,
+      preferences_json,
+      last_notification_at,
+      alerts_enabled,
+      kp_threshold,
+      bz_south_threshold,
+      flare_classes,
+      quiet_hours_enabled,
+      quiet_start_hour,
+      quiet_end_hour,
+      background_audio_enabled
+    FROM device_subscriptions
+    WHERE push_token IS NOT NULL AND push_token != ''`
   ).all<DeviceRow>();
 
   return rows.results;
@@ -199,7 +345,7 @@ async function logNotification(
   reason: string
 ): Promise<void> {
   await env.HELIOSINGER_DB.prepare(
-    `INSERT INTO notification_log (
+    `INSERT OR IGNORE INTO notification_log (
       install_id,
       event_id,
       status,
@@ -217,6 +363,23 @@ async function logNotification(
       .bind(new Date().toISOString(), installId)
       .run();
   }
+}
+
+function extractExpoError(payload: unknown): string | null {
+  const rows = Array.isArray((payload as { data?: unknown })?.data)
+    ? ((payload as { data: Array<Record<string, unknown>> }).data ?? [])
+    : [((payload as { data?: Record<string, unknown> })?.data ?? payload) as Record<string, unknown>];
+
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const status = String(row.status ?? "").toLowerCase();
+    if (status && status !== "ok") {
+      const message = String(row.message ?? row.details ?? "unknown Expo push error");
+      return `${status}:${message}`;
+    }
+  }
+
+  return null;
 }
 
 async function sendExpoPush(
@@ -241,33 +404,48 @@ async function sendExpoPush(
     }),
   });
 
+  const text = await response.text();
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    // leave as null
+  }
+
   if (!response.ok) {
-    const text = await response.text();
     throw new Error(`Expo push failed (${response.status}): ${text}`);
   }
+
+  const ticketError = extractExpoError(parsed);
+  if (ticketError) {
+    throw new Error(`Expo push rejected ticket: ${ticketError}`);
+  }
+}
+
+function dedupeKey(installId: string, key: string): string {
+  return `mobile:notify-dedupe:${installId}:${key}`;
 }
 
 export default {
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
     const previous = await loadPreviousSnapshot(env);
-    const current = await fetchNow();
+    const current = await fetchNow(previous);
 
     await saveSnapshot(env, current);
 
     const devices = await loadDevices(env);
     for (const device of devices) {
-      let preferences: DevicePreferencesRequest;
-      try {
-        preferences = JSON.parse(device.preferences_json) as DevicePreferencesRequest;
-      } catch {
+      const preferences = parseDevicePreferences(device);
+      if (!preferences || !preferences.alertsEnabled) {
         continue;
       }
 
+      const timezone = isValidTimezone(device.timezone) ? device.timezone : "UTC";
       const events = evaluateAlertEvents({
         previous,
         current,
         preferences,
-        timezone: device.timezone || "UTC",
+        timezone,
         now: new Date(),
         lastNotificationAt: device.last_notification_at ? new Date(device.last_notification_at) : null,
       });
@@ -277,8 +455,24 @@ export default {
       }
 
       const event = events[0];
+      const key = dedupeKey(device.install_id, event.dedupeKey);
+      const recentlySent = await env.HELIOSINGER_KV.get(key, "text");
+      if (recentlySent) {
+        console.info("alerts-dispatcher:skipped", {
+          installId: device.install_id,
+          eventId: event.id,
+          reason: "dedupe_cooldown",
+          dedupeKey: event.dedupeKey,
+        });
+        await logNotification(env, device.install_id, event.id, "skipped", "dedupe_cooldown");
+        continue;
+      }
+
       try {
         await sendExpoPush(device.push_token, event.title, event.body, env.EXPO_PUSH_ACCESS_TOKEN);
+        await env.HELIOSINGER_KV.put(key, new Date().toISOString(), {
+          expirationTtl: DEDUPE_TTL_SECONDS,
+        });
         await logNotification(env, device.install_id, event.id, "sent", "dispatched");
       } catch (error) {
         await logNotification(

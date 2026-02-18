@@ -7,6 +7,25 @@ import type {
 } from "@heliosinger/core";
 import { API_BASE_URL, API_PATHS } from "./config";
 
+interface ErrorPayload {
+  ok?: boolean;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+}
+
+export class MobileApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string
+  ) {
+    super(message);
+    this.name = "MobileApiError";
+  }
+}
+
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
@@ -17,7 +36,18 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed (${response.status})`);
+    let payload: ErrorPayload | null = null;
+    try {
+      payload = (await response.json()) as ErrorPayload;
+    } catch {
+      // ignore parsing errors
+    }
+
+    throw new MobileApiError(
+      payload?.error?.message ?? `Request failed (${response.status})`,
+      response.status,
+      payload?.error?.code
+    );
   }
 
   return (await response.json()) as T;

@@ -89,3 +89,7 @@ export async function savePushToken(token: string): Promise<void> {
 export async function loadPushToken(): Promise<string | null> {
   return AsyncStorage.getItem(KEYS.pushToken);
 }
+
+export async function clearPushToken(): Promise<void> {
+  await AsyncStorage.removeItem(KEYS.pushToken);
+}
