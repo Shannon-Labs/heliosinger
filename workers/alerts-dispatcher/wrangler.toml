@@ -1,0 +1,15 @@
+name = "heliosinger-alerts-dispatcher"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[triggers]
+crons = ["*/1 * * * *"]
+
+[[d1_databases]]
+binding = "HELIOSINGER_DB"
+database_name = "heliosinger-mobile"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+[[kv_namespaces]]
+binding = "HELIOSINGER_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"

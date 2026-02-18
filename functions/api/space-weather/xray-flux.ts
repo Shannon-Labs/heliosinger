@@ -1,3 +1,5 @@
+import { classifyFlareClass } from "../../../packages/core/src/index.ts";
+
 export async function onRequestOptions(): Promise<Response> {
   return new Response(null, {
     headers: {
@@ -10,16 +12,6 @@ export async function onRequestOptions(): Promise<Response> {
 
 export async function onRequestGet(): Promise<Response> {
   try {
-    // Helper function to calculate flare class from X-ray flux (W/m²)
-    // NOAA classification: A < 1e-7, B: 1e-7-1e-6, C: 1e-6-1e-5, M: 1e-5-1e-4, X: >= 1e-4
-    const calculateFlareClass = (shortWave: number): string => {
-      if (shortWave >= 1e-4) return 'X';
-      if (shortWave >= 1e-5) return 'M';
-      if (shortWave >= 1e-6) return 'C';
-      if (shortWave >= 1e-7) return 'B';
-      return 'A';
-    };
-
     // Try multiple possible endpoints for X-ray flux
     let xrayData = null;
     let error = null;
@@ -69,7 +61,7 @@ export async function onRequestGet(): Promise<Response> {
             providedFlareClass = data.flare_class;
           }
 
-          const calculatedFlareClass = calculateFlareClass(shortWave);
+          const calculatedFlareClass = classifyFlareClass(shortWave);
           const flareClass = providedFlareClass && ['A', 'B', 'C', 'M', 'X'].includes(providedFlareClass[0]) 
             ? providedFlareClass 
             : calculatedFlareClass;
@@ -101,7 +93,7 @@ export async function onRequestGet(): Promise<Response> {
               // Parse max_flux which is typically in scientific notation like "1.2e-05"
               const maxFlux = parseFloat(latest[7]) || 0;
               const timestamp = `${latest[0]}-${latest[1]}-${latest[2]} ${latest[3].slice(0,2)}:${latest[3].slice(2,4)}:00`;
-              const flareClass = calculateFlareClass(maxFlux);
+              const flareClass = classifyFlareClass(maxFlux);
               
               xrayData = {
                 timestamp,
@@ -154,4 +146,3 @@ export async function onRequestGet(): Promise<Response> {
     );
   }
 }
-

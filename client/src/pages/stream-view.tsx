@@ -187,7 +187,12 @@ export default function StreamView() {
         <div className="flex-1 relative bg-black overflow-hidden">
           {/* 3D Solar Hologram */}
           <div className="absolute inset-0">
-            <Suspense fallback={<div className="w-full h-full bg-black" />}>
+            <Suspense fallback={
+              <div className="w-full h-full bg-black flex flex-col items-center justify-center">
+                <div className="w-24 h-24 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+                <span className="text-primary/50 font-mono text-sm mt-4 uppercase tracking-wider">Loading solar visualization...</span>
+              </div>
+            }>
               <SolarHologram
                 data={comprehensiveData}
                 heliosingerData={heliosinger.currentData}

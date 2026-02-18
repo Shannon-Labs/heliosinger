@@ -70,6 +70,28 @@ npm run build
 npx wrangler pages deploy dist --project-name=heliosinger
 ```
 
+## Mobile MVP Scaffold
+
+This repository now includes a mobile and backend scaffold for the Heliosinger
+iOS/Android MVP:
+
+- `mobile/` - Expo React Native app with `Listen`, `Flares`, `Learn`, `Settings`
+- `packages/core/` - shared contracts and deterministic logic (flare/radio scale, alert evaluation, learning cards)
+- `functions/api/mobile/v1/` - versioned mobile endpoints
+- `workers/alerts-dispatcher/` - scheduled push dispatcher worker
+- `scripts/migrations/mobile/` - D1 schema migrations
+- `wrangler.mobile.example.toml` - binding template for D1/KV
+
+Helpful commands:
+
+```bash
+# Run shared core tests
+npm run test:core
+
+# Run mobile app
+npm run mobile:start
+```
+
 ## License
 
 MIT

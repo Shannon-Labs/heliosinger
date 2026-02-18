@@ -1,0 +1,11 @@
+# Example Cloudflare bindings for mobile APIs + worker.
+# Copy values into your deployed wrangler config/environment.
+
+[[d1_databases]]
+binding = "HELIOSINGER_DB"
+database_name = "heliosinger-mobile"
+database_id = "replace-with-d1-id"
+
+[[kv_namespaces]]
+binding = "HELIOSINGER_KV"
+id = "replace-with-kv-id"

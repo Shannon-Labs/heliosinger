@@ -1,3 +1,5 @@
+import { classifyFlareClass } from "../../../packages/core/src/index.ts";
+
 export async function onRequestOptions(): Promise<Response> {
   return new Response(null, {
     headers: {
@@ -75,16 +77,6 @@ export async function onRequestGet(): Promise<Response> {
       };
     }
 
-    // Helper function to calculate flare class from X-ray flux (W/m²)
-    // NOAA classification: A < 1e-7, B: 1e-7-1e-6, C: 1e-6-1e-5, M: 1e-5-1e-4, X: >= 1e-4
-    const calculateFlareClass = (shortWave: number): string => {
-      if (shortWave >= 1e-4) return 'X';
-      if (shortWave >= 1e-5) return 'M';
-      if (shortWave >= 1e-6) return 'C';
-      if (shortWave >= 1e-7) return 'B';
-      return 'A';
-    };
-
     // Process X-ray flux
     let xrayData = null;
     if (xrayFlux.status === 'fulfilled' && xrayFlux.value) {
@@ -132,7 +124,7 @@ export async function onRequestGet(): Promise<Response> {
       }
 
       // Calculate flare class from flux value if not provided or if provided value seems incorrect
-      const calculatedFlareClass = calculateFlareClass(shortWave);
+      const calculatedFlareClass = classifyFlareClass(shortWave);
       const flareClass = providedFlareClass && ['A', 'B', 'C', 'M', 'X'].includes(providedFlareClass[0]) 
         ? providedFlareClass 
         : calculatedFlareClass;
@@ -221,4 +213,3 @@ export async function onRequestGet(): Promise<Response> {
     );
   }
 }
-

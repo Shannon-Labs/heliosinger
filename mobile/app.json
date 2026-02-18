@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Heliosinger",
+    "slug": "heliosinger-mobile",
+    "scheme": "heliosinger",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "../generated-icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "../generated-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.shannonlabs.heliosinger",
+      "infoPlist": {
+        "UIBackgroundModes": ["audio", "fetch", "remote-notification"]
+      }
+    },
+    "android": {
+      "package": "com.shannonlabs.heliosinger",
+      "adaptiveIcon": {
+        "foregroundImage": "../generated-icon.png",
+        "backgroundColor": "#000000"
+      },
+      "permissions": [
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.POST_NOTIFICATIONS"
+      ]
+    },
+    "plugins": [
+      "expo-notifications"
+    ],
+    "extra": {
+      "apiBaseUrl": "https://heliosinger.com"
+    }
+  }
+}

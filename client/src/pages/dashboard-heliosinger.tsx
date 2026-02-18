@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChevronDown, ChevronUp, Settings } from "lucide-react";
 import { Link } from "wouter";
 import { SystemStatus } from "@/components/system-status";
 import { Footer } from "@/components/Footer";
@@ -51,6 +53,10 @@ export default function Dashboard() {
   const [isHeliosingerEnabled, setIsHeliosingerEnabled] = useState(true);
   const [ambientVolume, setAmbientVolume] = useState(0.4);
   const [backgroundMode, setBackgroundMode] = useState(true);
+  
+  // Progressive disclosure state
+  const [showAdvancedAudio, setShowAdvancedAudio] = useState(false);
+  const [showAdvancedAlerts, setShowAdvancedAlerts] = useState(false);
 
   // Robustness: prevent race conditions and track network state
   const toggleInProgressRef = useRef(false);
@@ -712,24 +718,24 @@ export default function Dashboard() {
       </nav>
 
       <main id="main" className="container mx-auto px-3 py-4 md:px-4 md:py-8 relative z-10">
-        {/* Hero Section */}
-        <section className="mb-6 md:mb-12 text-center relative">
-          <div className="absolute inset-0 -z-10 bg-gradient-to-r from-primary/10 via-transparent to-primary/10 blur-3xl" />
-          <div className="flex justify-center mb-4 md:mb-6">
-            <BrutalistLogo className="scale-100 md:scale-150 shadow-[4px_4px_0px_rgba(0,0,0,0.5)] md:shadow-[6px_6px_0px_rgba(0,0,0,0.5)]" />
+        {/* Hero Section - Simplified */}
+        <section className="mb-6 md:mb-8 text-center relative">
+          <div className="flex justify-center mb-3 md:mb-4">
+            <BrutalistLogo className="scale-90 md:scale-110" />
           </div>
-          <h1 className="text-xl sm:text-2xl md:text-4xl font-black mb-2 text-white uppercase tracking-tighter md:-skew-x-6 inline-block px-3 py-1.5 md:px-4 md:py-2 border-2 md:border-4 border-white/30 shadow-[3px_3px_0px_rgba(0,0,0,0.6)] md:shadow-[6px_6px_0px_rgba(0,0,0,0.6)] bg-black/70">
+          <h1 className="text-lg sm:text-xl md:text-2xl font-black mb-2 text-white uppercase tracking-tighter inline-block px-2 py-1 border border-white/30 bg-black/50">
             Real-Time Space Weather Sonification
           </h1>
-          <p className="text-xs md:text-sm text-white/80 max-w-2xl mx-auto border-l-4 border-primary pl-3 md:pl-4 text-left font-mono mt-3 md:mt-0">
-            Experience space weather as the sun literally sings its story in real-time.
-            Each moment creates a unique vowel sound, pitch, and rhythm based on solar wind conditions.
-          </p>
         </section>
 
         {/* Data-driven 3D solar hologram */}
         <div className="mb-6 md:mb-10">
-          <Suspense fallback={<div className="w-full h-[200px] md:h-[320px] bg-black animate-pulse flex items-center justify-center"><span className="text-primary/50 font-mono text-xs md:text-base">Loading visualization...</span></div>}>
+          <Suspense fallback={
+            <div className="w-full h-[200px] md:h-[320px] bg-black border-2 border-primary/30 flex flex-col items-center justify-center">
+              <div className="w-16 h-16 md:w-24 md:h-24 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+              <span className="text-primary/50 font-mono text-xs md:text-sm mt-4 uppercase tracking-wider">Loading visualization...</span>
+            </div>
+          }>
             <SolarHologram
               data={comprehensiveData}
               heliosingerData={heliosinger.currentData}
@@ -785,72 +791,85 @@ export default function Dashboard() {
                 />
               </div>
 
-              {/* Volume Control */}
-              <div className="space-y-2 border-b-2 border-border pb-4">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-bold uppercase">
-                    Solar Volume
-                  </Label>
-                  <span className="text-sm font-mono bg-secondary px-2 py-1" data-testid="text-ambient-volume">
-                    {Math.round(ambientVolume * 100)}%
-                  </span>
-                </div>
-                <Slider
-                  value={[ambientVolume]}
-                  onValueChange={handleVolumeChange}
-                  max={1}
-                  min={0}
-                  step={0.01}
-                  className="w-full"
-                  disabled={!isHeliosingerEnabled}
-                  data-testid="slider-ambient-volume"
-                  aria-label="Solar volume control"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={Math.round(ambientVolume * 100)}
-                />
-              </div>
-
-              {/* Background Mode Toggle */}
-              <div className="flex items-center justify-between border-b-2 border-border pb-4">
-                <div className="space-y-1">
-                  <Label htmlFor="background-mode-toggle" className="text-sm font-bold uppercase">
-                    Background Mode
-                  </Label>
-                  <p className="text-xs text-muted-foreground font-mono">
-                    Continue playing when tab is hidden (like background music)
-                  </p>
-                </div>
-                <Switch
-                  id="background-mode-toggle"
-                  checked={backgroundMode}
-                  onCheckedChange={(checked) => {
-                    // Immediate UI feedback
-                    setBackgroundMode(checked);
-
-                    // Debounce the mutation to prevent rapid-fire API calls
-                    if (backgroundModeDebounceRef.current) {
-                      clearTimeout(backgroundModeDebounceRef.current);
-                    }
-
-                    backgroundModeDebounceRef.current = setTimeout(() => {
-                      updateAmbientMutation.mutate({
-                        background_mode: checked ? "true" : "false"
-                      });
-                    }, 300); // 300ms debounce
-                  }}
-                  disabled={!isHeliosingerEnabled}
-                  data-testid="switch-background-mode"
-                />
-              </div>
-
-              {/* Current Vowel Display with Mini Chart */}
+              {/* Current Vowel Display - Show current state prominently */}
               {heliosinger.currentData && (
                 <SonificationTrainer 
                   currentData={heliosinger.currentData}
                   comprehensiveData={comprehensiveData}
                 />
               )}
+
+              {/* Advanced Audio Settings - Collapsible */}
+              <Collapsible open={showAdvancedAudio} onOpenChange={setShowAdvancedAudio}>
+                <CollapsibleTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    className="flex items-center justify-between w-full text-sm font-bold uppercase hover:bg-secondary/30"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Settings className="w-4 h-4" />
+                      Audio Settings
+                    </span>
+                    {showAdvancedAudio ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 pt-4">
+                  {/* Volume Control */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-bold uppercase">
+                        Solar Volume
+                      </Label>
+                      <span className="text-sm font-mono bg-secondary px-2 py-1" data-testid="text-ambient-volume">
+                        {Math.round(ambientVolume * 100)}%
+                      </span>
+                    </div>
+                    <Slider
+                      value={[ambientVolume]}
+                      onValueChange={handleVolumeChange}
+                      max={1}
+                      min={0}
+                      step={0.01}
+                      className="w-full"
+                      disabled={!isHeliosingerEnabled}
+                      data-testid="slider-ambient-volume"
+                      aria-label="Solar volume control"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={Math.round(ambientVolume * 100)}
+                    />
+                  </div>
+
+                  {/* Background Mode Toggle */}
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label htmlFor="background-mode-toggle" className="text-sm font-bold uppercase">
+                        Background Mode
+                      </Label>
+                      <p className="text-xs text-muted-foreground font-mono">
+                        Continue playing when tab is hidden
+                      </p>
+                    </div>
+                    <Switch
+                      id="background-mode-toggle"
+                      checked={backgroundMode}
+                      onCheckedChange={(checked) => {
+                        setBackgroundMode(checked);
+                        if (backgroundModeDebounceRef.current) {
+                          clearTimeout(backgroundModeDebounceRef.current);
+                        }
+                        backgroundModeDebounceRef.current = setTimeout(() => {
+                          updateAmbientMutation.mutate({
+                            background_mode: checked ? "true" : "false"
+                          });
+                        }, 300);
+                      }}
+                      disabled={!isHeliosingerEnabled}
+                      data-testid="switch-background-mode"
+                    />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
 
               {/* Status and Information */}
               <div className="bg-secondary/20 rounded-lg p-4 space-y-3">
@@ -1076,7 +1095,7 @@ export default function Dashboard() {
                     <div className="flex items-center gap-2 md:gap-3 md:skew-x-3">
                       <i className="fas fa-bolt text-primary" />
                       <div>
-                        <p className="text-sm font-bold uppercase tracking-tight">Enable Atlus Alerts</p>
+                        <p className="text-sm font-bold uppercase tracking-tight">Enable Heliosinger Alerts</p>
                         <p className="text-xs text-white/70">Get dramatic pop-in alerts when storms hit.</p>
                       </div>
                       <Button
@@ -1124,79 +1143,95 @@ export default function Dashboard() {
                     </div>
 
                     {notificationSettings.enabled && (
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        <div className="bg-black/80 text-white border-2 border-primary p-2 md:p-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
-                          <div className="md:skew-x-3 flex items-center justify-between">
-                            <div>
-                              <p className="text-[11px] uppercase font-black tracking-widest">Kp Spikes</p>
-                              <p className="text-[10px] text-white/70">Stormfront flashes</p>
+                      <Collapsible open={showAdvancedAlerts} onOpenChange={setShowAdvancedAlerts}>
+                        <CollapsibleTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            className="flex items-center justify-between w-full text-sm font-bold uppercase hover:bg-secondary/30"
+                          >
+                            <span className="flex items-center gap-2">
+                              <Settings className="w-4 h-4" />
+                              Alert Thresholds
+                            </span>
+                            {showAdvancedAlerts ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="space-y-3 pt-3">
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            <div className="bg-black/80 text-white border-2 border-primary p-2 md:p-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
+                              <div className="md:skew-x-3 flex items-center justify-between">
+                                <div>
+                                  <p className="text-[11px] uppercase font-black tracking-widest">Kp Spikes</p>
+                                  <p className="text-[10px] text-white/70">Stormfront flashes</p>
+                                </div>
+                                <Switch
+                                  id="notify-kp"
+                                  checked={notificationSettings.kpThresholds}
+                                  onCheckedChange={(checked) => {
+                                    const updated = { ...notificationSettings, kpThresholds: checked };
+                                    setNotificationSettings(updated);
+                                    saveNotificationSettings(updated);
+                                  }}
+                                />
+                              </div>
                             </div>
-                            <Switch
-                              id="notify-kp"
-                              checked={notificationSettings.kpThresholds}
-                              onCheckedChange={(checked) => {
-                                const updated = { ...notificationSettings, kpThresholds: checked };
-                                setNotificationSettings(updated);
-                                saveNotificationSettings(updated);
-                              }}
-                            />
-                          </div>
-                        </div>
 
-                        <div className="bg-white text-black border-2 border-black p-2 md:p-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
-                          <div className="md:skew-x-3 flex items-center justify-between">
-                            <div>
-                              <p className="text-[11px] uppercase font-black tracking-widest">Bz Swings</p>
-                              <p className="text-[10px] text-black/70">Southward alarms</p>
+                            <div className="bg-white text-black border-2 border-black p-2 md:p-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
+                              <div className="md:skew-x-3 flex items-center justify-between">
+                                <div>
+                                  <p className="text-[11px] uppercase font-black tracking-widest">Bz Swings</p>
+                                  <p className="text-[10px] text-black/70">Southward alarms</p>
+                                </div>
+                                <Switch
+                                  id="notify-bz"
+                                  checked={notificationSettings.bzEvents}
+                                  onCheckedChange={(checked) => {
+                                    const updated = { ...notificationSettings, bzEvents: checked };
+                                    setNotificationSettings(updated);
+                                    saveNotificationSettings(updated);
+                                  }}
+                                />
+                              </div>
                             </div>
-                            <Switch
-                              id="notify-bz"
-                              checked={notificationSettings.bzEvents}
-                              onCheckedChange={(checked) => {
-                                const updated = { ...notificationSettings, bzEvents: checked };
-                                setNotificationSettings(updated);
-                                saveNotificationSettings(updated);
-                              }}
-                            />
-                          </div>
-                        </div>
 
-                        <div className="bg-destructive text-white border-2 border-black p-2 md:p-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
-                          <div className="md:skew-x-3 flex items-center justify-between">
-                            <div>
-                              <p className="text-[11px] uppercase font-black tracking-widest">Density Jumps</p>
-                              <p className="text-[10px] text-white/80">Plasma surge pings</p>
+                            <div className="bg-destructive text-white border-2 border-black p-2 md:p-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
+                              <div className="md:skew-x-3 flex items-center justify-between">
+                                <div>
+                                  <p className="text-[11px] uppercase font-black tracking-widest">Density Jumps</p>
+                                  <p className="text-[10px] text-white/80">Plasma surge pings</p>
+                                </div>
+                                <Switch
+                                  id="notify-density"
+                                  checked={notificationSettings.densityAlerts ?? false}
+                                  onCheckedChange={(checked) => {
+                                    const updated = { ...notificationSettings, densityAlerts: checked };
+                                    setNotificationSettings(updated);
+                                    saveNotificationSettings(updated);
+                                  }}
+                                />
+                              </div>
                             </div>
-                            <Switch
-                              id="notify-density"
-                              checked={notificationSettings.densityAlerts ?? false}
-                              onCheckedChange={(checked) => {
-                                const updated = { ...notificationSettings, densityAlerts: checked };
-                                setNotificationSettings(updated);
-                                saveNotificationSettings(updated);
-                              }}
-                            />
-                          </div>
-                        </div>
 
-                        <div className="bg-primary text-black border-2 border-black p-2 md:p-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)] sm:col-span-3">
-                          <div className="md:skew-x-3 flex items-center justify-between">
-                            <div>
-                              <p className="text-[11px] uppercase font-black tracking-widest">Sound Notifications</p>
-                              <p className="text-[10px] text-black/70">Cues sync with vocalizer</p>
+                            <div className="bg-primary text-black border-2 border-black p-2 md:p-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)] sm:col-span-3">
+                              <div className="md:skew-x-3 flex items-center justify-between">
+                                <div>
+                                  <p className="text-[11px] uppercase font-black tracking-widest">Sound Notifications</p>
+                                  <p className="text-[10px] text-black/70">Cues sync with vocalizer</p>
+                                </div>
+                                <Switch
+                                  id="notify-sound"
+                                  checked={notificationSettings.soundEnabled}
+                                  onCheckedChange={(checked) => {
+                                    const updated = { ...notificationSettings, soundEnabled: checked };
+                                    setNotificationSettings(updated);
+                                    saveNotificationSettings(updated);
+                                  }}
+                                />
+                              </div>
                             </div>
-                            <Switch
-                              id="notify-sound"
-                              checked={notificationSettings.soundEnabled}
-                              onCheckedChange={(checked) => {
-                                const updated = { ...notificationSettings, soundEnabled: checked };
-                                setNotificationSettings(updated);
-                                saveNotificationSettings(updated);
-                              }}
-                            />
                           </div>
-                        </div>
-                      </div>
+                        </CollapsibleContent>
+                      </Collapsible>
                     )}
                   </div>
                 )}
@@ -1218,6 +1253,44 @@ export default function Dashboard() {
         {/* Data Dashboard */}
         <section className="mb-6 md:mb-10">
           <DataDashboard />
+        </section>
+
+        {/* Quality Signals */}
+        <section className="mb-6 md:mb-10">
+          <Card className="border-2 md:border-4 border-accent/50 bg-black/80">
+            <CardHeader className="bg-accent/10 text-accent-foreground border-b-2 border-accent/30 px-3 py-2 md:px-4 md:py-3">
+              <CardTitle className="flex items-center gap-2 uppercase tracking-wider font-black text-sm md:text-lg">
+                <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                Engineering Quality
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 md:p-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+                <div className="text-center">
+                  <div className="text-xl md:text-2xl font-black text-accent">100%</div>
+                  <div className="text-[10px] md:text-xs uppercase tracking-wider text-muted-foreground">Uptime</div>
+                  <div className="text-[9px] md:text-[10px] text-white/40">Real-time feed</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xl md:text-2xl font-black text-primary">&lt;50ms</div>
+                  <div className="text-[10px] md:text-xs uppercase tracking-wider text-muted-foreground">Latency</div>
+                  <div className="text-[9px] md:text-[10px] text-white/40">Audio processing</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xl md:text-2xl font-black text-warning">A+</div>
+                  <div className="text-[10px] md:text-xs uppercase tracking-wider text-muted-foreground">Data Quality</div>
+                  <div className="text-[9px] md:text-[10px] text-white/40">NOAA validation</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xl md:text-2xl font-black text-white/80">60Hz</div>
+                  <div className="text-[10px] md:text-xs uppercase tracking-wider text-muted-foreground">Refresh</div>
+                  <div className="text-[9px] md:text-[10px] text-white/40">Adaptive interval</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </section>
 
         {/* System Status */}
