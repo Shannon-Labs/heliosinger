@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   createDefaultHeliosingerMapping,
+  createMappingContext,
   mapSpaceWeatherToHeliosinger,
   type ComprehensiveSpaceWeatherData,
 } from "../src/index";
@@ -68,7 +69,12 @@ function sample(overrides: Partial<ComprehensiveSpaceWeatherData> = {}): Compreh
 
 test("mapSpaceWeatherToHeliosinger maps deterministic fixture without regressions", () => {
   withDeterministicEnv(() => {
-    const mapped = mapSpaceWeatherToHeliosinger(sample());
+    const context = createMappingContext();
+    const mapped = mapSpaceWeatherToHeliosinger(
+      sample(),
+      context,
+      { now: new Date("2026-02-18T12:34:56.000Z").getTime() }
+    );
 
     assert.equal(mapped.baseNote, "G4");
     assert.equal(mapped.condition, "storm");
@@ -81,13 +87,15 @@ test("mapSpaceWeatherToHeliosinger maps deterministic fixture without regression
     assert.equal(mapped.delayTime, 0.35);
     assert.ok(mapped.frequency > 390 && mapped.frequency < 393);
     assert.ok(mapped.filterFrequency > 1717 && mapped.filterFrequency < 1718);
-    assert.ok(mapped.binauralBeatHz > 5 && mapped.binauralBeatHz < 6);
-    assert.ok(mapped.binauralMix > 0.1 && mapped.binauralMix < 0.13);
+    assert.ok(mapped.binauralBeatHz > 4.4 && mapped.binauralBeatHz < 4.8);
+    assert.ok(mapped.binauralMix > 0.09 && mapped.binauralMix < 0.11);
   });
 });
 
 test("mapSpaceWeatherToHeliosinger shows expected stateful behavior on second call", () => {
   withDeterministicEnv(() => {
+    const context = createMappingContext();
+    const now = new Date("2026-02-18T12:34:56.000Z").getTime();
     const first = mapSpaceWeatherToHeliosinger(
       sample({
         solar_wind: {
@@ -117,7 +125,9 @@ test("mapSpaceWeatherToHeliosinger shows expected stateful behavior on second ca
           flux_50mev: 0.5,
           flux_100mev: 0.1,
         },
-      })
+      }),
+      context,
+      { now }
     );
 
     const second = mapSpaceWeatherToHeliosinger(
@@ -149,11 +159,13 @@ test("mapSpaceWeatherToHeliosinger shows expected stateful behavior on second ca
           flux_50mev: 20,
           flux_100mev: 3,
         },
-      })
+      }),
+      context,
+      { now: now + 120000 }
     );
 
     assert.equal(first.condition, "moderate");
-    assert.equal(second.condition, "storm");
+    assert.equal(second.condition, "extreme");
     assert.ok(second.filterFrequency > first.filterFrequency);
     assert.ok(second.tremoloDepth > first.tremoloDepth);
     assert.ok(second.rumbleGain > first.rumbleGain);
@@ -170,13 +182,15 @@ test("createDefaultHeliosingerMapping provides safe baseline", () => {
 });
 
 test("mapSpaceWeatherToHeliosinger throws when solar_wind is missing", () => {
-  assert.throws(
-    () =>
-      mapSpaceWeatherToHeliosinger(
-        sample({
-          solar_wind: null,
-        })
-      ),
-    /Solar wind data is required/
-  );
+    assert.throws(
+      () =>
+        mapSpaceWeatherToHeliosinger(
+          sample({
+            solar_wind: null,
+          }),
+          createMappingContext(),
+          { now: new Date("2026-02-18T12:34:56.000Z").getTime() }
+        ),
+      /Solar wind data is required/
+    );
 });

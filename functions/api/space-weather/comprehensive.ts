@@ -1,4 +1,4 @@
-import { classifyFlareClass } from "../../../packages/core/src/index.ts";
+import { parseXrayFlux } from "../_shared/parse-xray.ts";
 
 export async function onRequestOptions(): Promise<Response> {
   return new Response(null, {
@@ -82,61 +82,7 @@ export async function onRequestGet(): Promise<Response> {
     // Process X-ray flux
     let xrayData = null;
     if (xrayFlux.status === 'fulfilled' && xrayFlux.value) {
-      let shortWave = 0;
-      let longWave = 0;
-      let timestamp = new Date().toISOString();
-      let providedFlareClass: string | undefined;
-
-      if (Array.isArray(xrayFlux.value) && xrayFlux.value.length > 0) {
-        // Handle array format - could be array of objects or array of arrays
-        const latest = xrayFlux.value[xrayFlux.value.length - 1];
-        
-        if (Array.isArray(latest)) {
-          // Array format: [timestamp, short_wave, long_wave, ...] or similar
-          timestamp = latest[0] ? new Date(latest[0]).toISOString() : timestamp;
-          shortWave = parseFloat(latest[1]) || parseFloat(latest[2]) || 0;
-          longWave = parseFloat(latest[2]) || parseFloat(latest[3]) || 0;
-        } else if (typeof latest === 'object') {
-          // Object format
-          timestamp = latest.timestamp ? new Date(latest.timestamp).toISOString() : timestamp;
-          shortWave = parseFloat(latest.short_wave) || 
-                     parseFloat(latest['0.05-0.4nm']) || 
-                     parseFloat(latest.xrsa) || 
-                     parseFloat(latest.xrs_short) || 0;
-          longWave = parseFloat(latest.long_wave) || 
-                    parseFloat(latest['0.1-0.8nm']) || 
-                    parseFloat(latest.xrsb) || 
-                    parseFloat(latest.xrs_long) || 0;
-          providedFlareClass = latest.flare_class;
-        }
-      } else if (typeof xrayFlux.value === 'object') {
-        // Single object format
-        const data = xrayFlux.value;
-        timestamp = data.timestamp ? new Date(data.timestamp).toISOString() : timestamp;
-        shortWave = parseFloat(data.short_wave) || 
-                   parseFloat(data['0.05-0.4nm']) || 
-                   parseFloat(data.xrsa) || 
-                   parseFloat(data.xrs_short) || 
-                   parseFloat(data.current) || 0;
-        longWave = parseFloat(data.long_wave) || 
-                  parseFloat(data['0.1-0.8nm']) || 
-                  parseFloat(data.xrsb) || 
-                  parseFloat(data.xrs_long) || 0;
-        providedFlareClass = data.flare_class;
-      }
-
-      // Calculate flare class from flux value if not provided or if provided value seems incorrect
-      const calculatedFlareClass = classifyFlareClass(shortWave);
-      const flareClass = providedFlareClass && ['A', 'B', 'C', 'M', 'X'].includes(providedFlareClass[0]) 
-        ? providedFlareClass 
-        : calculatedFlareClass;
-
-      xrayData = {
-        timestamp,
-        short_wave: shortWave,
-        long_wave: longWave,
-        flare_class: flareClass
-      };
+      xrayData = parseXrayFlux(xrayFlux.value);
     }
 
     // Process proton flux
