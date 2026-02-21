@@ -48,6 +48,15 @@ export interface MagnetometerData {
   note?: string;
 }
 
+export interface ReconnectionData {
+  timestamp: string;
+  score: number;          // 0.0–1.0 composite likelihood
+  level: string;          // "WATCH" | "WARNING" | "ALERT"
+  raw_score: number;      // pre-Kp-boost score
+  kp_boost: number;       // multiplicative Kp context factor
+  contributors: Record<string, { level: string; component_score: number }>;
+}
+
 export interface ComprehensiveSpaceWeatherData {
   timestamp: string;
   solar_wind: {
@@ -65,6 +74,7 @@ export interface ComprehensiveSpaceWeatherData {
   proton_flux: ProtonFluxData | null;
   electron_flux: ElectronFluxData | null;
   magnetometer: MagnetometerData | null;
+  reconnection: ReconnectionData | null;
 }
 
 export interface ChordData {
@@ -80,4 +90,5 @@ export interface ChordData {
   protonFlux?: number;
   electronFlux?: number;
   magnetometerH?: number;
+  reconnectionScore?: number;
 }

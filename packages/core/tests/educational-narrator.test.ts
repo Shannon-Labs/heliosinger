@@ -61,6 +61,7 @@ function data(overrides: Partial<ComprehensiveSpaceWeatherData> = {}): Comprehen
       d_component: 10,
       z_component: 7,
     },
+    reconnection: null,
     ...overrides,
   };
 }

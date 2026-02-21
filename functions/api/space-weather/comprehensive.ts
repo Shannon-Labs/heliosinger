@@ -13,13 +13,15 @@ export async function onRequestOptions(): Promise<Response> {
 export async function onRequestGet(): Promise<Response> {
   try {
     // Fetch all data sources in parallel
-    const [solarWind, kIndex, xrayFlux, protonFlux, electronFlux, magnetometer] = await Promise.allSettled([
+    const PLASMATAIL_MONITOR_URL = 'https://plasmatail-monitor.shannonlabs.io';
+    const [solarWind, kIndex, xrayFlux, protonFlux, electronFlux, magnetometer, reconnection] = await Promise.allSettled([
       fetch('https://services.swpc.noaa.gov/products/solar-wind/plasma-2-hour.json').then(r => r.json()),
       fetch('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json').then(r => r.json()),
       fetch('https://services.swpc.noaa.gov/json/goes/goes-xrs-report.json').then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('https://services.swpc.noaa.gov/json/goes/goes-r_proton-1m.json').then(r => r.ok ? r.json() : null).catch(() => null),
       fetch('https://services.swpc.noaa.gov/json/goes/goes-r_electron-1m.json').then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('https://services.swpc.noaa.gov/json/boulder/magnetometer.json').then(r => r.ok ? r.json() : null).catch(() => null)
+      fetch('https://services.swpc.noaa.gov/json/boulder/magnetometer.json').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${PLASMATAIL_MONITOR_URL}/v1/monitor/signals?limit=1&type=reconnection_composite`, { signal: AbortSignal.timeout(3000) }).then(r => r.ok ? r.json() : null).catch(() => null)
     ]);
 
     // Process solar wind data
@@ -181,6 +183,28 @@ export async function onRequestGet(): Promise<Response> {
       }
     }
 
+    // Process reconnection data from plasmatail monitor
+    let reconnectionData = null;
+    if (reconnection.status === 'fulfilled' && reconnection.value) {
+      try {
+        const signals = Array.isArray(reconnection.value) ? reconnection.value : reconnection.value.signals;
+        if (Array.isArray(signals) && signals.length > 0) {
+          const latest = signals[0];
+          const meta = latest.metadata || {};
+          reconnectionData = {
+            timestamp: latest.timestamp || new Date().toISOString(),
+            score: typeof meta.score === 'number' ? meta.score : parseFloat(latest.value) || 0,
+            level: latest.level || 'WATCH',
+            raw_score: typeof meta.raw_score === 'number' ? meta.raw_score : 0,
+            kp_boost: typeof meta.kp_boost === 'number' ? meta.kp_boost : 1.0,
+            contributors: meta.contributors || {},
+          };
+        }
+      } catch {
+        // Reconnection data is optional; continue without it
+      }
+    }
+
     const comprehensiveData = {
       timestamp: new Date().toISOString(),
       solar_wind: solarWindData ? { ...solarWindData, bz } : null,
@@ -188,7 +212,8 @@ export async function onRequestGet(): Promise<Response> {
       xray_flux: xrayData,
       proton_flux: protonData,
       electron_flux: electronData,
-      magnetometer: magnetometerData
+      magnetometer: magnetometerData,
+      reconnection: reconnectionData
     };
 
     return new Response(JSON.stringify(comprehensiveData), {
