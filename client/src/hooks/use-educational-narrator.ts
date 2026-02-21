@@ -54,14 +54,14 @@ export function useEducationalNarrator(
   useEffect(() => {
     if (!enabled) return;
 
-    const newState = updateNarrator(
-      currentData,
-      previousDataRef.current,
-      heliosingerData ?? null,
-      state
+    setState((previousState) =>
+      updateNarrator(
+        currentData,
+        previousDataRef.current,
+        heliosingerData ?? null,
+        previousState
+      )
     );
-
-    setState(newState);
     previousDataRef.current = currentData;
   }, [currentData, heliosingerData, enabled]);
 

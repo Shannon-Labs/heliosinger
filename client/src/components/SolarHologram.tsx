@@ -58,11 +58,15 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
     wind?: THREE.PointsMaterial;
   }>({});
   const meshesRef = useRef<{
+    sun?: THREE.Mesh;
+    corona?: THREE.Mesh;
     ring?: THREE.Mesh;
+    wind?: THREE.Points;
   }>({});
   const uniformsRef = useRef<SunUniforms | null>(null);
   const targetChordTensionRef = useRef(0);
   const targetBzRef = useRef(0);
+  const targetReconnectionRef = useRef(0);
   const dynamicsRef = useRef({
     rotationVelocity: 0.004,
     windSpeed: 0.006,
@@ -336,7 +340,9 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
         }
       `,
     });
-    const sun = new THREE.Mesh(new THREE.SphereGeometry(1.5, 96, 96), sunMaterial);
+    const sunGeometry = new THREE.SphereGeometry(1.5, 96, 96);
+    const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+    meshesRef.current.sun = sun;
     materialsRef.current.sun = sunMaterial;
     group.add(sun);
 
@@ -391,7 +397,9 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
         }
       `,
     });
-    const corona = new THREE.Mesh(new THREE.SphereGeometry(1.8, 64, 64), coronaMaterial);
+    const coronaGeometry = new THREE.SphereGeometry(1.8, 64, 64);
+    const corona = new THREE.Mesh(coronaGeometry, coronaMaterial);
+    meshesRef.current.corona = corona;
     materialsRef.current.corona = coronaMaterial;
     group.add(corona);
 
@@ -403,7 +411,8 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
       blending: THREE.AdditiveBlending,
       wireframe: true,
     });
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(2.3, 0.06, 32, 180), ringMaterial);
+    const ringGeometry = new THREE.TorusGeometry(2.3, 0.06, 32, 180);
+    const ring = new THREE.Mesh(ringGeometry, ringMaterial);
     ring.rotation.x = Math.PI / 2;
     materialsRef.current.ring = ringMaterial;
     meshesRef.current.ring = ring;
@@ -435,6 +444,7 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
       blending: THREE.AdditiveBlending,
     });
     const wind = new THREE.Points(particleGeometry, particleMaterial);
+    meshesRef.current.wind = wind;
     materialsRef.current.wind = particleMaterial;
     particleRef.current = {
       geometry: particleGeometry,
@@ -469,7 +479,11 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
       uniformsRef.current.uChordTension.value = THREE.MathUtils.lerp(uniformsRef.current.uChordTension.value, targetChordTensionRef.current, 0.08);
       uniformsRef.current.uBz.value = THREE.MathUtils.lerp(uniformsRef.current.uBz.value, targetBzRef.current, 0.08);
       // Reconnection lerps faster for responsive visual feedback
-      uniformsRef.current.uReconnection.value = THREE.MathUtils.lerp(uniformsRef.current.uReconnection.value, uniformsRef.current.uReconnection.value, 0.12);
+      uniformsRef.current.uReconnection.value = THREE.MathUtils.lerp(
+        uniformsRef.current.uReconnection.value,
+        targetReconnectionRef.current,
+        0.12
+      );
       
       updateParticles();
       
@@ -501,10 +515,39 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
     return () => {
       window.removeEventListener("resize", handleResize);
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
-      renderer.dispose();
+      if (groupRef.current) {
+        const disposeMaterial = (material?: THREE.Material | THREE.Material[]) => {
+          if (!material) return;
+          if (Array.isArray(material)) {
+            material.forEach(disposeMaterial);
+            return;
+          }
+          material.dispose();
+        };
+
+        const disposeObject = (object: THREE.Object3D) => {
+          const mesh = object as THREE.Mesh;
+          if (mesh.geometry) {
+            mesh.geometry.dispose();
+          }
+          if ("material" in mesh && mesh.material) {
+            disposeMaterial(mesh.material as THREE.Material | THREE.Material[]);
+          }
+        };
+
+        if (meshesRef.current.sun) disposeObject(meshesRef.current.sun);
+        if (meshesRef.current.corona) disposeObject(meshesRef.current.corona);
+        if (meshesRef.current.ring) disposeObject(meshesRef.current.ring);
+        if (meshesRef.current.wind) disposeObject(meshesRef.current.wind);
+      }
+
+      if (materialsRef.current.sun) materialsRef.current.sun.dispose();
+      if (materialsRef.current.corona) materialsRef.current.corona.dispose();
+      if (materialsRef.current.ring) materialsRef.current.ring.dispose();
+      if (materialsRef.current.wind) materialsRef.current.wind.dispose();
+
       mount.removeChild(renderer.domElement);
-      particleGeometry.dispose();
-      particleMaterial.dispose();
+      renderer.dispose();
     };
   }, []);
 
@@ -547,7 +590,7 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
     const reconIntensity = reconScore > RECONNECTION_THRESHOLD
       ? (reconScore - RECONNECTION_THRESHOLD) / (1.0 - RECONNECTION_THRESHOLD) // 0→1 ramp above threshold
       : 0.0;
-    uniformsRef.current.uReconnection.value = reconIntensity;
+    targetReconnectionRef.current = reconIntensity;
 
     dynamicsRef.current.rotationVelocity =
       0.001 + velocityFactor * 0.011 + kpFactor * 0.002 + (circadianNormalized - 0.5) * 0.003;

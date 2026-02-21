@@ -1,9 +1,4 @@
-export type SpaceWeatherCondition =
-  | "quiet"
-  | "moderate"
-  | "storm"
-  | "extreme"
-  | "super_extreme";
+import type { SpaceWeatherCondition } from "../heliosinger/types";
 
 export interface SpaceWeatherNowResponse {
   timestamp: string;

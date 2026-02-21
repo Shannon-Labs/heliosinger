@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export interface ChangeInfo {
   field: string;
@@ -17,7 +17,7 @@ export function useChangeTracking<T extends Record<string, any>>(
   clearChanges: () => void;
 } {
   const previousDataRef = useRef<T | undefined>(undefined);
-  const changesRef = useRef<ChangeInfo[]>([]);
+  const [changes, setChanges] = useState<ChangeInfo[]>([]);
 
   useEffect(() => {
     if (!enabled || !data) {
@@ -66,16 +66,15 @@ export function useChangeTracking<T extends Record<string, any>>(
     }
 
     // Keep only last 5 changes
-    changesRef.current = [...newChanges, ...changesRef.current].slice(0, 5);
+    setChanges((currentChanges) => [...newChanges, ...currentChanges].slice(0, 5));
     previousDataRef.current = data;
   }, [data, enabled]);
 
   return {
-    changes: changesRef.current,
-    hasChanges: changesRef.current.length > 0,
+    changes,
+    hasChanges: changes.length > 0,
     clearChanges: () => {
-      changesRef.current = [];
+      setChanges([]);
     },
   };
 }
-

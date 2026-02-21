@@ -3,6 +3,18 @@ import { pgTable, text, varchar, real, timestamp, integer, jsonb } from "drizzle
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+export type {
+  ChordData,
+  ComprehensiveSpaceWeatherData,
+  ElectronFluxData,
+  KIndexData,
+  MagnetometerData,
+  ProtonFluxData,
+  ReconnectionData,
+  SpaceWeatherCondition,
+  XrayFluxData,
+} from "../packages/core/src/heliosinger/types";
+
 // Solar Wind Data from NOAA DSCOVR
 export const solarWindReadings = pgTable("solar_wind_readings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -79,111 +91,13 @@ export const insertAmbientSettingsSchema = createInsertSchema(ambientSettings).o
 
 // Types
 export type SolarWindReading = typeof solarWindReadings.$inferSelect;
-// @ts-expect-error - drizzle-zod schema type compatibility
 export type InsertSolarWindReading = z.infer<typeof insertSolarWindReadingSchema>;
 
 export type MappingConfig = typeof mappingConfigs.$inferSelect;
-// @ts-expect-error - drizzle-zod schema type compatibility
 export type InsertMappingConfig = z.infer<typeof insertMappingConfigSchema>;
 
 export type SystemStatus = typeof systemStatus.$inferSelect;
-// @ts-expect-error - drizzle-zod schema type compatibility
 export type InsertSystemStatus = z.infer<typeof insertSystemStatusSchema>;
 
 export type AmbientSettings = typeof ambientSettings.$inferSelect;
-// @ts-expect-error - drizzle-zod schema type compatibility
 export type InsertAmbientSettings = z.infer<typeof insertAmbientSettingsSchema>;
-
-// Space weather condition types
-export type SpaceWeatherCondition = 'quiet' | 'moderate' | 'storm' | 'extreme' | 'super_extreme';
-
-// Space Weather Data Types
-export interface KIndexData {
-  timestamp: string;
-  kp: number;
-  a_running: number;
-  station_count?: number;
-  history?: Array<{ timestamp: string; kp: number; a_running: number }>;
-}
-
-export interface XrayFluxData {
-  timestamp: string;
-  short_wave?: number;
-  long_wave?: number;
-  flare_class?: string;
-  begin?: string;
-  current?: string;
-  end?: string;
-  max_flux?: string;
-  note?: string;
-}
-
-export interface ProtonFluxData {
-  timestamp: string;
-  flux_10mev: number;
-  flux_50mev: number;
-  flux_100mev: number;
-  note?: string;
-}
-
-export interface ElectronFluxData {
-  timestamp: string;
-  flux_2mev: number;
-  flux_0_8mev: number;
-  note?: string;
-}
-
-export interface MagnetometerData {
-  timestamp: string;
-  h_component: number;
-  d_component: number;
-  z_component: number;
-  note?: string;
-}
-
-export interface ReconnectionData {
-  timestamp: string;
-  score: number;          // 0.0–1.0 composite likelihood
-  level: string;          // "WATCH" | "WARNING" | "ALERT"
-  raw_score: number;      // pre-Kp-boost score
-  kp_boost: number;       // multiplicative Kp context factor
-  contributors: Record<string, { level: string; component_score: number }>;
-}
-
-export interface ComprehensiveSpaceWeatherData {
-  timestamp: string;
-  solar_wind: {
-    timestamp: string;
-    velocity: number;
-    density: number;
-    bz: number;
-    bx?: number;
-    by?: number;
-    bt?: number;
-    temperature: number;
-  } | null;
-  k_index: KIndexData | null;
-  xray_flux: XrayFluxData | null;
-  proton_flux: ProtonFluxData | null;
-  electron_flux: ElectronFluxData | null;
-  magnetometer: MagnetometerData | null;
-  reconnection: ReconnectionData | null;
-}
-
-// Chord data structure (expanded for multi-parameter audio)
-export interface ChordData {
-  baseNote: string;
-  frequency: number;
-  midiNote: number;
-  decayTime: number;
-  detuneCents: number;
-  condition: SpaceWeatherCondition;
-  density: number; // Solar wind particle density (p/cm³)
-  // New parameters for multi-layer audio
-  kIndex?: number; // For rhythm/tempo
-  xrayFlux?: number; // For brightness/volume bursts
-  protonFlux?: number; // For harmonic richness
-  electronFlux?: number; // For high-frequency content
-  magnetometerH?: number; // For low-frequency rumble
-  reconnectionScore?: number; // For reconnection visualization intensity
-}

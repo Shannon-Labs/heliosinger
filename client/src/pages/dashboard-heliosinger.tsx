@@ -24,7 +24,10 @@ import { useToast } from "@/hooks/use-toast";
 import { getAmbientSettings, saveAmbientSettings } from "@/lib/localStorage";
 import { useHeliosinger } from "@/hooks/use-heliosinger";
 import { useEducationalNarrator } from "@/hooks/use-educational-narrator";
-import { mapSpaceWeatherToHeliosinger } from "@/lib/heliosinger-mapping";
+import {
+  createMappingContext,
+  mapSpaceWeatherToHeliosinger,
+} from "@/lib/heliosinger-mapping";
 import { debugLog, debugWarn } from "@/lib/debug";
 import { 
   getNotificationSettings, 
@@ -112,6 +115,7 @@ export default function Dashboard() {
   // Local state for adaptive refetch interval (must be declared before queries that use it)
   const [updateFrequency, setUpdateFrequency] = useState(60000);
   const previousComprehensiveDataRef = useRef<ComprehensiveSpaceWeatherData | undefined>(undefined);
+  const mappingContextRef = useRef(createMappingContext());
 
   // Fetch comprehensive space weather data (used for adaptive interval calculation)
   const { data: comprehensiveData, isLoading: comprehensiveLoading } = useQuery<ComprehensiveSpaceWeatherData>({
@@ -137,7 +141,11 @@ export default function Dashboard() {
     if (heliosinger.currentData) return heliosinger.currentData;
     if (!comprehensiveData) return null;
     try {
-      return mapSpaceWeatherToHeliosinger(comprehensiveData);
+      return mapSpaceWeatherToHeliosinger(
+        comprehensiveData,
+        mappingContextRef.current,
+        { now: Date.now() }
+      );
     } catch (error) {
       debugWarn("Failed to map space weather for insights:", error);
       return null;

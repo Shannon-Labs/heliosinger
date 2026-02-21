@@ -22,6 +22,62 @@ export interface VowelFormants {
   frontness: number; // 0-1, how front the vowel is (I=1.0, U=0.0)
 }
 
+export interface VowelFilterContext {
+  previousVowel: VowelFormants | null;
+  previousScore: number;
+}
+
+export interface VowelFilterOptions {
+  now?: number;
+  randomSeed?: number;
+}
+
+export function createVowelFilterContext(): VowelFilterContext {
+  return {
+    previousVowel: null,
+    previousScore: 0,
+  };
+}
+
+function createSeededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function buildSeed(params: {
+  density: number;
+  temperature: number;
+  bz: number;
+  kp: number;
+  velocity?: number;
+  now: number;
+  randomSeed?: number;
+}): number {
+  if (params.randomSeed !== undefined) {
+    return params.randomSeed >>> 0;
+  }
+
+  let hash = 0x811c9dc5;
+  const mix = (value: number) => {
+    hash ^= value >>> 0;
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  };
+
+  mix(Math.round(params.density * 10));
+  mix(Math.round(params.temperature));
+  mix(Math.round(params.bz * 10));
+  mix(Math.round(params.kp * 10));
+  mix(params.velocity !== undefined ? Math.round(params.velocity) : 0);
+  mix(Math.floor(params.now / 1000));
+
+  return hash >>> 0;
+}
+
 /**
  * Vowel formant database - IPA standard vowels
  * Formant frequencies based on IPA standards for adult male voice
@@ -86,10 +142,6 @@ export const VOWEL_FORMANTS: Record<VowelName, VowelFormants> = {
   }
 };
 
-// Track previous vowel for hysteresis
-let previousVowel: VowelFormants | null = null;
-let previousScore = 0;
-
 /**
  * Get vowel from space weather parameters
  * Improved algorithm with better variability and hysteresis
@@ -99,7 +151,9 @@ export function getVowelFromSpaceWeather(
   temperature: number,
   bz: number,
   kp: number,
-  velocity?: number
+  velocity: number | undefined,
+  context: VowelFilterContext,
+  options: VowelFilterOptions = {}
 ): VowelFormants {
   // Normalize parameters to 0-1 range with wider ranges for more distinct zones
   const normalizedDensity = Math.max(0, Math.min(1, (density - 0.5) / 49.5));
@@ -137,7 +191,8 @@ export function getVowelFromSpaceWeather(
   targetFrontness = Math.max(0, Math.min(1, targetFrontness));
   
   // Add time-based micro-variation for subtle movement even in stable conditions
-  const timeVariation = Math.sin(Date.now() / 15000) * 0.08; // ±8% variation over 15 seconds
+  const now = options.now ?? 0;
+  const timeVariation = Math.sin(now / 15000) * 0.08; // ±8% variation over 15 seconds
   const targetBrightnessWithVariation = Math.max(0, Math.min(1, targetBrightness + timeVariation * 0.3));
   const targetFrontnessWithVariation = Math.max(0, Math.min(1, targetFrontness + timeVariation * 0.2));
 
@@ -164,30 +219,44 @@ export function getVowelFromSpaceWeather(
   });
 
   // Hysteresis: require significant change to switch vowels (prevents jitter)
-  if (previousVowel) {
-    const scoreDifference = Math.abs(bestScore - previousScore);
-    const vowelChanged = bestVowel.name !== previousVowel.name;
+  if (context.previousVowel) {
+    const scoreDifference = Math.abs(bestScore - context.previousScore);
+    const vowelChanged = bestVowel.name !== context.previousVowel.name;
     
     // If vowel changed but score difference is small, keep previous vowel
     if (vowelChanged && scoreDifference < 0.15) {
-      return previousVowel;
+      return context.previousVowel;
     }
   }
 
   // Add randomness for variability (lower threshold, higher frequency)
-  if (normalizedKp > 0.3 && Math.random() < 0.3) {
+  if (normalizedKp > 0.3) {
+    const random = createSeededRandom(
+      buildSeed({
+        density,
+        temperature,
+        bz,
+        kp,
+        velocity,
+        now,
+        randomSeed: options.randomSeed,
+      })
+    );
+
     // Randomly shift vowel during moderate+ activity
-    const vowelNames: VowelName[] = ['I', 'E', 'A', 'O', 'U'];
-    const randomVowel = vowelNames[Math.floor(Math.random() * vowelNames.length)];
-    const selectedVowel = VOWEL_FORMANTS[randomVowel];
-    previousVowel = selectedVowel;
-    previousScore = bestScore;
-    return selectedVowel;
+    if (random() < 0.3) {
+      const vowelNames: VowelName[] = ['I', 'E', 'A', 'O', 'U'];
+      const randomVowel = vowelNames[Math.floor(random() * vowelNames.length)];
+      const selectedVowel = VOWEL_FORMANTS[randomVowel];
+      context.previousVowel = selectedVowel;
+      context.previousScore = bestScore;
+      return selectedVowel;
+    }
   }
 
   // Update tracking
-  previousVowel = bestVowel;
-  previousScore = bestScore;
+  context.previousVowel = bestVowel;
+  context.previousScore = bestScore;
 
   return bestVowel;
 }
@@ -202,7 +271,8 @@ export function getSolarMoodDescription(
   velocity?: number,
   density?: number,
   bz?: number,
-  kp?: number
+  kp?: number,
+  options: VowelFilterOptions = {}
 ): string {
   // 1. Mood Verb (based on condition)
   const verbs = {
@@ -214,7 +284,8 @@ export function getSolarMoodDescription(
   };
   
   // Use time-based index to cycle verbs slowly (every minute) instead of random flickering
-  const timeIndex = Math.floor(Date.now() / 60000);
+  const now = options.now ?? 0;
+  const timeIndex = Math.floor(now / 60000);
   const verb = verbs[condition][timeIndex % verbs[condition].length];
 
   // 2. Sonic Quality (based on vowel & condition)

@@ -7,13 +7,17 @@
 
 import type { ComprehensiveSpaceWeatherData, ChordData, SpaceWeatherCondition } from "./types";
 import { midiNoteToFrequency } from "./midi";
+import { deriveSpaceWeatherCondition } from "../space-weather";
 import { 
   VOWEL_FORMANTS, 
   VowelName, 
   VowelFormants,
   getVowelFromSpaceWeather,
   getSolarMoodDescription,
-  getFormantFiltersForVowel
+  getFormantFiltersForVowel,
+  createVowelFilterContext,
+  type VowelFilterContext,
+  type VowelFilterOptions,
 } from "./vowel-filters";
 import { getChordQuality, type ChordQuality } from "./chord-utils";
 
@@ -83,13 +87,34 @@ export interface HeliosingerData extends ChordData {
 // MAIN HELIOSINGER MAPPING FUNCTION
 // ============================================================================
 
-// Module-level state for tracking previous values (for spike detection)
-let previousData: ComprehensiveSpaceWeatherData | null = null;
-let previousDerivedMetrics: DerivedMetrics | null = null;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
+export interface MappingContext {
+  previousData: ComprehensiveSpaceWeatherData | null;
+  previousDerivedMetrics: DerivedMetrics | null;
+  vowelFilterContext: VowelFilterContext;
+}
+
+export interface MappingOptions {
+  now?: number;
+}
+
+function getMappingNow(options?: MappingOptions): number {
+  return options?.now ?? 0;
+}
+
+export function createMappingContext(): MappingContext {
+  return {
+    previousData: null,
+    previousDerivedMetrics: null,
+    vowelFilterContext: createVowelFilterContext(),
+  };
+}
+
 export function mapSpaceWeatherToHeliosinger(
-  data: ComprehensiveSpaceWeatherData
+  data: ComprehensiveSpaceWeatherData,
+  context: MappingContext,
+  options?: MappingOptions
 ): HeliosingerData {
   const solarWind = data.solar_wind;
   const kIndex = data.k_index;
@@ -102,7 +127,14 @@ export function mapSpaceWeatherToHeliosinger(
   const { frequency, midiNote, noteName } = calculateFoundationFrequency(solarWind.velocity);
   
   // Step 2: Determine space weather condition
-  const condition = determineSpaceWeatherCondition(solarWind, kIndex);
+  const condition = deriveSpaceWeatherCondition({
+    kp: kIndex?.kp,
+    velocity: solarWind.velocity,
+    bz: solarWind.bz,
+  });
+
+  const now = getMappingNow(options);
+  const vowelOptions: VowelFilterOptions = { now };
   
   // Step 3: Calculate derived metrics from solar wind parameters
   const derivedMetrics = calculateDerivedMetrics(
@@ -120,7 +152,9 @@ export function mapSpaceWeatherToHeliosinger(
     solarWind.temperature,
     solarWind.bz,
     kIndex?.kp || 0,
-    solarWind.velocity
+    solarWind.velocity,
+    context.vowelFilterContext,
+    vowelOptions
   );
   
   // Step 5: Calculate formant filters for the vowel
@@ -150,7 +184,7 @@ export function mapSpaceWeatherToHeliosinger(
     kIndex?.kp || 0, 
     condition,
     data.magnetometer,
-    previousData?.magnetometer
+    context.previousData?.magnetometer
   );
   
   // Step 9: Calculate filter and texture parameters (temperature + BT + flux data + plasma beta)
@@ -161,7 +195,7 @@ export function mapSpaceWeatherToHeliosinger(
     data.xray_flux,
     data.electron_flux,
     derivedMetrics.plasmaBeta,
-    previousData?.xray_flux
+    context.previousData?.xray_flux
   );
   
   // Step 10: Calculate decay time from density
@@ -186,7 +220,7 @@ export function mapSpaceWeatherToHeliosinger(
     condition,
     data.proton_flux,
     derivedMetrics.dynamicPressure,
-    previousDerivedMetrics?.dynamicPressure
+    context.previousDerivedMetrics?.dynamicPressure
   );
   
   // Step 13: Calculate rumble gain from proton flux
@@ -198,7 +232,8 @@ export function mapSpaceWeatherToHeliosinger(
     condition,
     kIndex?.kp || 0,
     solarWind.velocity,
-    solarWind.density
+    solarWind.density,
+    now
   );
 
   // Step 14.5: Calculate detailed chord quality metadata
@@ -235,7 +270,8 @@ export function mapSpaceWeatherToHeliosinger(
       solarWind.velocity, 
       solarWind.density, 
       solarWind.bz, 
-      kIndex?.kp
+      kIndex?.kp,
+      vowelOptions
     ),
     chordQuality, // Add the new field
     formantFilters,
@@ -279,8 +315,8 @@ export function mapSpaceWeatherToHeliosinger(
   };
   
   // Store current data for next call (for spike detection)
-  previousData = data;
-  previousDerivedMetrics = derivedMetrics;
+  context.previousData = data;
+  context.previousDerivedMetrics = derivedMetrics;
   
   return heliosingerData;
 }
@@ -368,13 +404,11 @@ function calculateHarmonicContent(
     
     // Apply spectral tilt: high tilt emphasizes higher harmonics
     const tiltFactor = Math.pow(harmonicNumber, spectralTilt * 2);
-    amplitude *= tiltFactor;
     
-    // Normalize so fundamental is 1.0
     if (i === 0) {
-      amplitude = 1.0;
+      amplitude = 1;
     } else {
-      amplitude /= tiltFactor;
+      amplitude *= tiltFactor;
     }
     
     // Boost during storms
@@ -1071,11 +1105,11 @@ function calculateBinauralBeat(
   condition: SpaceWeatherCondition,
   kp: number,
   velocity: number,
-  density: number
+  density: number,
+  now: number
 ): { beatHz: number; baseHz: number; mix: number } {
   // Time-of-day drift (sinusoid over 24h)
-  const now = new Date();
-  const minutes = now.getHours() * 60 + now.getMinutes();
+  const minutes = Math.floor((now / 60000) % 1440);
   const circadian = 0.5 + 0.5 * Math.sin((minutes / 1440) * Math.PI * 2);
   
   // Beat rate: calmer midday/evening (~4-6 Hz), nudged higher during storms/fast wind
@@ -1101,37 +1135,6 @@ function calculateBinauralBeat(
     baseHz,
     mix: clamp(mix, 0.05, 0.2)
   };
-}
-
-// ============================================================================
-// CONDITION DETERMINATION
-// ============================================================================
-
-function determineSpaceWeatherCondition(
-  solarWind: NonNullable<ComprehensiveSpaceWeatherData['solar_wind']>,
-  kIndex: ComprehensiveSpaceWeatherData['k_index']
-): SpaceWeatherCondition {
-  const kp = kIndex?.kp || 0;
-  const velocity = solarWind.velocity;
-  const bz = solarWind.bz;
-
-  if (kp >= 8) {
-    return 'super_extreme';
-  }
-  
-  if (kp >= 7 || (kp >= 5 && bz < -15)) {
-    return 'extreme';
-  }
-  
-  if (kp >= 5 || bz < -10 || velocity > 600) {
-    return 'storm';
-  }
-  
-  if (kp >= 3 || (Math.abs(bz) > 5 && velocity > 450)) {
-    return 'moderate';
-  }
-  
-  return 'quiet';
 }
 
 // ============================================================================

@@ -3,6 +3,7 @@
  */
 
 import type { ChordData, ComprehensiveSpaceWeatherData } from "./types";
+import { deriveSpaceWeatherCondition } from "../space-weather";
 
 // Standard MIDI note numbers for reference
 export const MIDI_NOTES = {
@@ -140,33 +141,6 @@ export function bzToDetuneCents(
 }
 
 /**
- * Determine space weather condition based on parameters
- */
-export function classifySpaceWeatherCondition(
-  velocity: number,
-  density: number,
-  bz: number
-): 'quiet' | 'moderate' | 'storm' | 'extreme' {
-  // Extreme storm conditions: very high velocity OR extremely negative Bz
-  if (velocity > 700 || bz < -15) {
-    return 'extreme';
-  }
-  
-  // Storm conditions: high velocity OR very negative Bz
-  if (velocity > 600 || bz < -10) {
-    return 'storm';
-  }
-  
-  // Moderate conditions: elevated velocity OR moderately negative Bz
-  if (velocity > 450 || bz < -5) {
-    return 'moderate';
-  }
-  
-  // Default to quiet
-  return 'quiet';
-}
-
-/**
  * Generate complete chord data from solar wind parameters
  */
 export interface ChordMappingConfig {
@@ -193,7 +167,7 @@ export function mapSolarWindToChord(
   noteName: string;
   decayTime: number;
   detuneCents: number;
-  condition: 'quiet' | 'moderate' | 'storm' | 'extreme';
+  condition: ChordData["condition"];
 } {
   const midiNote = velocityToMidiNote(
     velocity,
@@ -215,7 +189,7 @@ export function mapSolarWindToChord(
   );
   
   const detuneCents = bzToDetuneCents(bz, config.bzThreshold, config.bzDetuneCents);
-  const condition = classifySpaceWeatherCondition(velocity, density, bz);
+  const condition = deriveSpaceWeatherCondition({ velocity, bz });
   
   return {
     midiNote,

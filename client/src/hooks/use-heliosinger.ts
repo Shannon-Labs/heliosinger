@@ -1,6 +1,10 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { mapSpaceWeatherToHeliosinger, createDefaultHeliosingerMapping } from '@/lib/heliosinger-mapping';
+import {
+  mapSpaceWeatherToHeliosinger,
+  createDefaultHeliosingerMapping,
+  createMappingContext,
+} from '@/lib/heliosinger-mapping';
 import { startSinging, updateSinging, stopSinging, setSingingVolume, ensureAudioUnlocked } from '@/lib/heliosinger-engine';
 import { apiRequest } from '@/lib/queryClient';
 import { getAmbientSettings } from '@/lib/localStorage';
@@ -37,6 +41,7 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
   const [backgroundMode, setBackgroundMode] = useState(backgroundModeProp);
   const currentDataRef = useRef<ReturnType<typeof mapSpaceWeatherToHeliosinger> | null>(null);
   const previousDataRef = useRef<ComprehensiveSpaceWeatherData | null>(null);
+  const mappingContextRef = useRef(createMappingContext());
   
   // Request notification permission on first use
   useEffect(() => {
@@ -114,7 +119,11 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
       
       try {
         // Map space weather data to Heliosinger parameters
-        const heliosingerData = mapSpaceWeatherToHeliosinger(comprehensiveData);
+        const heliosingerData = mapSpaceWeatherToHeliosinger(
+          comprehensiveData,
+          mappingContextRef.current,
+          { now: Date.now() }
+        );
         currentDataRef.current = heliosingerData;
         
         // Start the Heliosinger engine
@@ -172,7 +181,11 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
     
     try {
       // Map new data to Heliosinger parameters
-      const heliosingerData = mapSpaceWeatherToHeliosinger(comprehensiveData);
+      const heliosingerData = mapSpaceWeatherToHeliosinger(
+        comprehensiveData,
+        mappingContextRef.current,
+        { now: Date.now() }
+      );
       const previousData = currentDataRef.current;
       const previousComprehensiveData = previousDataRef.current;
       currentDataRef.current = heliosingerData;
@@ -251,7 +264,11 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
       const data = (await response.json()) as ComprehensiveSpaceWeatherData;
       
       // Map to Heliosinger
-      const heliosingerData = mapSpaceWeatherToHeliosinger(data);
+      const heliosingerData = mapSpaceWeatherToHeliosinger(
+        data,
+        mappingContextRef.current,
+        { now: Date.now() }
+      );
       currentDataRef.current = heliosingerData;
       
       // Start audio
@@ -348,6 +365,7 @@ export function useDashboardHeliosinger() {
  * Utility hook to get the current Heliosinger mapping without starting audio
  */
 export function useHeliosingerPreview() {
+  const mappingContextRef = useRef(createMappingContext());
   const { data: comprehensiveData } = useQuery<ComprehensiveSpaceWeatherData>({
     queryKey: ['/api/space-weather/comprehensive-preview'],
     queryFn: async () => {
@@ -361,13 +379,21 @@ export function useHeliosingerPreview() {
     if (!comprehensiveData) {
       return createDefaultHeliosingerMapping();
     }
-    return mapSpaceWeatherToHeliosinger(comprehensiveData ?? undefined);
+    return mapSpaceWeatherToHeliosinger(
+      comprehensiveData,
+      mappingContextRef.current,
+      { now: Date.now() }
+    );
   }, [comprehensiveData]);
 
   const previewMapping = useCallback(async () => {
     const response = await apiRequest('GET', '/api/space-weather/comprehensive');
     const data = (await response.json()) as ComprehensiveSpaceWeatherData;
-    return mapSpaceWeatherToHeliosinger(data);
+    return mapSpaceWeatherToHeliosinger(
+      data,
+      mappingContextRef.current,
+      { now: Date.now() }
+    );
   }, []);
 
   return {

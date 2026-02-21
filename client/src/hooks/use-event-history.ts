@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ComprehensiveSpaceWeatherData } from '@shared/schema';
 
 export interface SpaceWeatherEvent {
@@ -47,7 +47,7 @@ export function useEventHistory(
   addEvent: (event: Omit<SpaceWeatherEvent, 'id' | 'timestamp'>) => void;
   clearEvents: () => void;
 } {
-  const eventsRef = useRef<SpaceWeatherEvent[]>(getStoredEvents());
+  const [events, setEvents] = useState<SpaceWeatherEvent[]>(getStoredEvents());
   const previousDataRef = useRef<ComprehensiveSpaceWeatherData | undefined>(previousData);
 
   useEffect(() => {
@@ -134,12 +134,15 @@ export function useEventHistory(
 
     // Add new events and store
     if (newEvents.length > 0) {
-      eventsRef.current = [...newEvents, ...eventsRef.current].slice(0, MAX_EVENTS);
-      storeEvents(eventsRef.current);
+      setEvents((storedEvents) => {
+        const nextEvents = [...newEvents, ...storedEvents].slice(0, MAX_EVENTS);
+        storeEvents(nextEvents);
+        return nextEvents;
+      });
     }
 
     previousDataRef.current = currentData;
-  }, [currentData]);
+  }, [currentData, previousData]);
 
   const addEvent = (event: Omit<SpaceWeatherEvent, 'id' | 'timestamp'>) => {
     const newEvent: SpaceWeatherEvent = {
@@ -147,17 +150,20 @@ export function useEventHistory(
       id: `${event.type}-${Date.now()}`,
       timestamp: new Date(),
     };
-    eventsRef.current = [newEvent, ...eventsRef.current].slice(0, MAX_EVENTS);
-    storeEvents(eventsRef.current);
+    setEvents((storedEvents) => {
+      const nextEvents = [newEvent, ...storedEvents].slice(0, MAX_EVENTS);
+      storeEvents(nextEvents);
+      return nextEvents;
+    });
   };
 
   const clearEvents = () => {
-    eventsRef.current = [];
+    setEvents([]);
     storeEvents([]);
   };
 
   return {
-    events: eventsRef.current,
+    events,
     addEvent,
     clearEvents,
   };
@@ -175,4 +181,3 @@ export function formatRelativeTime(date: Date): string {
   if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
   return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
 }
-

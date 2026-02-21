@@ -2,6 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertSolarWindReadingSchema, insertMappingConfigSchema, insertAmbientSettingsSchema } from "@shared/schema";
+import { mapSolarWindToChord } from "../packages/core/src/heliosinger/midi";
+import { deriveSpaceWeatherCondition } from "../packages/core/src/space-weather";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -156,49 +158,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "No active mapping configuration" });
       }
 
-      // Calculate MIDI note from velocity (200-800 km/s → C2-C6)
-      const velocityRange = mappingConfig.velocity_max - mappingConfig.velocity_min;
-      const midiRange = mappingConfig.midi_note_max - mappingConfig.midi_note_min;
-      const velocityNormalized = Math.max(0, Math.min(1, (velocity - mappingConfig.velocity_min) / velocityRange));
-      const midiNote = Math.round(mappingConfig.midi_note_min + (velocityNormalized * midiRange));
-      
-      // Convert MIDI note to frequency (A440 standard)
-      const frequency = 440 * Math.pow(2, (midiNote - 69) / 12);
-      
-      // Calculate note name
-      const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-      const octave = Math.floor((midiNote - 12) / 12);
-      const noteIndex = (midiNote - 12) % 12;
-      const noteName = `${noteNames[noteIndex]}${octave}`;
+      const chordData = mapSolarWindToChord(velocity, density, bz, {
+        velocityMin: mappingConfig.velocity_min,
+        velocityMax: mappingConfig.velocity_max,
+        midiNoteMin: mappingConfig.midi_note_min,
+        midiNoteMax: mappingConfig.midi_note_max,
+        densityMin: mappingConfig.density_min,
+        densityMax: mappingConfig.density_max,
+        decayTimeMin: mappingConfig.decay_time_min,
+        decayTimeMax: mappingConfig.decay_time_max,
+        bzThreshold: mappingConfig.bz_threshold,
+        bzDetuneCents: mappingConfig.bz_detune_cents,
+      });
 
-      // Calculate decay time from density (logarithmic mapping)
-      const densityNormalized = Math.max(0, Math.min(1, Math.log(density / mappingConfig.density_min) / Math.log(mappingConfig.density_max / mappingConfig.density_min)));
-      const decayTime = mappingConfig.decay_time_min + ((1 - densityNormalized) * (mappingConfig.decay_time_max - mappingConfig.decay_time_min));
-
-      // Calculate detune from Bz (southward creates beating)
-      const detuneCents = bz < mappingConfig.bz_threshold ? mappingConfig.bz_detune_cents : 0;
-      
-      // Determine space weather condition
-      let condition: 'quiet' | 'moderate' | 'storm' = 'quiet';
-      if (velocity > 600 || Math.abs(bz) > 10) {
-        condition = 'storm';
-      } else if (velocity > 450 || Math.abs(bz) > 5) {
-        condition = 'moderate';
-      }
-
-      const chordData = {
-        baseNote: noteName,
-        frequency,
-        midiNote,
-        decayTime: Math.round(decayTime * 100) / 100,
-        detuneCents,
-        condition,
+      const mappedData = {
+        ...chordData,
+        frequency: Math.round(chordData.frequency * 100) / 100,
+        decayTime: Math.round(chordData.decayTime * 100) / 100,
         velocity,
         density,
         bz
       };
 
-      res.json(chordData);
+      res.json(mappedData);
     } catch (error) {
       console.error("Error calculating chord:", error);
       res.status(500).json({ message: "Failed to calculate chord mapping" });
@@ -210,30 +192,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { condition } = req.body;
       
-      let testData;
-      switch (condition) {
-        case 'quiet':
-          testData = { velocity: 350, density: 5.0, bz: 2.0 };
-          break;
-        case 'moderate':
-          testData = { velocity: 500, density: 8.0, bz: -7.0 };
-          break;
-        case 'storm':
-          testData = { velocity: 750, density: 2.0, bz: -15.0 };
-          break;
-        default:
-          return res.status(400).json({ message: "Invalid condition. Use 'quiet', 'moderate', or 'storm'" });
+      const testDataMap: Record<string, { velocity: number; density: number; bz: number }> = {
+        quiet: { velocity: 350, density: 5.0, bz: 2.0 },
+        moderate: { velocity: 500, density: 8.0, bz: -7.0 },
+        storm: { velocity: 750, density: 2.0, bz: -15.0 },
+      };
+      const testData = testDataMap[condition];
+      if (!testData) {
+        return res.status(400).json({ message: "Invalid condition. Use 'quiet', 'moderate', or 'storm'" });
       }
 
-      // Calculate chord for test condition
-      const chordResponse = await fetch(`${req.protocol}://${req.get('host')}/api/mapping/calculate-chord`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(testData)
+      const mappingConfig = await storage.getActiveMappingConfig();
+      if (!mappingConfig) {
+        return res.status(404).json({ message: "No active mapping configuration" });
+      }
+
+      const chordData = mapSolarWindToChord(testData.velocity, testData.density, testData.bz, {
+        velocityMin: mappingConfig.velocity_min,
+        velocityMax: mappingConfig.velocity_max,
+        midiNoteMin: mappingConfig.midi_note_min,
+        midiNoteMax: mappingConfig.midi_note_max,
+        densityMin: mappingConfig.density_min,
+        densityMax: mappingConfig.density_max,
+        decayTimeMin: mappingConfig.decay_time_min,
+        decayTimeMax: mappingConfig.decay_time_max,
+        bzThreshold: mappingConfig.bz_threshold,
+        bzDetuneCents: mappingConfig.bz_detune_cents,
+      });
+      const canonicalCondition = deriveSpaceWeatherCondition({
+        velocity: testData.velocity,
+        bz: testData.bz,
       });
 
-      const chordData = await chordResponse.json();
-      res.json({ condition, testData, chord: chordData });
+      res.json({
+        condition: canonicalCondition,
+        testData,
+        chord: {
+          ...chordData,
+          condition: canonicalCondition,
+        },
+      });
     } catch (error) {
       console.error("Error testing condition:", error);
       res.status(500).json({ message: "Failed to test space weather condition" });
