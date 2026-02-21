@@ -36,6 +36,7 @@ type SunUniforms = {
   uCircadian: { value: number };
   uChordTension: { value: number };
   uPulseStrength: { value: number };
+  uReconnection: { value: number };
 };
 
 /**
@@ -75,6 +76,8 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
     const kp = data?.k_index?.kp ?? 0;
     const condition = heliosingerData?.condition ?? "quiet";
 
+    const reconnectionScore = data?.reconnection?.score ?? 0;
+
     return {
       velocity: wind?.velocity ?? 350,
       density: wind?.density ?? 5,
@@ -82,6 +85,7 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
       temperature: wind?.temperature ?? 100000,
       kp,
       condition,
+      reconnectionScore,
     };
   }, [data, heliosingerData?.condition]);
 
@@ -204,6 +208,7 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
       uCircadian: { value: 0.0 },
       uChordTension: { value: 0.0 },
       uPulseStrength: { value: 0.0 },
+      uReconnection: { value: 0.0 },
     };
     uniformsRef.current = uniforms;
 
@@ -239,9 +244,10 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
         uniform float uHueShift;
         uniform float uCircadian;
         uniform float uChordTension;
+        uniform float uReconnection;
         varying vec3 vNormal;
         varying vec3 vPosition;
-        
+
         // Halftone pattern function
         float halftone(vec2 uv, float scale) {
           vec2 nearest = 2.0 * fract(uv * scale) - 1.0;
@@ -252,26 +258,26 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
         void main() {
           // View direction is effectively z-axis in view space
           float NdotV = dot(normalize(vNormal), vec3(0.0, 0.0, 1.0));
-          
+
           // Activity drives the "turbulence" and threshold for bands
           float noise = sin(vPosition.y * 10.0 + uTime * 4.0) * cos(vPosition.x * 10.0 - uTime * 2.0) * 0.5 + 0.5;
           float intensity = NdotV + (noise * 0.2 * uActivity);
-          
+
           // Cel Shading Steps (Quantize intensity)
           // Dark base -> Mid -> Highlight
-          
+
           // Colors (Atlus Style: High Contrast Red/Black/Yellow)
           // Modify palette based on Chord Tension (Major=0 -> Gold/Red, Minor=0.5 -> Red/Blue, Dim=1.0 -> Purple/Black)
-          
+
           vec3 colShadow = vec3(0.1, 0.0, 0.05); // Almost black red
           vec3 colMid = vec3(0.85, 0.1, 0.1);    // Vibrant Persona Red
           vec3 colHigh = vec3(1.0, 0.95, 0.0);   // Bright Yellow
-          
+
           // Blend towards "Tension" Palette (Purples/Cyans for dissonance)
           vec3 tensionColShadow = vec3(0.1, 0.0, 0.2);
           vec3 tensionColMid = vec3(0.6, 0.0, 0.8); // Red -> Purple
           vec3 tensionColHigh = vec3(0.8, 0.9, 1.0); // Yellow -> Cyan/White
-          
+
           colShadow = mix(colShadow, tensionColShadow, uChordTension);
           colMid = mix(colMid, tensionColMid, uChordTension);
           colHigh = mix(colHigh, tensionColHigh, uChordTension);
@@ -281,6 +287,24 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
           // Positive uBz -> no strong effect, keep tension blend
           colMid = mix(colMid, vec3(0.9, 0.0, 0.0), max(0.0, -uBz / 5.0)); // Blends in for uBz < 0
 
+          // ── Reconnection field-line breakage effect ──
+          // When uReconnection > 0 (score exceeded 0.6 threshold), simulate
+          // magnetic field-line snapping via bright arc-like fractures
+          float reconFX = 0.0;
+          vec3 reconColor = vec3(0.0);
+          if (uReconnection > 0.0) {
+            // Fracture lines: high-frequency spatial noise modulated by time
+            float fracture = sin(vPosition.x * 25.0 + uTime * 8.0) *
+                             cos(vPosition.y * 30.0 - uTime * 6.0) *
+                             sin(vPosition.z * 20.0 + uTime * 4.0);
+            // Sharp threshold: only show bright arcs where fracture > threshold
+            float arcThreshold = 1.0 - uReconnection * 0.6; // lower threshold = more arcs
+            float arc = smoothstep(arcThreshold - 0.05, arcThreshold, abs(fracture));
+            reconFX = arc * uReconnection;
+            // Electric blue-white arcs for field-line snapping
+            reconColor = mix(vec3(0.3, 0.6, 1.0), vec3(1.0, 1.0, 1.0), arc * 0.5);
+          }
+
           // 3-Step Cel Shade
           vec3 finalColor;
           if (intensity > 0.75) {
@@ -289,12 +313,12 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
             finalColor = colMid;
           } else {
             finalColor = colShadow;
-            
+
             // Apply halftone to shadow
             float dot = halftone(gl_FragCoord.xy / 1000.0, 80.0); // Screen space dots
             finalColor = mix(vec3(0.0), colShadow, dot);
           }
-          
+
           // Rim light (sharp)
           float rim = 1.0 - NdotV;
           if (rim > 0.85) {
@@ -304,6 +328,9 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
           // Flare/Activity overlay (Pop art style)
           float popNoise = step(0.95, noise * uActivity);
           finalColor = mix(finalColor, vec3(1.0, 1.0, 0.8), popNoise);
+
+          // Apply reconnection arc overlay
+          finalColor = mix(finalColor, reconColor, reconFX * 0.7);
 
           gl_FragColor = vec4(finalColor, 1.0);
         }
@@ -334,11 +361,12 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
         uniform float uActivity;
         uniform float uBz;
         uniform float uCircadian;
+        uniform float uReconnection;
         varying vec3 vNormal;
         void main() {
           float intensity = pow(1.0 - dot(normalize(vNormal), vec3(0.0, 0.0, 1.0)), 1.2);
           float glow = intensity * (0.6 + uActivity * 1.2); // Increased glow intensity
-          
+
           vec3 baseCoronaColor = mix(
             vec3(1.0, 0.5, 0.0), // Orange
             vec3(1.0, 0.8, 0.0), // Bright yellow
@@ -351,6 +379,13 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
 
           // Smooth Blend with circadian for diurnal shift
           vec3 finalColor = mix(bzInfluenceColor, vec3(0.8, 0.3, 0.0), 1.0 - uCircadian); // Deeper red for lower circadian
+
+          // Reconnection: corona flares electric blue during field-line breakage
+          if (uReconnection > 0.0) {
+            vec3 reconGlow = vec3(0.4, 0.7, 1.0); // Electric blue
+            finalColor = mix(finalColor, reconGlow, uReconnection * 0.5);
+            glow *= (1.0 + uReconnection * 0.8); // Brighter corona during reconnection
+          }
 
           gl_FragColor = vec4(finalColor, glow);
         }
@@ -433,6 +468,8 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
       // Smoothly interpolate uniform values
       uniformsRef.current.uChordTension.value = THREE.MathUtils.lerp(uniformsRef.current.uChordTension.value, targetChordTensionRef.current, 0.08);
       uniformsRef.current.uBz.value = THREE.MathUtils.lerp(uniformsRef.current.uBz.value, targetBzRef.current, 0.08);
+      // Reconnection lerps faster for responsive visual feedback
+      uniformsRef.current.uReconnection.value = THREE.MathUtils.lerp(uniformsRef.current.uReconnection.value, uniformsRef.current.uReconnection.value, 0.12);
       
       updateParticles();
       
@@ -504,6 +541,14 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
     const pulse = heliosingerData?.tremoloDepth ? heliosingerData.tremoloDepth * 2.0 : 0.0;
     uniformsRef.current.uPulseStrength.value = pulse + (kpFactor * 0.5);
 
+    // Reconnection field-line effect: activate when score > 0.6 threshold
+    const RECONNECTION_THRESHOLD = 0.6;
+    const reconScore = stats.reconnectionScore;
+    const reconIntensity = reconScore > RECONNECTION_THRESHOLD
+      ? (reconScore - RECONNECTION_THRESHOLD) / (1.0 - RECONNECTION_THRESHOLD) // 0→1 ramp above threshold
+      : 0.0;
+    uniformsRef.current.uReconnection.value = reconIntensity;
+
     dynamicsRef.current.rotationVelocity =
       0.001 + velocityFactor * 0.011 + kpFactor * 0.002 + (circadianNormalized - 0.5) * 0.003;
     dynamicsRef.current.windSpeed =
@@ -569,6 +614,12 @@ export const SolarHologram = memo(function SolarHologram({ data, heliosingerData
       helper: "Chord voicing widens with magnetic turbulence",
       amount: Math.min(100, (heliosingerData?.chordVoicing?.length ?? 1) / 8 * 100),
     },
+    ...(stats.reconnectionScore > 0 ? [{
+      label: "Reconnection",
+      value: `${(stats.reconnectionScore * 100).toFixed(0)}%`,
+      helper: "Magnetic field-line breakage likelihood from plasmatail",
+      amount: stats.reconnectionScore * 100,
+    }] : []),
   ];
 
   if (mode === "stream") {
