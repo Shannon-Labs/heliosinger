@@ -1,5 +1,7 @@
 import type { SpaceWeatherCondition } from "../heliosinger/types";
 
+export type { SpaceWeatherCondition };
+
 export interface SpaceWeatherNowResponse {
   timestamp: string;
   stale: boolean;
