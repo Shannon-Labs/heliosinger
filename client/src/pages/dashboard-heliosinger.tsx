@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState, useRef, useMemo, lazy, Suspense } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback, lazy, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +70,15 @@ export default function Dashboard() {
   const previousComprehensiveDataRef = useRef<ComprehensiveSpaceWeatherData | undefined>(undefined);
   const mappingContextRef = useRef(createMappingContext());
 
+  const handleHeliosingerError = useCallback((error: Error) => {
+    toast({
+      title: "Heliosinger Error",
+      description: error.message,
+      variant: "destructive",
+    });
+    setIsHeliosingerEnabled(false);
+  }, [toast]);
+
   // Fetch comprehensive space weather data — single polling source for the whole dashboard
   const { data: comprehensiveData, isLoading: comprehensiveLoading } = useQuery<ComprehensiveSpaceWeatherData>({
     queryKey: ["/api/space-weather/comprehensive"],
@@ -95,14 +104,7 @@ export default function Dashboard() {
     volume: ambientVolume,
     backgroundMode: backgroundMode,
     comprehensiveData,
-    onError: (error) => {
-      toast({
-        title: "Heliosinger Error",
-        description: error.message,
-        variant: "destructive",
-      });
-      setIsHeliosingerEnabled(false);
-    }
+    onError: handleHeliosingerError,
   });
 
   // Network offline/online detection for graceful degradation
@@ -522,35 +524,6 @@ export default function Dashboard() {
       battery_min: 20.0
     });
   };
-
-  // Fallback: ensure unlock/start on user interaction (matches stream behavior, helps iOS)
-  useEffect(() => {
-    const startAudio = async () => {
-      if (!isHeliosingerEnabled) return;
-      try {
-        await heliosinger.unlock();
-        if (!heliosinger.isSinging && comprehensiveData) {
-          await heliosinger.start();
-        }
-      } catch (e) {
-        debugWarn("Dashboard unlock/start fallback failed", e);
-      }
-    };
-
-    // Try once on mount
-    startAudio();
-
-    const unlockHandler = () => {
-      startAudio();
-      document.removeEventListener('click', unlockHandler);
-    };
-    document.addEventListener('click', unlockHandler);
-
-    return () => {
-      document.removeEventListener('click', unlockHandler);
-    };
-  }, [heliosinger, isHeliosingerEnabled, comprehensiveData]);
-
 
   // Volume change handler with debounced audio and mutation to prevent spam
   const volumeDebounceRef = useRef<NodeJS.Timeout | null>(null);
