@@ -148,6 +148,7 @@ function d1Env(options: {
 
 beforeEach(() => {
   delete (globalThis as { __HELIOSINGER_MOBILE_MEM__?: unknown }).__HELIOSINGER_MOBILE_MEM__;
+  delete (globalThis as { __HELIOSINGER_MOBILE_RATE_LIMIT_MEM__?: unknown }).__HELIOSINGER_MOBILE_RATE_LIMIT_MEM__;
 });
 
 afterEach(() => {
@@ -178,6 +179,56 @@ test("register rejects malformed JSON", async () => {
   const payload = (await response.json()) as { ok: boolean; error: { code: string } };
   assert.equal(payload.ok, false);
   assert.equal(payload.error.code, "invalid_json");
+});
+
+test("register includes rate limit headers on success", async () => {
+  const env: MobileEnv = {};
+  const response = await registerDevice({
+    request: jsonRequest("https://example.com/api/mobile/v1/devices/register", "POST", {
+      installId: "device-rate-headers",
+      pushToken: "ExponentPushToken[test]",
+      timezone: "UTC",
+      platform: "ios",
+      appVersion: "0.1.0",
+    }),
+    env,
+  });
+
+  assert.equal(response.status, 201);
+  assert.equal(response.headers.get("x-ratelimit-limit"), "20");
+  assert.ok(Number(response.headers.get("x-ratelimit-remaining")) >= 0);
+  assert.ok(Number(response.headers.get("x-ratelimit-reset")) > 0);
+});
+
+test("register rate limits burst traffic", async () => {
+  const env: MobileEnv = {};
+  let blocked: Response | null = null;
+
+  for (let i = 0; i < 21; i += 1) {
+    const response = await registerDevice({
+      request: jsonRequest("https://example.com/api/mobile/v1/devices/register", "POST", {
+        installId: `device-rate-${i}`,
+        pushToken: `ExponentPushToken[test-${i}]`,
+        timezone: "UTC",
+        platform: "ios",
+        appVersion: "0.1.0",
+      }),
+      env,
+    });
+    if (response.status === 429) {
+      blocked = response;
+      break;
+    }
+  }
+
+  assert.ok(blocked);
+  assert.equal(blocked?.status, 429);
+  const payload = (await blocked?.json()) as { ok: boolean; error: { code: string } };
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error.code, "rate_limited");
+  assert.equal(blocked?.headers.get("x-ratelimit-limit"), "20");
+  assert.equal(blocked?.headers.get("x-ratelimit-remaining"), "0");
+  assert.ok(Number(blocked?.headers.get("retry-after")) > 0);
 });
 
 test("preferences update returns 404 for unknown installId", async () => {

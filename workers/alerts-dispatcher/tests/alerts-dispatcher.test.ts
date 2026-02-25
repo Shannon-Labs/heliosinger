@@ -271,7 +271,12 @@ function installFetchMocks(options: { expoTicketStatus?: "ok" | "error"; kp?: nu
   return { pushCalls };
 }
 
-async function runScheduled(env: { HELIOSINGER_DB: FakeDB; HELIOSINGER_KV: FakeKV; EXPO_PUSH_ACCESS_TOKEN?: string }) {
+async function runScheduled(env: {
+  HELIOSINGER_DB: FakeDB;
+  HELIOSINGER_KV: FakeKV;
+  EXPO_PUSH_ACCESS_TOKEN?: string;
+  MAX_NOTIFICATIONS_PER_TICK?: string;
+}) {
   await worker.scheduled({} as ScheduledController, env as unknown as Parameters<typeof worker.scheduled>[1]);
 }
 
@@ -372,4 +377,66 @@ test("Expo logical ticket error is logged as failed", async () => {
   const failed = db.notificationLog.find((row) => row.status === "failed");
   assert.ok(failed);
   assert.match(failed?.reason ?? "", /Expo push rejected ticket/i);
+});
+
+test("run-level dispatch cap skips additional events", async () => {
+  fixedDate("2026-02-18T12:36:00.000Z");
+  const kv = new FakeKV();
+  kv.set("mobile:latest-space-weather", JSON.stringify(snapshot()));
+
+  const db = new FakeDB([
+    makeDevice({
+      install_id: "device-1",
+      push_token: "ExponentPushToken[device-1]",
+    }),
+    makeDevice({
+      install_id: "device-2",
+      push_token: "ExponentPushToken[device-2]",
+      preferences_json: JSON.stringify({
+        installId: "device-2",
+        alertsEnabled: true,
+        thresholds: { kp: 5, bzSouth: 8, flareClasses: ["M", "X"] },
+        quietHours: { enabled: false, startHour: 22, endHour: 7 },
+        backgroundAudioEnabled: true,
+      }),
+    }),
+  ]);
+  const env = {
+    HELIOSINGER_DB: db,
+    HELIOSINGER_KV: kv,
+    EXPO_PUSH_ACCESS_TOKEN: "token",
+    MAX_NOTIFICATIONS_PER_TICK: "1",
+  };
+  const { pushCalls } = installFetchMocks({ expoTicketStatus: "ok" });
+
+  await runScheduled(env);
+
+  assert.equal(pushCalls.length, 1);
+  assert.ok(db.notificationLog.some((row) => row.status === "sent"));
+  assert.ok(db.notificationLog.some((row) => row.status === "skipped" && row.reason === "dispatch_cap"));
+});
+
+test("structured summary logs are emitted for each run", async () => {
+  fixedDate("2026-02-18T12:36:00.000Z");
+  const kv = new FakeKV();
+  kv.set("mobile:latest-space-weather", JSON.stringify(snapshot()));
+
+  const db = new FakeDB([makeDevice()]);
+  const env = { HELIOSINGER_DB: db, HELIOSINGER_KV: kv, EXPO_PUSH_ACCESS_TOKEN: "token" };
+  installFetchMocks({ expoTicketStatus: "ok" });
+
+  const originalInfo = console.info;
+  const entries: string[] = [];
+  console.info = (...args: unknown[]) => {
+    entries.push(args.map((arg) => String(arg)).join(" "));
+  };
+
+  try {
+    await runScheduled(env);
+  } finally {
+    console.info = originalInfo;
+  }
+
+  assert.ok(entries.some((line) => line.includes("\"event\":\"run.started\"")));
+  assert.ok(entries.some((line) => line.includes("\"event\":\"run.completed\"")));
 });

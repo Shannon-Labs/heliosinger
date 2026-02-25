@@ -8,6 +8,7 @@ import {
   updateNarrator,
   type ComprehensiveSpaceWeatherData,
   type HeliosingerData,
+  SubstormPhase,
 } from "../src/index";
 
 function withFixedNow<T>(fn: () => T): T {
@@ -131,6 +132,16 @@ function heliosinger(overrides: Partial<HeliosingerData> = {}): HeliosingerData 
     binauralBeatHz: 5,
     binauralBaseHz: 175,
     binauralMix: 0.12,
+    tailMetrics: {
+      bLobe: 27,
+      eTail: 4_000_000_000_000,
+      jCross: 0.23,
+      dSheet: 2.4,
+      stretchingIndex: 0.3,
+      stretchingProgress: 0.35,
+      phase: SubstormPhase.GROWTH,
+      phaseElapsedMs: 20_000,
+    },
     ...overrides,
   };
 }

@@ -706,6 +706,39 @@ class HeliosingerEngine {
     }
   }
   
+  // --- Musically appropriate ramp durations (seconds) ---
+  private static readonly RAMP_FREQUENCY = 3.0;      // pitch glide
+  private static readonly RAMP_GAIN = 0.75;           // amplitude — avoids clicks
+  private static readonly RAMP_FORMANT = 4.0;         // vowel crossfade — slow choir morph
+  private static readonly RAMP_FILTER = 1.5;          // filter cutoff
+  private static readonly RAMP_PAN = 1.5;             // stereo movement
+  private static readonly RAMP_REVERB_DELAY = 1.5;    // wet/dry/feedback
+  private static readonly RAMP_MODULATION = 1.5;      // vibrato/tremolo rates
+  private static readonly RAMP_BINAURAL = 5.0;        // very slow drift
+  private static readonly RAMP_TEXTURE = 1.5;         // wind/shimmer/rumble
+
+  /**
+   * Cancel any pending ramp on `param`, snapshot its current value, then
+   * schedule an exponential ramp to `target` over `duration` seconds.
+   * Prevents ramp-stacking when updates arrive before a previous ramp completes.
+   */
+  private rampParam(param: AudioParam, target: number, duration: number): void {
+    const now = this.audioContext!.currentTime;
+    param.cancelScheduledValues(now);
+    param.setValueAtTime(param.value, now);
+    param.exponentialRampToValueAtTime(target, now + duration);
+  }
+
+  /**
+   * Same as rampParam but uses linearRampToValueAtTime (for pan, delayTime).
+   */
+  private rampParamLinear(param: AudioParam, target: number, duration: number): void {
+    const now = this.audioContext!.currentTime;
+    param.cancelScheduledValues(now);
+    param.setValueAtTime(param.value, now);
+    param.linearRampToValueAtTime(target, now + duration);
+  }
+
   /**
    * Update the sun's singing as space weather changes
    */
@@ -714,17 +747,13 @@ class HeliosingerEngine {
 
     // Verify audio context is in a valid state
     if (this.audioContext.state === 'suspended') {
-      // Attempt to resume suspended context (common on iOS/Android during low activity)
       debugWarn('AudioContext suspended during update, attempting resume...');
       this.audioContext.resume().catch(e => debugWarn('Resume failed:', e));
-      return; // Wait for next update cycle after resume attempt
+      return;
     } else if (this.audioContext.state !== 'running') {
       debugWarn('AudioContext not running during update, state:', this.audioContext.state);
       return;
     }
-
-    const now = this.audioContext.currentTime;
-    const smoothingTime = 0.1; // 100ms smooth transitions
 
     // Update chord tone frequencies and formant filters
     heliosingerData.chordVoicing.forEach((chordTone, toneIndex) => {
@@ -732,186 +761,163 @@ class HeliosingerEngine {
 
       const toneLayer = this.heliosingerLayer!.chordToneLayers[toneIndex];
 
-      // Update chord tone frequency
-      toneLayer.osc.frequency.exponentialRampToValueAtTime(
+      // Chord tone frequency → slow pitch glide
+      this.rampParam(toneLayer.osc.frequency,
         Math.max(20, chordTone.frequency),
-        now + smoothingTime
-      );
+        HeliosingerEngine.RAMP_FREQUENCY);
 
-      // Update chord tone gain (use same multiplier as startSinging: 0.7)
-      toneLayer.oscGain.gain.exponentialRampToValueAtTime(
+      // Chord tone gain
+      this.rampParam(toneLayer.oscGain.gain,
         Math.max(0.001, chordTone.amplitude * 0.7),
-        now + smoothingTime
-      );
-      
-      // Update formant filters for this chord tone
+        HeliosingerEngine.RAMP_GAIN);
+
+      // Formant filters — slow vowel crossfade
       heliosingerData.formantFilters.forEach((formant, i) => {
         if (i >= toneLayer.formantFilters.length) return;
-        
+
         const filter = toneLayer.formantFilters[i];
         const gain = toneLayer.formantGains[i];
-        
-        filter.frequency.exponentialRampToValueAtTime(
+
+        this.rampParam(filter.frequency,
           Math.max(100, Math.min(20000, formant.frequency)),
-          now + smoothingTime
-        );
-        
-        filter.Q.exponentialRampToValueAtTime(
+          HeliosingerEngine.RAMP_FORMANT);
+
+        this.rampParam(filter.Q,
           Math.max(0.1, formant.frequency / formant.bandwidth),
-          now + smoothingTime
-        );
-        
-        gain.gain.exponentialRampToValueAtTime(
+          HeliosingerEngine.RAMP_FORMANT);
+
+        this.rampParam(gain.gain,
           Math.max(0.001, formant.gain),
-          now + smoothingTime
-        );
+          HeliosingerEngine.RAMP_FORMANT);
       });
-      
-      // Update stereo panning for this chord tone
+
+      // Chord tone panning (linear)
       const panSpread = (heliosingerData.stereoSpread - 0.5) * 2;
       const tonePanOffset = (toneIndex - (heliosingerData.chordVoicing.length - 1) / 2) * 0.2;
-      toneLayer.panner.pan.linearRampToValueAtTime(
+      this.rampParamLinear(toneLayer.panner.pan,
         Math.max(-1, Math.min(1, panSpread * 0.7 + tonePanOffset)),
-        now + smoothingTime
-      );
+        HeliosingerEngine.RAMP_PAN);
     });
-    
+
     // Update harmonic frequencies and gains
     heliosingerData.harmonicAmplitudes.forEach((amplitude, i) => {
       if (i === 0 || i >= this.heliosingerLayer!.harmonicOscs.length) return;
-      
+
       const osc = this.heliosingerLayer!.harmonicOscs[i - 1];
       const gain = this.heliosingerLayer!.harmonicGains[i - 1];
       const harmonicNumber = i + 1;
       const targetFreq = heliosingerData.frequency * harmonicNumber;
-      
-      osc.frequency.exponentialRampToValueAtTime(
+
+      this.rampParam(osc.frequency,
         Math.max(20, targetFreq),
-        now + smoothingTime
-      );
-      
-      const targetGain = amplitude * 0.2;
-      gain.gain.exponentialRampToValueAtTime(
-        Math.max(0.001, targetGain),
-        now + smoothingTime
-      );
+        HeliosingerEngine.RAMP_FREQUENCY);
+
+      this.rampParam(gain.gain,
+        Math.max(0.001, amplitude * 0.2),
+        HeliosingerEngine.RAMP_GAIN);
     });
-    
-    // Update master stereo panning
+
+    // Master stereo panning (linear)
     const panSpread = (heliosingerData.stereoSpread - 0.5) * 2;
-    this.heliosingerLayer.masterPanner.pan.linearRampToValueAtTime(
+    this.rampParamLinear(this.heliosingerLayer.masterPanner.pan,
       Math.max(-1, Math.min(1, panSpread * 0.3)),
-      now + smoothingTime
-    );
-    
-    // Update reverb and delay
-    // Note: exponentialRampToValueAtTime can't ramp to 0, so use minimum of 0.001
+      HeliosingerEngine.RAMP_PAN);
+
+    // Reverb and delay
     if (this.delayNode && this.delayGain && this.delayFeedbackGain && this.reverbGain) {
-      // delayTime uses linearRamp since it's not a gain value
-      this.delayNode.delayTime.linearRampToValueAtTime(
+      this.rampParamLinear(this.delayNode.delayTime,
         Math.max(0.05, Math.min(1.0, heliosingerData.delayTime)),
-        now + smoothingTime
-      );
-      this.delayGain.gain.exponentialRampToValueAtTime(
+        HeliosingerEngine.RAMP_REVERB_DELAY);
+
+      this.rampParam(this.delayGain.gain,
         Math.max(0.001, Math.min(0.4, heliosingerData.delayGain)),
-        now + smoothingTime
-      );
-      // Delay feedback can be 0, so use minimum of 0.001 for exponential ramp
-      this.delayFeedbackGain.gain.exponentialRampToValueAtTime(
+        HeliosingerEngine.RAMP_REVERB_DELAY);
+
+      this.rampParam(this.delayFeedbackGain.gain,
         Math.max(0.001, Math.min(0.5, heliosingerData.delayFeedback)),
-        now + smoothingTime
-      );
-      this.reverbGain.gain.exponentialRampToValueAtTime(
+        HeliosingerEngine.RAMP_REVERB_DELAY);
+
+      this.rampParam(this.reverbGain.gain,
         Math.max(0.001, Math.min(0.5, heliosingerData.reverbRoomSize * 0.3)),
-        now + smoothingTime
-      );
-    }
-    
-    // Update modulation (vibrato, tremolo)
-    if (this.modulationLayer.vibratoLfo && this.modulationLayer.vibratoGain) {
-      this.modulationLayer.vibratoLfo.frequency.exponentialRampToValueAtTime(
-        Math.max(0.1, heliosingerData.vibratoRate),
-        now + smoothingTime
-      );
-      this.modulationLayer.vibratoGain.gain.exponentialRampToValueAtTime(
-        Math.max(0.1, heliosingerData.vibratoDepth),
-        now + smoothingTime
-      );
-    }
-    
-    if (this.modulationLayer.tremoloLfo && this.modulationLayer.tremoloGain) {
-      this.modulationLayer.tremoloLfo.frequency.exponentialRampToValueAtTime(
-        Math.max(0.1, heliosingerData.tremoloRate),
-        now + smoothingTime
-      );
-      this.modulationLayer.tremoloGain.gain.exponentialRampToValueAtTime(
-        Math.max(0.01, heliosingerData.tremoloDepth * 0.5),
-        now + smoothingTime
-      );
+        HeliosingerEngine.RAMP_REVERB_DELAY);
     }
 
-    // Update binaural layer
+    // Modulation: vibrato
+    if (this.modulationLayer.vibratoLfo && this.modulationLayer.vibratoGain) {
+      this.rampParam(this.modulationLayer.vibratoLfo.frequency,
+        Math.max(0.1, heliosingerData.vibratoRate),
+        HeliosingerEngine.RAMP_MODULATION);
+
+      this.rampParam(this.modulationLayer.vibratoGain.gain,
+        Math.max(0.1, heliosingerData.vibratoDepth),
+        HeliosingerEngine.RAMP_MODULATION);
+    }
+
+    // Modulation: tremolo
+    if (this.modulationLayer.tremoloLfo && this.modulationLayer.tremoloGain) {
+      this.rampParam(this.modulationLayer.tremoloLfo.frequency,
+        Math.max(0.1, heliosingerData.tremoloRate),
+        HeliosingerEngine.RAMP_MODULATION);
+
+      this.rampParam(this.modulationLayer.tremoloGain.gain,
+        Math.max(0.01, heliosingerData.tremoloDepth * 0.5),
+        HeliosingerEngine.RAMP_MODULATION);
+    }
+
+    // Binaural layer — very slow drift
     if (this.binauralLayer.leftOsc && this.binauralLayer.rightOsc && this.binauralLayer.leftGain && this.binauralLayer.rightGain) {
       const base = Math.max(20, heliosingerData.binauralBaseHz);
       const offset = Math.max(0.5, heliosingerData.binauralBeatHz / 2);
-      const mix = Math.max(0.02, heliosingerData.binauralMix);
-      this.binauralLayer.leftOsc.frequency.exponentialRampToValueAtTime(
+      const safeMix = Math.max(0.001, Math.max(0.02, heliosingerData.binauralMix));
+
+      this.rampParam(this.binauralLayer.leftOsc.frequency,
         Math.max(20, base - offset),
-        now + smoothingTime
-      );
-      this.binauralLayer.rightOsc.frequency.exponentialRampToValueAtTime(
+        HeliosingerEngine.RAMP_BINAURAL);
+
+      this.rampParam(this.binauralLayer.rightOsc.frequency,
         Math.max(20, base + offset),
-        now + smoothingTime
-      );
-      // Safety clamp: exponentialRampToValueAtTime cannot ramp to 0
-      const safeMix = Math.max(0.001, mix);
-      this.binauralLayer.leftGain.gain.exponentialRampToValueAtTime(safeMix, now + smoothingTime);
-      this.binauralLayer.rightGain.gain.exponentialRampToValueAtTime(safeMix, now + smoothingTime);
+        HeliosingerEngine.RAMP_BINAURAL);
+
+      this.rampParam(this.binauralLayer.leftGain.gain, safeMix, HeliosingerEngine.RAMP_BINAURAL);
+      this.rampParam(this.binauralLayer.rightGain.gain, safeMix, HeliosingerEngine.RAMP_BINAURAL);
     }
-    
-    // Update texture layer
+
+    // Texture layer
     if (this.textureLayer.windGain && this.textureLayer.windFilter) {
       const velocity = heliosingerData.velocity || 350;
       const density = heliosingerData.density || 5;
-      
-      // Update wind frequency (velocity)
+
       const targetWindFreq = 200 + ((velocity - 200) / 600) * 1000;
-      this.textureLayer.windFilter.frequency.exponentialRampToValueAtTime(
+      this.rampParam(this.textureLayer.windFilter.frequency,
         Math.max(100, targetWindFreq),
-        now + smoothingTime
-      );
-      
-      // Update wind volume (density)
+        HeliosingerEngine.RAMP_TEXTURE);
+
       const targetWindVol = Math.min(0.15, (density / 20) * 0.15);
-      this.textureLayer.windGain.gain.exponentialRampToValueAtTime(
+      this.rampParam(this.textureLayer.windGain.gain,
         Math.max(0.001, targetWindVol),
-        now + smoothingTime
-      );
+        HeliosingerEngine.RAMP_TEXTURE);
     }
 
     if (this.textureLayer.noiseGain && heliosingerData.shimmerGain > 0) {
-      this.textureLayer.noiseGain.gain.exponentialRampToValueAtTime(
+      this.rampParam(this.textureLayer.noiseGain.gain,
         Math.max(0.001, heliosingerData.shimmerGain * 0.5),
-        now + smoothingTime
-      );
+        HeliosingerEngine.RAMP_TEXTURE);
     }
-    
+
     if (this.textureLayer.rumbleGain && heliosingerData.rumbleGain > 0) {
-      this.textureLayer.rumbleGain.gain.exponentialRampToValueAtTime(
+      this.rampParam(this.textureLayer.rumbleGain.gain,
         Math.max(0.001, heliosingerData.rumbleGain),
-        now + smoothingTime
-      );
+        HeliosingerEngine.RAMP_TEXTURE);
     }
-    
+
     // Don't override user volume - volume is controlled by setVolume()
-    // The masterGain volume is set by setVolume() and should not be changed here
-    
+
     // Log vowel changes
     if (this.currentData && this.currentData.vowelName !== heliosingerData.vowelName) {
       debugLog(`🌞 Vowel change: "${this.currentData.vowelName}" → "${heliosingerData.vowelName}"`);
       debugLog(`   ${heliosingerData.solarMood}`);
     }
-    
+
     this.currentData = heliosingerData;
   }
   

@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text } from "react-native";
+import { tokens } from "../theme/tokens";
 
 interface TabButtonProps {
   label: string;
@@ -17,24 +18,24 @@ export function TabButton({ label, active, onPress }: TabButtonProps) {
 const styles = StyleSheet.create({
   button: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: tokens.spacing.sm,
     borderTopWidth: 2,
-    borderTopColor: "#1f2937",
+    borderTopColor: tokens.colors.border,
     alignItems: "center",
-    backgroundColor: "#050505",
+    backgroundColor: tokens.colors.surface,
   },
   active: {
-    backgroundColor: "#111827",
-    borderTopColor: "#22d3ee",
+    backgroundColor: tokens.colors.surfaceElevated,
+    borderTopColor: tokens.colors.accent,
   },
   label: {
-    color: "#9ca3af",
-    fontSize: 11,
+    color: tokens.colors.textMuted,
+    ...tokens.typography.compact,
     fontWeight: "700",
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 1.1,
   },
   activeLabel: {
-    color: "#ecfeff",
+    color: tokens.colors.textPrimary,
   },
 });

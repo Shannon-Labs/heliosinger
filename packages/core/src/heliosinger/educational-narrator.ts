@@ -12,6 +12,7 @@
 
 import type { ComprehensiveSpaceWeatherData } from "./types";
 import type { HeliosingerData } from "./mapping";
+import { SubstormPhase } from "./plasmatail";
 
 // ============================================================================
 // TYPES
@@ -283,6 +284,61 @@ const ELECTROMAGNETISM_INSIGHTS = {
     cooldownKey: "pressure",
   }),
 
+  tailLoading: (
+    growth: number,
+    dSheet: number,
+    bLobe: number
+  ): EducationalInsight => ({
+    id: "em-tail-loading",
+    track: "electromagnetism",
+    priority: "significant",
+    headline: "MAGNETOTAIL ENERGY LOADING",
+    explanation: "Southward IMF and reconnection proxies indicate sustained energy transport into the magnetotail, compressing the lobes and loading the cross-tail current sheet in preparation for release.",
+    dataConnection: `Stretching index ${(growth * 100).toFixed(0)}% with ${dSheet.toFixed(2)} Rₑ sheet half-thickness and B_lobe ${bLobe.toFixed(1)} nT.`,
+    soundConnection: "The sub-bass broadens and texture becomes denser as the tail stores energy.",
+    duration: 14000,
+    cooldownKey: "tail-loading",
+  }),
+
+  tailOnset: (
+    phaseDurationSec: number,
+    eTailGj: number
+  ): EducationalInsight => ({
+    id: "em-tail-onset",
+    track: "electromagnetism",
+    priority: "breakthrough",
+    headline: "SUBSTORM ONSET IN MAGNETOTAIL",
+    explanation: "A reconnection trigger has been detected in the magnetotail. Stored magnetic energy begins converting to kinetic and particle energy, producing sudden auroral activation downstream.",
+    dataConnection: `Tail onset sustained for ~${Math.max(0, Math.round(phaseDurationSec)).toFixed(0)} s with E_tail ≈ ${(eTailGj / 1e12).toFixed(2)}×10¹² J.`,
+    soundConnection: "Expect a louder, wider chord change and a reverb swell as the system releases energy.",
+    duration: 15000,
+    cooldownKey: "tail-onset",
+  }),
+
+  tailExpansion: (eTailGj: number): EducationalInsight => ({
+    id: "em-tail-expansion",
+    track: "electromagnetism",
+    priority: "breakthrough",
+    headline: "EXPANSION: ENERGY RELEASE",
+    explanation: "Reconnection is in expansion mode. Magnetotail tension has relaxed, and energy now drives auroral and wave activity in the inner magnetosphere.",
+    dataConnection: `Stored tail energy is high (≈${(eTailGj / 1e12).toFixed(2)}×10¹² J).`,
+    soundConnection: "Listen for a broadening in harmonic content and stronger room-like reverberation.",
+    duration: 14000,
+    cooldownKey: "tail-expansion",
+  }),
+
+  tailRecovery: (phaseDurationSec: number): EducationalInsight => ({
+    id: "em-tail-recovery",
+    track: "electromagnetism",
+    priority: "notable",
+    headline: "RECOVERY PHASE",
+    explanation: "The substorm cycle is relaxing. Tail currents and stress relax while injected particles and waves settle into more stable conditions.",
+    dataConnection: `Recovery phase active for about ${Math.max(0, Math.round(phaseDurationSec)).toFixed(0)} s. Magnetic stress is easing.`,
+    soundConnection: "Harmonics simplify and the space narrows as tension resolves.",
+    duration: 12000,
+    cooldownKey: "tail-recovery",
+  }),
+
   convectionEfield: (vel: number, bz: number, ey: number): EducationalInsight => ({
     id: "em-efield",
     track: "electromagnetism",
@@ -368,6 +424,7 @@ export function analyzeConditions(
   const prevBz = previous?.solar_wind?.bz ?? 0;
   const kp = current.k_index?.kp ?? 0;
   const prevKp = previous?.k_index?.kp ?? 0;
+  const tailMetrics = heliosingerData?.tailMetrics;
   // Dynamic pressure: Pdyn = 1.6726e-6 * n * v² (nPa) - NOAA standard formula
   const dynamicPressure = Math.max(0, 1.6726e-6 * density * vel * vel);
   // Magnetopause standoff: Shue et al. (1998) formula with Bz correction
@@ -445,6 +502,48 @@ export function analyzeConditions(
   const ey = vel * bzSouth * 0.001; // mV/m
   if (ey >= 2 && !isCoolingDown(state, "efield")) {
     insights.push(ELECTROMAGNETISM_INSIGHTS.convectionEfield(vel, bz, ey));
+  }
+
+  if (tailMetrics) {
+    if (
+      tailMetrics.phase === SubstormPhase.GROWTH &&
+      tailMetrics.stretchingProgress > 0.2 &&
+      !isCoolingDown(state, "tail-loading")
+    ) {
+      insights.push(
+        ELECTROMAGNETISM_INSIGHTS.tailLoading(
+          tailMetrics.stretchingProgress,
+          tailMetrics.dSheet,
+          tailMetrics.bLobe
+        )
+      );
+    }
+
+    if (
+      tailMetrics.phase === SubstormPhase.ONSET &&
+      !isCoolingDown(state, "tail-onset")
+    ) {
+      insights.push(
+        ELECTROMAGNETISM_INSIGHTS.tailOnset(
+          tailMetrics.phaseElapsedMs / 1000,
+          tailMetrics.eTail
+        )
+      );
+    }
+
+    if (
+      tailMetrics.phase === SubstormPhase.EXPANSION &&
+      !isCoolingDown(state, "tail-expansion")
+    ) {
+      insights.push(ELECTROMAGNETISM_INSIGHTS.tailExpansion(tailMetrics.eTail));
+    }
+
+    if (
+      tailMetrics.phase === SubstormPhase.RECOVERY &&
+      !isCoolingDown(state, "tail-recovery")
+    ) {
+      insights.push(ELECTROMAGNETISM_INSIGHTS.tailRecovery(tailMetrics.phaseElapsedMs / 1000));
+    }
   }
 
   // R-scale radio blackout

@@ -2,8 +2,10 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertSolarWindReadingSchema, insertMappingConfigSchema, insertAmbientSettingsSchema } from "@shared/schema";
-import { mapSolarWindToChord } from "../packages/core/src/heliosinger/midi";
-import { deriveSpaceWeatherCondition } from "../packages/core/src/space-weather";
+import {
+  buildMappedChordFromStorageConfig,
+  getTestConditionInput,
+} from "../functions/api/mapping/_shared/chord-mapping";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
@@ -158,28 +160,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "No active mapping configuration" });
       }
 
-      const chordData = mapSolarWindToChord(velocity, density, bz, {
-        velocityMin: mappingConfig.velocity_min,
-        velocityMax: mappingConfig.velocity_max,
-        midiNoteMin: mappingConfig.midi_note_min,
-        midiNoteMax: mappingConfig.midi_note_max,
-        densityMin: mappingConfig.density_min,
-        densityMax: mappingConfig.density_max,
-        decayTimeMin: mappingConfig.decay_time_min,
-        decayTimeMax: mappingConfig.decay_time_max,
-        bzThreshold: mappingConfig.bz_threshold,
-        bzDetuneCents: mappingConfig.bz_detune_cents,
-      });
-
-      const mappedData = {
-        ...chordData,
-        frequency: Math.round(chordData.frequency * 100) / 100,
-        decayTime: Math.round(chordData.decayTime * 100) / 100,
-        velocity,
-        density,
-        bz
-      };
-
+      const mappedData = buildMappedChordFromStorageConfig(
+        { velocity, density, bz },
+        mappingConfig
+      );
       res.json(mappedData);
     } catch (error) {
       console.error("Error calculating chord:", error);
@@ -191,13 +175,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/mapping/test-condition", async (req, res) => {
     try {
       const { condition } = req.body;
-      
-      const testDataMap: Record<string, { velocity: number; density: number; bz: number }> = {
-        quiet: { velocity: 350, density: 5.0, bz: 2.0 },
-        moderate: { velocity: 500, density: 8.0, bz: -7.0 },
-        storm: { velocity: 750, density: 2.0, bz: -15.0 },
-      };
-      const testData = testDataMap[condition];
+
+      const testData = getTestConditionInput(condition);
       if (!testData) {
         return res.status(400).json({ message: "Invalid condition. Use 'quiet', 'moderate', or 'storm'" });
       }
@@ -207,30 +186,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "No active mapping configuration" });
       }
 
-      const chordData = mapSolarWindToChord(testData.velocity, testData.density, testData.bz, {
-        velocityMin: mappingConfig.velocity_min,
-        velocityMax: mappingConfig.velocity_max,
-        midiNoteMin: mappingConfig.midi_note_min,
-        midiNoteMax: mappingConfig.midi_note_max,
-        densityMin: mappingConfig.density_min,
-        densityMax: mappingConfig.density_max,
-        decayTimeMin: mappingConfig.decay_time_min,
-        decayTimeMax: mappingConfig.decay_time_max,
-        bzThreshold: mappingConfig.bz_threshold,
-        bzDetuneCents: mappingConfig.bz_detune_cents,
-      });
-      const canonicalCondition = deriveSpaceWeatherCondition({
-        velocity: testData.velocity,
-        bz: testData.bz,
-      });
+      const chordData = buildMappedChordFromStorageConfig(testData, mappingConfig);
 
       res.json({
-        condition: canonicalCondition,
+        requestedCondition: condition,
+        condition: chordData.condition,
         testData,
-        chord: {
-          ...chordData,
-          condition: canonicalCondition,
-        },
+        chord: chordData,
       });
     } catch (error) {
       console.error("Error testing condition:", error);

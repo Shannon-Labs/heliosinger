@@ -42,8 +42,8 @@ export function calculateRefetchInterval(
   let interval: number;
   
   if (kp >= 7) {
-    // Extreme conditions: 10 seconds
-    interval = 10000;
+    // Extreme conditions: 15 seconds
+    interval = 15000;
   } else if (kp >= 5) {
     // Storm conditions: 15 seconds
     interval = 15000;
@@ -56,7 +56,7 @@ export function calculateRefetchInterval(
   }
   
   // Apply velocity change bonus (makes it faster if velocity is changing rapidly)
-  interval = Math.max(10000, interval - velocityChangeBonus);
+  interval = Math.max(15000, interval - velocityChangeBonus);
   
   return interval;
 }

@@ -22,6 +22,7 @@ Required bindings:
 - `HELIOSINGER_DB` (D1)
 - `HELIOSINGER_KV` (KV)
 - `EXPO_PUSH_ACCESS_TOKEN` (secret, optional but recommended)
+- `MAX_NOTIFICATIONS_PER_TICK` (optional env var, default `200`)
 
 ## Verify
 
@@ -46,6 +47,13 @@ npx wrangler d1 execute heliosinger-mobile --command "SELECT install_id, event_i
 ```bash
 npx wrangler d1 execute heliosinger-mobile --command "PRAGMA index_list('notification_log');"
 ```
+
+4. Confirm structured run logs
+
+- `run.started`
+- `run.completed`
+- `dispatch.skipped` (dedupe or cap)
+- `worker.error` for failed sends
 
 ## Rollback
 

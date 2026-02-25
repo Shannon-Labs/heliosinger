@@ -1,5 +1,6 @@
 import { PropsWithChildren } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import { tokens } from "../theme/tokens";
 
 interface SectionCardProps extends PropsWithChildren {
   title: string;
@@ -17,21 +18,20 @@ export function SectionCard({ title, children }: SectionCardProps) {
 const styles = StyleSheet.create({
   card: {
     borderWidth: 1,
-    borderColor: "#1f2937",
-    borderRadius: 12,
-    padding: 14,
-    backgroundColor: "#0b0b0c",
-    marginBottom: 12,
+    borderColor: tokens.colors.border,
+    borderRadius: tokens.radius.md,
+    padding: tokens.spacing.md,
+    backgroundColor: tokens.colors.surface,
+    marginBottom: tokens.spacing.sm,
   },
   title: {
-    color: "#e5e7eb",
-    fontSize: 14,
-    fontWeight: "800",
-    marginBottom: 8,
+    color: tokens.colors.textPrimary,
+    ...tokens.typography.heading,
+    marginBottom: tokens.spacing.xs,
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 1.1,
   },
   body: {
-    gap: 8,
+    gap: tokens.spacing.xs,
   },
 });

@@ -33,6 +33,7 @@ Common codes:
 - `invalid_preferences_payload`
 - `invalid_install_id`
 - `device_not_found`
+- `rate_limited`
 - `space_weather_now_failed`
 - `flare_timeline_failed`
 - `learning_context_failed`
@@ -42,6 +43,11 @@ Common codes:
 - Existing mobile success shapes remain backward-compatible.
 - Responses include `source` where applicable (`live` or `cached`).
 - Responses include `meta` with optional `requestId` and storage details.
+- Protected routes include rate-limit headers:
+  - `X-RateLimit-Limit`
+  - `X-RateLimit-Remaining`
+  - `X-RateLimit-Reset`
+  - `Retry-After`
 
 ## Request Examples
 

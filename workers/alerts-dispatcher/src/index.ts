@@ -36,6 +36,7 @@ interface Env {
   HELIOSINGER_DB: D1Database;
   HELIOSINGER_KV: KVNamespace;
   EXPO_PUSH_ACCESS_TOKEN?: string;
+  MAX_NOTIFICATIONS_PER_TICK?: string;
 }
 
 interface DeviceRow {
@@ -55,6 +56,46 @@ interface DeviceRow {
 }
 
 const DEDUPE_TTL_SECONDS = 15 * 60;
+const DEFAULT_MAX_NOTIFICATIONS_PER_TICK = 200;
+
+function parsePositiveInt(input: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(String(input ?? ""), 10);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+  return fallback;
+}
+
+function logWorkerEvent(
+  level: "info" | "warn" | "error",
+  event: string,
+  payload: Record<string, unknown>
+): void {
+  const line = JSON.stringify({
+    ts: new Date().toISOString(),
+    component: "alerts-dispatcher",
+    event,
+    ...payload,
+  });
+  if (level === "error") {
+    console.error(line);
+    return;
+  }
+  if (level === "warn") {
+    console.warn(line);
+    return;
+  }
+  console.info(line);
+}
+
+function captureWorkerError(error: unknown, context: Record<string, unknown>): void {
+  logWorkerEvent("error", "worker.error", {
+    errorMessage: error instanceof Error ? error.message : String(error),
+    errorStack: error instanceof Error ? error.stack : undefined,
+    ...context,
+  });
+  // Hook point: wire this function to a provider-specific SDK when added.
+}
 
 function parseNumber(input: unknown, fallback = 0): number {
   const parsed = Number.parseFloat(String(input ?? ""));
@@ -428,61 +469,127 @@ function dedupeKey(installId: string, key: string): string {
 
 export default {
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
-    const previous = await loadPreviousSnapshot(env);
-    const current = await fetchNow(previous);
+    const startedAt = Date.now();
+    const dispatchCap = parsePositiveInt(
+      env.MAX_NOTIFICATIONS_PER_TICK,
+      DEFAULT_MAX_NOTIFICATIONS_PER_TICK
+    );
+    const summary = {
+      snapshotSource: "unknown",
+      devicesScanned: 0,
+      eligibleDevices: 0,
+      eventsDetected: 0,
+      sent: 0,
+      skipped: 0,
+      failed: 0,
+      capped: 0,
+    };
 
-    await saveSnapshot(env, current);
+    logWorkerEvent("info", "run.started", {
+      dispatchCap,
+      hasExpoPushAccessToken: Boolean(env.EXPO_PUSH_ACCESS_TOKEN),
+    });
 
-    const devices = await loadDevices(env);
-    for (const device of devices) {
-      const preferences = parseDevicePreferences(device);
-      if (!preferences || !preferences.alertsEnabled) {
-        continue;
+    try {
+      const previous = await loadPreviousSnapshot(env);
+      const current = await fetchNow(previous);
+      summary.snapshotSource = current.source;
+
+      await saveSnapshot(env, current);
+
+      const devices = await loadDevices(env);
+      summary.devicesScanned = devices.length;
+
+      let dispatchAttempts = 0;
+      for (const device of devices) {
+        const preferences = parseDevicePreferences(device);
+        if (!preferences || !preferences.alertsEnabled) {
+          continue;
+        }
+        summary.eligibleDevices += 1;
+
+        const timezone = isValidTimezone(device.timezone) ? device.timezone : "UTC";
+        const events = evaluateAlertEvents({
+          previous,
+          current,
+          preferences,
+          timezone,
+          now: new Date(),
+          lastNotificationAt: device.last_notification_at ? new Date(device.last_notification_at) : null,
+        });
+        summary.eventsDetected += events.length;
+
+        if (events.length === 0) {
+          continue;
+        }
+
+        const event = events[0];
+        const key = dedupeKey(device.install_id, event.dedupeKey);
+        const recentlySent = await env.HELIOSINGER_KV.get(key, "text");
+        if (recentlySent) {
+          summary.skipped += 1;
+          logWorkerEvent("info", "dispatch.skipped", {
+            installId: device.install_id,
+            eventId: event.id,
+            reason: "dedupe_cooldown",
+            dedupeKey: event.dedupeKey,
+          });
+          await logNotification(env, device.install_id, event.id, "skipped", "dedupe_cooldown");
+          continue;
+        }
+
+        if (dispatchAttempts >= dispatchCap) {
+          summary.skipped += 1;
+          summary.capped += 1;
+          logWorkerEvent("warn", "dispatch.skipped", {
+            installId: device.install_id,
+            eventId: event.id,
+            reason: "dispatch_cap",
+            dispatchCap,
+          });
+          await logNotification(env, device.install_id, event.id, "skipped", "dispatch_cap");
+          continue;
+        }
+
+        dispatchAttempts += 1;
+
+        try {
+          await sendExpoPush(device.push_token, event.title, event.body, env.EXPO_PUSH_ACCESS_TOKEN);
+          await env.HELIOSINGER_KV.put(key, new Date().toISOString(), {
+            expirationTtl: DEDUPE_TTL_SECONDS,
+          });
+          await logNotification(env, device.install_id, event.id, "sent", "dispatched");
+          summary.sent += 1;
+        } catch (error) {
+          summary.failed += 1;
+          captureWorkerError(error, {
+            event: "dispatch.failed",
+            installId: device.install_id,
+            eventId: event.id,
+          });
+          await logNotification(
+            env,
+            device.install_id,
+            event.id,
+            "failed",
+            error instanceof Error ? error.message : "unknown"
+          );
+        }
       }
 
-      const timezone = isValidTimezone(device.timezone) ? device.timezone : "UTC";
-      const events = evaluateAlertEvents({
-        previous,
-        current,
-        preferences,
-        timezone,
-        now: new Date(),
-        lastNotificationAt: device.last_notification_at ? new Date(device.last_notification_at) : null,
+      logWorkerEvent("info", "run.completed", {
+        ...summary,
+        durationMs: Date.now() - startedAt,
       });
-
-      if (events.length === 0) {
-        continue;
-      }
-
-      const event = events[0];
-      const key = dedupeKey(device.install_id, event.dedupeKey);
-      const recentlySent = await env.HELIOSINGER_KV.get(key, "text");
-      if (recentlySent) {
-        console.info("alerts-dispatcher:skipped", {
-          installId: device.install_id,
-          eventId: event.id,
-          reason: "dedupe_cooldown",
-          dedupeKey: event.dedupeKey,
-        });
-        await logNotification(env, device.install_id, event.id, "skipped", "dedupe_cooldown");
-        continue;
-      }
-
-      try {
-        await sendExpoPush(device.push_token, event.title, event.body, env.EXPO_PUSH_ACCESS_TOKEN);
-        await env.HELIOSINGER_KV.put(key, new Date().toISOString(), {
-          expirationTtl: DEDUPE_TTL_SECONDS,
-        });
-        await logNotification(env, device.install_id, event.id, "sent", "dispatched");
-      } catch (error) {
-        await logNotification(
-          env,
-          device.install_id,
-          event.id,
-          "failed",
-          error instanceof Error ? error.message : "unknown"
-        );
-      }
+    } catch (error) {
+      captureWorkerError(error, {
+        event: "run.failed",
+      });
+      logWorkerEvent("error", "run.failed", {
+        ...summary,
+        durationMs: Date.now() - startedAt,
+      });
+      throw error;
     }
   },
 };

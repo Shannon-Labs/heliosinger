@@ -103,9 +103,34 @@ export interface ValidationFailure {
   details?: ValidationIssue[];
 }
 
+export interface RateLimitConfig {
+  key: string;
+  limit: number;
+  windowSeconds: number;
+}
+
+export interface RateLimitResult {
+  allowed: boolean;
+  key: string;
+  limit: number;
+  remaining: number;
+  resetEpochSeconds: number;
+  retryAfterSeconds: number;
+  clientIp: string;
+}
+
+interface ApiLogContext {
+  route: string;
+  method: string;
+  requestId?: string;
+  clientIp: string;
+}
+
 declare global {
   // eslint-disable-next-line no-var
   var __HELIOSINGER_MOBILE_MEM__: MemoryStore | undefined;
+  // eslint-disable-next-line no-var
+  var __HELIOSINGER_MOBILE_RATE_LIMIT_MEM__: Map<string, number> | undefined;
 }
 
 function memoryStore(): MemoryStore {
@@ -117,6 +142,13 @@ function memoryStore(): MemoryStore {
     };
   }
   return globalThis.__HELIOSINGER_MOBILE_MEM__;
+}
+
+function rateLimitStore(): Map<string, number> {
+  if (!globalThis.__HELIOSINGER_MOBILE_RATE_LIMIT_MEM__) {
+    globalThis.__HELIOSINGER_MOBILE_RATE_LIMIT_MEM__ = new Map();
+  }
+  return globalThis.__HELIOSINGER_MOBILE_RATE_LIMIT_MEM__;
 }
 
 function parseNumber(input: unknown, fallback = 0): number {
@@ -139,6 +171,15 @@ function d1Changes(result: D1RunResult | null | undefined): number {
 function requestIdFromRequest(request?: Request): string | undefined {
   if (!request) return undefined;
   return request.headers.get("cf-ray") ?? request.headers.get("x-request-id") ?? undefined;
+}
+
+function clientIpFromRequest(request?: Request): string {
+  if (!request) return "unknown";
+  const cfIp = request.headers.get("cf-connecting-ip");
+  if (cfIp) return cfIp;
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (!forwardedFor) return "unknown";
+  return forwardedFor.split(",")[0]?.trim() || "unknown";
 }
 
 function normalizedTimezone(input: string): string {
@@ -174,6 +215,7 @@ export function errorResponse(
   options: {
     details?: unknown;
     requestId?: string;
+    headers?: HeadersInit;
   } = {}
 ): Response {
   const payload: ApiErrorPayload = {
@@ -185,7 +227,164 @@ export function errorResponse(
     },
     ...(options.requestId ? { requestId: options.requestId } : {}),
   };
-  return jsonResponse(payload, { status });
+  return jsonResponse(payload, { status, headers: options.headers });
+}
+
+export function withHeaders(response: Response, headers?: HeadersInit): Response {
+  if (!headers) return response;
+  const merged = new Headers(response.headers);
+  const incoming = new Headers(headers);
+  incoming.forEach((value, key) => merged.set(key, value));
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: merged,
+  });
+}
+
+function logApiEvent(level: "info" | "warn" | "error", event: string, payload: Record<string, unknown>): void {
+  const record = JSON.stringify({
+    ts: new Date().toISOString(),
+    component: "mobile-api",
+    event,
+    ...payload,
+  });
+  if (level === "error") {
+    console.error(record);
+    return;
+  }
+  if (level === "warn") {
+    console.warn(record);
+    return;
+  }
+  console.info(record);
+}
+
+export function createRequestLogger(context: ApiLogContext): (status: number, extra?: Record<string, unknown>) => void {
+  const startedAt = Date.now();
+  return (status: number, extra: Record<string, unknown> = {}) => {
+    const level = status >= 500 ? "error" : status >= 400 ? "warn" : "info";
+    logApiEvent(level, "request.complete", {
+      route: context.route,
+      method: context.method,
+      requestId: context.requestId ?? null,
+      clientIp: context.clientIp,
+      status,
+      durationMs: Date.now() - startedAt,
+      ...extra,
+    });
+  };
+}
+
+export function captureApiError(
+  error: unknown,
+  context: {
+    route: string;
+    method: string;
+    requestId?: string;
+    clientIp: string;
+    details?: Record<string, unknown>;
+  }
+): void {
+  logApiEvent("error", "request.error", {
+    route: context.route,
+    method: context.method,
+    requestId: context.requestId ?? null,
+    clientIp: context.clientIp,
+    errorMessage: error instanceof Error ? error.message : String(error),
+    errorStack: error instanceof Error ? error.stack : undefined,
+    ...(context.details ?? {}),
+  });
+  // Hook point: wire this function to a provider-specific SDK when added.
+}
+
+function rateLimitHeaders(result: RateLimitResult): Record<string, string> {
+  return {
+    "X-RateLimit-Limit": String(result.limit),
+    "X-RateLimit-Remaining": String(result.remaining),
+    "X-RateLimit-Reset": String(result.resetEpochSeconds),
+  };
+}
+
+async function readRateLimitCount(env: MobileEnv | undefined, key: string): Promise<number> {
+  try {
+    const raw = await env?.HELIOSINGER_KV?.get(key, "text");
+    if (typeof raw === "string") {
+      const parsed = Number.parseInt(raw, 10);
+      if (Number.isFinite(parsed)) {
+        return Math.max(0, parsed);
+      }
+    }
+  } catch {
+    // fall through to memory store
+  }
+  return rateLimitStore().get(key) ?? 0;
+}
+
+async function writeRateLimitCount(
+  env: MobileEnv | undefined,
+  key: string,
+  count: number,
+  ttlSeconds: number
+): Promise<void> {
+  try {
+    if (env?.HELIOSINGER_KV) {
+      await env.HELIOSINGER_KV.put(key, String(count), {
+        expirationTtl: Math.max(1, ttlSeconds),
+      });
+      return;
+    }
+  } catch {
+    // fall through to memory store
+  }
+  rateLimitStore().set(key, count);
+}
+
+export async function enforceRateLimit(
+  env: MobileEnv | undefined,
+  request: Request,
+  config: RateLimitConfig
+): Promise<RateLimitResult & { headers: Record<string, string> }> {
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const windowStartSeconds = nowSeconds - (nowSeconds % config.windowSeconds);
+  const resetEpochSeconds = windowStartSeconds + config.windowSeconds;
+  const retryAfterSeconds = Math.max(1, resetEpochSeconds - nowSeconds);
+  const clientIp = clientIpFromRequest(request);
+  const key = `mobile:rate-limit:${config.key}:${clientIp}:${windowStartSeconds}`;
+
+  const current = await readRateLimitCount(env, key);
+  if (current >= config.limit) {
+    const result: RateLimitResult = {
+      allowed: false,
+      key,
+      limit: config.limit,
+      remaining: 0,
+      resetEpochSeconds,
+      retryAfterSeconds,
+      clientIp,
+    };
+    return {
+      ...result,
+      headers: rateLimitHeaders(result),
+    };
+  }
+
+  const nextCount = current + 1;
+  await writeRateLimitCount(env, key, nextCount, retryAfterSeconds + 1);
+
+  const result: RateLimitResult = {
+    allowed: true,
+    key,
+    limit: config.limit,
+    remaining: Math.max(0, config.limit - nextCount),
+    resetEpochSeconds,
+    retryAfterSeconds,
+    clientIp,
+  };
+  return {
+    ...result,
+    headers: rateLimitHeaders(result),
+  };
 }
 
 export async function parseJsonBody<T = unknown>(

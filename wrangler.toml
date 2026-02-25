@@ -3,3 +3,11 @@ name = "heliosinger"
 compatibility_date = "2024-01-01"
 pages_build_output_dir = "dist"
 
+[[d1_databases]]
+binding = "HELIOSINGER_DB"
+database_name = "heliosinger-mobile"
+database_id = "cd4a3586-a545-4629-99d9-d0ebf890f427"
+
+[[kv_namespaces]]
+binding = "HELIOSINGER_KV"
+id = "8945c9ec56714ba58bc257750412db82"

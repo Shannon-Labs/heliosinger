@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
+  Animated,
+  Easing,
   Platform,
   Pressable,
   SafeAreaView,
@@ -19,6 +20,7 @@ import type {
 } from "@heliosinger/core";
 import { TabButton } from "./src/components/TabButton";
 import { SectionCard } from "./src/components/SectionCard";
+import { StatePanel } from "./src/components/StatePanel";
 import {
   fetchFlares,
   fetchLearningCards,
@@ -29,6 +31,7 @@ import {
 } from "./src/lib/api";
 import {
   clearPushToken,
+  getInstallId,
   loadFlares,
   loadLearning,
   loadNow,
@@ -39,7 +42,6 @@ import {
   saveNow,
   savePreferences,
   savePushToken,
-  getInstallId,
 } from "./src/lib/storage";
 import { requestPushToken } from "./src/lib/notifications";
 import {
@@ -51,6 +53,13 @@ import {
   stopAudio,
   updateAudio,
 } from "./src/lib/audio";
+import {
+  hapticError,
+  hapticPrimaryAction,
+  hapticTabSwitch,
+  hapticToggle,
+} from "./src/lib/haptics";
+import { tokens } from "./src/theme/tokens";
 
 type Tab = "listen" | "flares" | "learn" | "settings";
 
@@ -96,6 +105,34 @@ function resolveTimezone(): string {
   } catch {
     return "UTC";
   }
+}
+
+function AnimatedSection({ children, delay = 0 }: { children: ReactNode; delay?: number }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(8)).current;
+
+  useEffect(() => {
+    opacity.setValue(0);
+    translateY.setValue(8);
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: tokens.motion.normal,
+        delay,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: tokens.motion.normal,
+        delay,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [delay, opacity, translateY]);
+
+  return <Animated.View style={{ opacity, transform: [{ translateY }] }}>{children}</Animated.View>;
 }
 
 function Badge({ label, tone = "muted" }: { label: string; tone?: "muted" | "alert" | "good" }) {
@@ -193,12 +230,12 @@ export default function App() {
 
       if (cachedNow) {
         setNow({ ...cachedNow, source: "cached", stale: true });
-        setError("Using cached space-weather data");
+        setError("Using cached space-weather data while reconnecting.");
         if (!lastSuccessfulSyncAt) {
           setLastSuccessfulSyncAt(cachedNow.lastUpdatedAt);
         }
       } else {
-        setError("Unable to load space-weather data");
+        setError("Unable to load space-weather data right now.");
       }
       setFlares(cachedFlares);
       setLearning(cachedLearning);
@@ -210,6 +247,7 @@ export default function App() {
   }, [clearRetrySchedule, lastSuccessfulSyncAt, scheduleRetry]);
 
   const retryNow = useCallback(() => {
+    hapticPrimaryAction().catch(() => undefined);
     clearRetrySchedule();
     refreshData().catch(() => undefined);
   }, [clearRetrySchedule, refreshData]);
@@ -268,7 +306,7 @@ export default function App() {
       }
     };
 
-    bootstrap();
+    bootstrap().catch(() => undefined);
 
     const interval = setInterval(() => {
       refreshData().catch(() => undefined);
@@ -325,13 +363,14 @@ export default function App() {
       if (isPlaying) {
         await setBackgroundMode(next.backgroundAudioEnabled);
       }
-
     },
     [isPlaying]
   );
 
   const togglePlayback = useCallback(async () => {
     if (!now) return;
+
+    await hapticPrimaryAction();
 
     if (isPlaying) {
       await pauseAudio();
@@ -347,10 +386,20 @@ export default function App() {
   const updatePreference = useCallback(
     (mutate: (current: DevicePreferencesRequest) => DevicePreferencesRequest) => {
       if (!preferences) return;
+      hapticToggle().catch(() => undefined);
       const next = mutate(preferences);
       persistPreferences({ ...next, updatedAt: new Date().toISOString() }).catch(() => undefined);
     },
     [persistPreferences, preferences]
+  );
+
+  const switchTab = useCallback(
+    (tab: Tab) => {
+      if (tab === activeTab) return;
+      hapticTabSwitch().catch(() => undefined);
+      setActiveTab(tab);
+    },
+    [activeTab]
   );
 
   useEffect(() => {
@@ -403,6 +452,7 @@ export default function App() {
 
   const unregisterCurrentDevice = useCallback(async () => {
     if (!installId) return;
+    await hapticToggle();
     setSyncing(true);
 
     try {
@@ -415,20 +465,23 @@ export default function App() {
       lastRegistrationSignatureRef.current = null;
       setRegistrationState("removed");
       setSyncing(false);
-      setError("Device registration removed. Alerts are disabled until you re-enable push permissions.");
+      setError("Device registration removed. Alerts stay paused until push is enabled again.");
     }
   }, [installId]);
 
   const registerCurrentDevice = useCallback(async () => {
     if (!platform) {
+      await hapticError();
       setError("Push registration is only available on iOS and Android.");
       return;
     }
 
+    await hapticPrimaryAction();
     setSyncing(true);
     try {
       const token = await requestPushToken();
       if (!token) {
+        await hapticError();
         setError("Push permissions are not granted.");
         return;
       }
@@ -450,10 +503,16 @@ export default function App() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.loadingScreen}>
+      <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
-        <ActivityIndicator size="large" color="#22d3ee" />
-        <Text style={styles.loadingText}>Loading Heliosinger...</Text>
+        <ExpoStatusBar style="light" />
+        <View style={styles.stateWrap}>
+          <StatePanel
+            kind="loading"
+            title="Warming up the stream"
+            message="Preparing your latest heliospheric snapshot and ambient engine presets."
+          />
+        </View>
       </SafeAreaView>
     );
   }
@@ -465,6 +524,7 @@ export default function App() {
 
       <View style={styles.header}>
         <Text style={styles.title}>Heliosinger Mobile</Text>
+        <Text style={styles.subtitle}>Live solar weather transformed into intentional ambient listening.</Text>
         <View style={styles.headerBadges}>
           <Badge label={now?.condition ?? "unknown"} tone={statusTone} />
           <Badge label={syncing ? "syncing" : now?.source ?? "offline"} />
@@ -473,341 +533,380 @@ export default function App() {
 
       {(error || now?.stale) && (
         <View style={styles.warningBanner}>
-          <View style={styles.warningRow}>
-            <View style={styles.warningBody}>
-              <Text style={styles.warningText}>
-                {error ?? `Data is stale (${staleAgeSeconds ?? now?.staleSeconds ?? 0}s old)`}
-              </Text>
-              {retryCountdownSeconds !== null && retryCountdownSeconds > 0 ? (
-                <Text style={styles.warningSubtext}>Auto retry in {retryCountdownSeconds}s</Text>
-              ) : null}
-            </View>
-            <Pressable style={styles.warningRetryButton} onPress={retryNow}>
-              <Text style={styles.warningRetryText}>Retry now</Text>
-            </Pressable>
+          <View style={styles.warningBody}>
+            <Text style={styles.warningText}>
+              {error ?? `Data is stale (${staleAgeSeconds ?? now?.staleSeconds ?? 0}s old).`}
+            </Text>
+            {retryCountdownSeconds !== null && retryCountdownSeconds > 0 ? (
+              <Text style={styles.warningSubtext}>Auto-retry in {retryCountdownSeconds}s</Text>
+            ) : null}
           </View>
+          <Pressable style={styles.warningRetryButton} onPress={retryNow}>
+            <Text style={styles.warningRetryText}>Refresh now</Text>
+          </Pressable>
         </View>
       )}
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         {activeTab === "listen" && (
           <>
-            <SectionCard title="Ambient Playback">
-              <Text style={styles.keyText}>Status: {isPlaying ? "Playing" : "Paused"}</Text>
-              <Pressable style={styles.primaryButton} onPress={togglePlayback}>
-                <Text style={styles.primaryButtonText}>{isPlaying ? "Pause Ambient" : "Start Ambient"}</Text>
-              </Pressable>
-              <View style={styles.rowBetween}>
-                <Text style={styles.mutedText}>Volume {Math.round(volume * 100)}%</Text>
-                <View style={styles.inlineControls}>
-                  <Pressable style={styles.stepButton} onPress={() => setVolume((v) => clamp(v - 0.05, 0, 1))}>
-                    <Text style={styles.stepButtonText}>-</Text>
-                  </Pressable>
-                  <Pressable style={styles.stepButton} onPress={() => setVolume((v) => clamp(v + 0.05, 0, 1))}>
-                    <Text style={styles.stepButtonText}>+</Text>
-                  </Pressable>
+            <AnimatedSection delay={0}>
+              <SectionCard title="Ambient Playback">
+                <Text style={styles.keyText}>Session: {isPlaying ? "Playing" : "Paused"}</Text>
+                <Pressable style={styles.primaryButton} onPress={() => togglePlayback().catch(() => undefined)}>
+                  <Text style={styles.primaryButtonText}>{isPlaying ? "Pause Ambient" : "Start Ambient"}</Text>
+                </Pressable>
+                <View style={styles.rowBetween}>
+                  <Text style={styles.mutedText}>Output level {Math.round(volume * 100)}%</Text>
+                  <View style={styles.inlineControls}>
+                    <Pressable
+                      style={styles.stepButton}
+                      onPress={() => {
+                        hapticToggle().catch(() => undefined);
+                        setVolume((v) => clamp(v - 0.05, 0, 1));
+                      }}
+                    >
+                      <Text style={styles.stepButtonText}>-</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.stepButton}
+                      onPress={() => {
+                        hapticToggle().catch(() => undefined);
+                        setVolume((v) => clamp(v + 0.05, 0, 1));
+                      }}
+                    >
+                      <Text style={styles.stepButtonText}>+</Text>
+                    </Pressable>
+                  </View>
                 </View>
-              </View>
-            </SectionCard>
+              </SectionCard>
+            </AnimatedSection>
 
-            <SectionCard title="Latest Conditions">
-              <Text style={styles.keyText}>Velocity: {now?.solarWind?.velocity?.toFixed(0) ?? "--"} km/s</Text>
-              <Text style={styles.keyText}>Density: {now?.solarWind?.density?.toFixed(1) ?? "--"} p/cm3</Text>
-              <Text style={styles.keyText}>Bz: {now?.solarWind?.bz?.toFixed(1) ?? "--"} nT</Text>
-              <Text style={styles.keyText}>Kp: {now?.geomagnetic?.kp?.toFixed(1) ?? "--"}</Text>
-              <Text style={styles.smallMutedText}>
-                Last weather update: {now?.lastUpdatedAt ?? "unknown"}
-              </Text>
-              <Text style={styles.smallMutedText}>
-                Last successful sync: {formatSyncTimestamp(lastSuccessfulSyncAt)}
-              </Text>
-              <Text style={styles.smallMutedText}>Stale age: {staleAgeSeconds ?? 0}s</Text>
-            </SectionCard>
+            <AnimatedSection delay={80}>
+              <SectionCard title="Latest Conditions">
+                <Text style={styles.keyText}>Velocity: {now?.solarWind?.velocity?.toFixed(0) ?? "--"} km/s</Text>
+                <Text style={styles.keyText}>Density: {now?.solarWind?.density?.toFixed(1) ?? "--"} p/cm3</Text>
+                <Text style={styles.keyText}>Bz: {now?.solarWind?.bz?.toFixed(1) ?? "--"} nT</Text>
+                <Text style={styles.keyText}>Kp: {now?.geomagnetic?.kp?.toFixed(1) ?? "--"}</Text>
+                <Text style={styles.smallMutedText}>Latest data point: {now?.lastUpdatedAt ?? "unknown"}</Text>
+                <Text style={styles.smallMutedText}>Last successful sync: {formatSyncTimestamp(lastSuccessfulSyncAt)}</Text>
+                <Text style={styles.smallMutedText}>Stale age: {staleAgeSeconds ?? 0}s</Text>
+              </SectionCard>
+            </AnimatedSection>
 
-            <SectionCard title="Binaural Tip">
-              <Text style={styles.mutedText}>Use headphones for true binaural perception.</Text>
-              <Text style={styles.smallMutedText}>The beat offset adapts to live space-weather intensity.</Text>
-            </SectionCard>
+            <AnimatedSection delay={160}>
+              <SectionCard title="Binaural Guidance">
+                <Text style={styles.mutedText}>Use headphones for a stable stereo field and cleaner beat perception.</Text>
+                <Text style={styles.smallMutedText}>Harmonic density adapts continuously to current heliophysical conditions.</Text>
+              </SectionCard>
+            </AnimatedSection>
           </>
         )}
 
         {activeTab === "flares" && (
           <>
-            <SectionCard title="Latest Flare">
-              {latestFlare ? (
-                <>
-                  <View style={styles.rowBetween}>
-                    <Text style={styles.keyText}>{latestFlare.flareClass}-class flare</Text>
-                    <Badge label={latestFlare.rScale} tone={latestFlare.rScale >= "R3" ? "alert" : "muted"} />
-                  </View>
-                  <Text style={styles.mutedText}>{latestFlare.impactSummary}</Text>
-                  <Text style={styles.smallMutedText}>{latestFlare.timestamp}</Text>
-                </>
-              ) : (
-                <Text style={styles.mutedText}>No flare data available yet.</Text>
-              )}
-            </SectionCard>
+            <AnimatedSection delay={0}>
+              <SectionCard title="Latest Flare">
+                {latestFlare ? (
+                  <>
+                    <View style={styles.rowBetween}>
+                      <Text style={styles.keyText}>{latestFlare.flareClass}-class flare</Text>
+                      <Badge label={latestFlare.rScale} tone={latestFlare.rScale >= "R3" ? "alert" : "muted"} />
+                    </View>
+                    <Text style={styles.mutedText}>{latestFlare.impactSummary}</Text>
+                    <Text style={styles.smallMutedText}>{latestFlare.timestamp}</Text>
+                  </>
+                ) : (
+                  <StatePanel
+                    kind="empty"
+                    compact
+                    title="No flare events yet"
+                    message="Once NOAA reports fresh X-ray flare activity, this panel updates automatically."
+                  />
+                )}
+              </SectionCard>
+            </AnimatedSection>
 
-            <SectionCard title="Timeline">
-              {flares.slice(0, 12).map((flare) => (
-                <View key={flare.id} style={styles.timelineRow}>
-                  <Text style={styles.timelineClass}>{flare.flareClass}</Text>
-                  <View style={styles.timelineBody}>
-                    <Text style={styles.timelineImpact}>{flare.impactSummary}</Text>
-                    <Text style={styles.smallMutedText}>{flare.timestamp}</Text>
+            <AnimatedSection delay={90}>
+              <SectionCard title="Timeline">
+                {flares.slice(0, 12).map((flare) => (
+                  <View key={flare.id} style={styles.timelineRow}>
+                    <Text style={styles.timelineClass}>{flare.flareClass}</Text>
+                    <View style={styles.timelineBody}>
+                      <Text style={styles.timelineImpact}>{flare.impactSummary}</Text>
+                      <Text style={styles.smallMutedText}>{flare.timestamp}</Text>
+                    </View>
                   </View>
-                </View>
-              ))}
-              {flares.length === 0 && <Text style={styles.mutedText}>Timeline unavailable offline.</Text>}
-            </SectionCard>
+                ))}
+                {flares.length === 0 && (
+                  <StatePanel
+                    kind="empty"
+                    compact
+                    title="Timeline unavailable"
+                    message="Cached flare history is currently empty on this device."
+                  />
+                )}
+              </SectionCard>
+            </AnimatedSection>
           </>
         )}
 
         {activeTab === "learn" && (
-          <SectionCard title="Current Learning Cards">
-            {learning.map((card) => (
-              <View key={card.id} style={styles.learnCard}>
-                <View style={styles.rowBetween}>
-                  <Text style={styles.learnTitle}>{card.title}</Text>
-                  <Badge label={card.track} />
+          <AnimatedSection delay={0}>
+            <SectionCard title="Current Learning Cards">
+              {learning.map((card) => (
+                <View key={card.id} style={styles.learnCard}>
+                  <View style={styles.rowBetween}>
+                    <Text style={styles.learnTitle}>{card.title}</Text>
+                    <Badge label={card.track} />
+                  </View>
+                  <Text style={styles.mutedText}>{card.body}</Text>
+                  <Text style={styles.smallMutedText}>Data context: {card.dataConnection}</Text>
+                  <Text style={styles.smallMutedText}>Audio mapping: {card.audioConnection}</Text>
                 </View>
-                <Text style={styles.mutedText}>{card.body}</Text>
-                <Text style={styles.smallMutedText}>Data: {card.dataConnection}</Text>
-                <Text style={styles.smallMutedText}>Audio: {card.audioConnection}</Text>
-              </View>
-            ))}
-            {learning.length === 0 && <Text style={styles.mutedText}>Learning cards unavailable offline.</Text>}
-          </SectionCard>
+              ))}
+              {learning.length === 0 && (
+                <StatePanel
+                  kind="empty"
+                  compact
+                  title="No cards right now"
+                  message="Learning cards will appear once a fresh conditions payload is available."
+                />
+              )}
+            </SectionCard>
+          </AnimatedSection>
         )}
 
         {activeTab === "settings" && preferences && (
           <>
-            <SectionCard title="Alerts">
-              <View style={styles.rowBetween}>
-                <Text style={styles.keyText}>Alerts Enabled</Text>
-                <Pressable
-                  style={styles.toggleButton}
-                  onPress={() =>
-                    updatePreference((current) => ({
-                      ...current,
-                      alertsEnabled: !current.alertsEnabled,
-                    }))
-                  }
-                >
-                  <Text style={styles.toggleText}>{preferences.alertsEnabled ? "ON" : "OFF"}</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.rowBetween}>
-                <Text style={styles.mutedText}>Kp Threshold: {preferences.thresholds.kp.toFixed(1)}</Text>
-                <View style={styles.inlineControls}>
+            <AnimatedSection delay={0}>
+              <SectionCard title="Alert Profile">
+                <View style={styles.rowBetween}>
+                  <Text style={styles.keyText}>Solar alert notifications</Text>
                   <Pressable
-                    style={styles.stepButton}
+                    style={styles.toggleButton}
                     onPress={() =>
                       updatePreference((current) => ({
                         ...current,
-                        thresholds: {
-                          ...current.thresholds,
-                          kp: clamp(current.thresholds.kp - 1, 1, 9),
-                        },
+                        alertsEnabled: !current.alertsEnabled,
                       }))
                     }
                   >
-                    <Text style={styles.stepButtonText}>-</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.stepButton}
-                    onPress={() =>
-                      updatePreference((current) => ({
-                        ...current,
-                        thresholds: {
-                          ...current.thresholds,
-                          kp: clamp(current.thresholds.kp + 1, 1, 9),
-                        },
-                      }))
-                    }
-                  >
-                    <Text style={styles.stepButtonText}>+</Text>
+                    <Text style={styles.toggleText}>{preferences.alertsEnabled ? "ON" : "OFF"}</Text>
                   </Pressable>
                 </View>
-              </View>
 
-              <View style={styles.rowBetween}>
-                <Text style={styles.mutedText}>Southward Bz Threshold: {preferences.thresholds.bzSouth.toFixed(1)} nT</Text>
-                <View style={styles.inlineControls}>
-                  <Pressable
-                    style={styles.stepButton}
-                    onPress={() =>
-                      updatePreference((current) => ({
-                        ...current,
-                        thresholds: {
-                          ...current.thresholds,
-                          bzSouth: clamp(current.thresholds.bzSouth - 1, 2, 20),
-                        },
-                      }))
-                    }
-                  >
-                    <Text style={styles.stepButtonText}>-</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.stepButton}
-                    onPress={() =>
-                      updatePreference((current) => ({
-                        ...current,
-                        thresholds: {
-                          ...current.thresholds,
-                          bzSouth: clamp(current.thresholds.bzSouth + 1, 2, 20),
-                        },
-                      }))
-                    }
-                  >
-                    <Text style={styles.stepButtonText}>+</Text>
-                  </Pressable>
+                <View style={styles.rowBetween}>
+                  <Text style={styles.mutedText}>Kp trigger: {preferences.thresholds.kp.toFixed(1)}</Text>
+                  <View style={styles.inlineControls}>
+                    <Pressable
+                      style={styles.stepButton}
+                      onPress={() =>
+                        updatePreference((current) => ({
+                          ...current,
+                          thresholds: {
+                            ...current.thresholds,
+                            kp: clamp(current.thresholds.kp - 1, 1, 9),
+                          },
+                        }))
+                      }
+                    >
+                      <Text style={styles.stepButtonText}>-</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.stepButton}
+                      onPress={() =>
+                        updatePreference((current) => ({
+                          ...current,
+                          thresholds: {
+                            ...current.thresholds,
+                            kp: clamp(current.thresholds.kp + 1, 1, 9),
+                          },
+                        }))
+                      }
+                    >
+                      <Text style={styles.stepButtonText}>+</Text>
+                    </Pressable>
+                  </View>
                 </View>
-              </View>
-            </SectionCard>
 
-            <SectionCard title="Quiet Hours & Background Audio">
-              <View style={styles.rowBetween}>
-                <Text style={styles.keyText}>Quiet Hours</Text>
-                <Pressable
-                  style={styles.toggleButton}
-                  onPress={() =>
-                    updatePreference((current) => ({
-                      ...current,
-                      quietHours: {
-                        ...current.quietHours,
-                        enabled: !current.quietHours.enabled,
-                      },
-                    }))
-                  }
-                >
-                  <Text style={styles.toggleText}>{preferences.quietHours.enabled ? "ON" : "OFF"}</Text>
-                </Pressable>
-              </View>
-              <Text style={styles.smallMutedText}>
-                Window: {formatHour(preferences.quietHours.startHour)} - {formatHour(preferences.quietHours.endHour)}
-              </Text>
+                <View style={styles.rowBetween}>
+                  <Text style={styles.mutedText}>Southward Bz trigger: {preferences.thresholds.bzSouth.toFixed(1)} nT</Text>
+                  <View style={styles.inlineControls}>
+                    <Pressable
+                      style={styles.stepButton}
+                      onPress={() =>
+                        updatePreference((current) => ({
+                          ...current,
+                          thresholds: {
+                            ...current.thresholds,
+                            bzSouth: clamp(current.thresholds.bzSouth - 1, 2, 20),
+                          },
+                        }))
+                      }
+                    >
+                      <Text style={styles.stepButtonText}>-</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.stepButton}
+                      onPress={() =>
+                        updatePreference((current) => ({
+                          ...current,
+                          thresholds: {
+                            ...current.thresholds,
+                            bzSouth: clamp(current.thresholds.bzSouth + 1, 2, 20),
+                          },
+                        }))
+                      }
+                    >
+                      <Text style={styles.stepButtonText}>+</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </SectionCard>
+            </AnimatedSection>
 
-              <View style={styles.rowBetween}>
-                <Text style={styles.mutedText}>Quiet Start: {formatHour(preferences.quietHours.startHour)}</Text>
-                <View style={styles.inlineControls}>
+            <AnimatedSection delay={100}>
+              <SectionCard title="Quiet Hours & Playback">
+                <View style={styles.rowBetween}>
+                  <Text style={styles.keyText}>Quiet hours (local time)</Text>
                   <Pressable
-                    style={styles.stepButton}
+                    style={styles.toggleButton}
                     onPress={() =>
                       updatePreference((current) => ({
                         ...current,
                         quietHours: {
                           ...current.quietHours,
-                          startHour: shiftHour(current.quietHours.startHour, -1),
+                          enabled: !current.quietHours.enabled,
                         },
                       }))
                     }
                   >
-                    <Text style={styles.stepButtonText}>-</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.stepButton}
-                    onPress={() =>
-                      updatePreference((current) => ({
-                        ...current,
-                        quietHours: {
-                          ...current.quietHours,
-                          startHour: shiftHour(current.quietHours.startHour, 1),
-                        },
-                      }))
-                    }
-                  >
-                    <Text style={styles.stepButtonText}>+</Text>
+                    <Text style={styles.toggleText}>{preferences.quietHours.enabled ? "ON" : "OFF"}</Text>
                   </Pressable>
                 </View>
-              </View>
+                <Text style={styles.smallMutedText}>
+                  Delivery window: {formatHour(preferences.quietHours.startHour)} - {formatHour(preferences.quietHours.endHour)}
+                </Text>
 
-              <View style={styles.rowBetween}>
-                <Text style={styles.mutedText}>Quiet End: {formatHour(preferences.quietHours.endHour)}</Text>
-                <View style={styles.inlineControls}>
+                <View style={styles.rowBetween}>
+                  <Text style={styles.mutedText}>Quiet start: {formatHour(preferences.quietHours.startHour)}</Text>
+                  <View style={styles.inlineControls}>
+                    <Pressable
+                      style={styles.stepButton}
+                      onPress={() =>
+                        updatePreference((current) => ({
+                          ...current,
+                          quietHours: {
+                            ...current.quietHours,
+                            startHour: shiftHour(current.quietHours.startHour, -1),
+                          },
+                        }))
+                      }
+                    >
+                      <Text style={styles.stepButtonText}>-</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.stepButton}
+                      onPress={() =>
+                        updatePreference((current) => ({
+                          ...current,
+                          quietHours: {
+                            ...current.quietHours,
+                            startHour: shiftHour(current.quietHours.startHour, 1),
+                          },
+                        }))
+                      }
+                    >
+                      <Text style={styles.stepButtonText}>+</Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                <View style={styles.rowBetween}>
+                  <Text style={styles.mutedText}>Quiet end: {formatHour(preferences.quietHours.endHour)}</Text>
+                  <View style={styles.inlineControls}>
+                    <Pressable
+                      style={styles.stepButton}
+                      onPress={() =>
+                        updatePreference((current) => ({
+                          ...current,
+                          quietHours: {
+                            ...current.quietHours,
+                            endHour: shiftHour(current.quietHours.endHour, -1),
+                          },
+                        }))
+                      }
+                    >
+                      <Text style={styles.stepButtonText}>-</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.stepButton}
+                      onPress={() =>
+                        updatePreference((current) => ({
+                          ...current,
+                          quietHours: {
+                            ...current.quietHours,
+                            endHour: shiftHour(current.quietHours.endHour, 1),
+                          },
+                        }))
+                      }
+                    >
+                      <Text style={styles.stepButtonText}>+</Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                <View style={styles.rowBetween}>
+                  <Text style={styles.keyText}>Background playback</Text>
                   <Pressable
-                    style={styles.stepButton}
+                    style={styles.toggleButton}
                     onPress={() =>
                       updatePreference((current) => ({
                         ...current,
-                        quietHours: {
-                          ...current.quietHours,
-                          endHour: shiftHour(current.quietHours.endHour, -1),
-                        },
+                        backgroundAudioEnabled: !current.backgroundAudioEnabled,
                       }))
                     }
                   >
-                    <Text style={styles.stepButtonText}>-</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.stepButton}
-                    onPress={() =>
-                      updatePreference((current) => ({
-                        ...current,
-                        quietHours: {
-                          ...current.quietHours,
-                          endHour: shiftHour(current.quietHours.endHour, 1),
-                        },
-                      }))
-                    }
-                  >
-                    <Text style={styles.stepButtonText}>+</Text>
+                    <Text style={styles.toggleText}>{preferences.backgroundAudioEnabled ? "ON" : "OFF"}</Text>
                   </Pressable>
                 </View>
-              </View>
 
-              <View style={styles.rowBetween}>
-                <Text style={styles.keyText}>Background Audio</Text>
+                <Text style={styles.smallMutedText}>Timezone: {timezone}</Text>
+                <Text style={styles.smallMutedText}>Install ID: {installId || "pending"}</Text>
+                <Text style={styles.smallMutedText}>Push token: {pushToken ? "registered" : "not granted"}</Text>
+                <Text style={styles.smallMutedText}>Registration state: {registrationState}</Text>
+                {!pushToken && platform ? (
+                  <Pressable
+                    style={styles.primaryButton}
+                    onPress={() => {
+                      registerCurrentDevice().catch(() => undefined);
+                    }}
+                  >
+                    <Text style={styles.primaryButtonText}>Enable Push Registration</Text>
+                  </Pressable>
+                ) : null}
                 <Pressable
-                  style={styles.toggleButton}
-                  onPress={() =>
-                    updatePreference((current) => ({
-                      ...current,
-                      backgroundAudioEnabled: !current.backgroundAudioEnabled,
-                    }))
-                  }
-                >
-                  <Text style={styles.toggleText}>{preferences.backgroundAudioEnabled ? "ON" : "OFF"}</Text>
-                </Pressable>
-              </View>
-
-              <Text style={styles.smallMutedText}>Timezone: {timezone}</Text>
-              <Text style={styles.smallMutedText}>Install ID: {installId || "pending"}</Text>
-              <Text style={styles.smallMutedText}>
-                Push token: {pushToken ? "registered" : "not granted"}
-              </Text>
-              <Text style={styles.smallMutedText}>Registration status: {registrationState}</Text>
-              {!pushToken && platform ? (
-                <Pressable
-                  style={styles.primaryButton}
+                  style={[styles.primaryButton, styles.destructiveButton]}
                   onPress={() => {
-                    registerCurrentDevice().catch(() => undefined);
+                    unregisterCurrentDevice().catch(() => undefined);
                   }}
                 >
-                  <Text style={styles.primaryButtonText}>Register Device for Alerts</Text>
+                  <Text style={[styles.primaryButtonText, styles.destructiveButtonText]}>
+                    Remove Device Registration
+                  </Text>
                 </Pressable>
-              ) : null}
-              <Pressable
-                style={[styles.primaryButton, styles.destructiveButton]}
-                onPress={() => {
-                  unregisterCurrentDevice().catch(() => undefined);
-                }}
-              >
-                <Text style={[styles.primaryButtonText, styles.destructiveButtonText]}>
-                  Remove Device Registration
-                </Text>
-              </Pressable>
-            </SectionCard>
+              </SectionCard>
+            </AnimatedSection>
           </>
         )}
       </ScrollView>
 
       <View style={styles.tabBar}>
-        <TabButton label="Listen" active={activeTab === "listen"} onPress={() => setActiveTab("listen")} />
-        <TabButton label="Flares" active={activeTab === "flares"} onPress={() => setActiveTab("flares")} />
-        <TabButton label="Learn" active={activeTab === "learn"} onPress={() => setActiveTab("learn")} />
-        <TabButton label="Settings" active={activeTab === "settings"} onPress={() => setActiveTab("settings")} />
+        <TabButton label="Listen" active={activeTab === "listen"} onPress={() => switchTab("listen")} />
+        <TabButton label="Flares" active={activeTab === "flares"} onPress={() => switchTab("flares")} />
+        <TabButton label="Learn" active={activeTab === "learn"} onPress={() => switchTab("learn")} />
+        <TabButton label="Settings" active={activeTab === "settings"} onPress={() => switchTab("settings")} />
       </View>
     </SafeAreaView>
   );
@@ -816,139 +915,130 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#000000",
+    backgroundColor: tokens.colors.bg,
   },
-  loadingScreen: {
+  stateWrap: {
     flex: 1,
-    backgroundColor: "#000000",
     justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    color: "#e5e7eb",
-    marginTop: 10,
-    fontWeight: "700",
+    paddingHorizontal: tokens.spacing.md,
   },
   header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 10,
+    paddingHorizontal: tokens.spacing.md,
+    paddingTop: tokens.spacing.sm,
+    paddingBottom: tokens.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: "#111827",
-    backgroundColor: "#050505",
+    borderBottomColor: tokens.colors.border,
+    backgroundColor: tokens.colors.surface,
+    gap: 6,
   },
   title: {
-    color: "#ecfeff",
-    fontSize: 22,
-    fontWeight: "900",
+    color: tokens.colors.textPrimary,
+    ...tokens.typography.display,
     textTransform: "uppercase",
-    letterSpacing: 1,
+  },
+  subtitle: {
+    color: tokens.colors.textSecondary,
+    ...tokens.typography.body,
   },
   headerBadges: {
     flexDirection: "row",
-    gap: 8,
-    marginTop: 8,
+    gap: tokens.spacing.xs,
+    marginTop: 2,
   },
   badge: {
-    borderRadius: 999,
+    borderRadius: tokens.radius.pill,
     borderWidth: 1,
-    borderColor: "#334155",
-    backgroundColor: "#111827",
+    borderColor: tokens.colors.border,
+    backgroundColor: tokens.colors.surfaceElevated,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
   badgeAlert: {
-    borderColor: "#ef4444",
-    backgroundColor: "#3f1015",
+    borderColor: tokens.colors.danger,
+    backgroundColor: "#3b1220",
   },
   badgeGood: {
-    borderColor: "#22c55e",
-    backgroundColor: "#0f2916",
+    borderColor: tokens.colors.good,
+    backgroundColor: "#102a1b",
   },
   badgeText: {
-    color: "#e2e8f0",
-    fontSize: 11,
-    fontWeight: "700",
+    color: tokens.colors.textSecondary,
+    ...tokens.typography.compact,
+    fontWeight: "800",
     textTransform: "uppercase",
   },
   warningBanner: {
-    backgroundColor: "#3f1015",
-    borderBottomWidth: 1,
-    borderBottomColor: "#7f1d1d",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  warningRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
+    gap: tokens.spacing.sm,
+    backgroundColor: "#3c1d0d",
+    borderBottomWidth: 1,
+    borderBottomColor: "#9a3412",
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: tokens.spacing.xs,
   },
   warningBody: {
     flex: 1,
-    gap: 3,
+    gap: 2,
   },
   warningText: {
-    color: "#fecaca",
-    fontSize: 12,
-    fontWeight: "600",
+    color: "#fed7aa",
+    ...tokens.typography.body,
   },
   warningSubtext: {
-    color: "#fca5a5",
-    fontSize: 11,
+    color: "#fdba74",
+    ...tokens.typography.compact,
   },
   warningRetryButton: {
     borderWidth: 1,
-    borderColor: "#fca5a5",
-    borderRadius: 8,
-    paddingHorizontal: 10,
+    borderColor: "#fdba74",
+    borderRadius: tokens.radius.sm,
+    paddingHorizontal: tokens.spacing.sm,
     paddingVertical: 6,
   },
   warningRetryText: {
-    color: "#ffe4e6",
-    fontSize: 11,
-    fontWeight: "700",
+    color: "#ffedd5",
+    ...tokens.typography.compact,
+    fontWeight: "800",
     textTransform: "uppercase",
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 18,
+    paddingHorizontal: tokens.spacing.md,
+    paddingTop: tokens.spacing.sm,
+    paddingBottom: tokens.spacing.lg,
   },
   rowBetween: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 8,
+    gap: tokens.spacing.xs,
   },
   keyText: {
-    color: "#f9fafb",
-    fontSize: 14,
-    fontWeight: "700",
+    color: tokens.colors.textPrimary,
+    ...tokens.typography.heading,
   },
   mutedText: {
-    color: "#cbd5e1",
-    fontSize: 13,
-    lineHeight: 18,
+    color: tokens.colors.textSecondary,
+    ...tokens.typography.body,
   },
   smallMutedText: {
-    color: "#94a3b8",
-    fontSize: 11,
+    color: tokens.colors.textMuted,
+    ...tokens.typography.compact,
   },
   primaryButton: {
-    backgroundColor: "#22d3ee",
-    borderRadius: 10,
-    paddingVertical: 12,
+    backgroundColor: tokens.colors.accent,
+    borderRadius: tokens.radius.sm,
+    paddingVertical: tokens.spacing.sm,
     alignItems: "center",
-    marginTop: 8,
+    marginTop: tokens.spacing.xs,
   },
   primaryButtonText: {
-    color: "#00111a",
-    fontSize: 14,
-    fontWeight: "900",
+    color: "#052927",
+    ...tokens.typography.heading,
     textTransform: "uppercase",
     letterSpacing: 1,
   },
@@ -957,80 +1047,80 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   stepButton: {
-    backgroundColor: "#0f172a",
+    backgroundColor: tokens.colors.surfaceElevated,
     borderWidth: 1,
-    borderColor: "#334155",
-    borderRadius: 8,
+    borderColor: tokens.colors.border,
+    borderRadius: tokens.radius.sm,
     width: 34,
     height: 34,
     alignItems: "center",
     justifyContent: "center",
   },
   stepButtonText: {
-    color: "#ecfeff",
+    color: tokens.colors.textPrimary,
     fontWeight: "800",
     fontSize: 16,
   },
   timelineRow: {
     flexDirection: "row",
-    gap: 10,
-    paddingVertical: 8,
+    gap: tokens.spacing.xs,
+    paddingVertical: tokens.spacing.xs,
     borderBottomWidth: 1,
-    borderBottomColor: "#111827",
+    borderBottomColor: tokens.colors.border,
   },
   timelineClass: {
-    color: "#22d3ee",
-    width: 24,
-    fontWeight: "900",
-    fontSize: 14,
+    color: tokens.colors.accent,
+    width: 26,
+    ...tokens.typography.heading,
   },
   timelineBody: {
     flex: 1,
     gap: 4,
   },
   timelineImpact: {
-    color: "#e5e7eb",
-    fontSize: 12,
+    color: tokens.colors.textPrimary,
+    ...tokens.typography.body,
   },
   learnCard: {
     borderWidth: 1,
-    borderColor: "#1f2937",
-    borderRadius: 10,
-    padding: 10,
+    borderColor: tokens.colors.border,
+    borderRadius: tokens.radius.sm,
+    padding: tokens.spacing.sm,
     gap: 6,
+    backgroundColor: tokens.colors.surfaceElevated,
   },
   learnTitle: {
-    color: "#f8fafc",
-    fontSize: 13,
-    fontWeight: "800",
+    color: tokens.colors.textPrimary,
+    ...tokens.typography.heading,
     flex: 1,
-    paddingRight: 8,
+    paddingRight: tokens.spacing.xs,
   },
   toggleButton: {
     borderWidth: 1,
-    borderColor: "#334155",
-    borderRadius: 999,
-    backgroundColor: "#0f172a",
+    borderColor: tokens.colors.border,
+    borderRadius: tokens.radius.pill,
+    backgroundColor: tokens.colors.surfaceElevated,
     paddingVertical: 4,
     paddingHorizontal: 10,
   },
   toggleText: {
-    color: "#ecfeff",
-    fontSize: 11,
+    color: tokens.colors.textPrimary,
+    ...tokens.typography.compact,
     fontWeight: "800",
     letterSpacing: 1,
   },
   destructiveButton: {
-    backgroundColor: "#450a0a",
+    backgroundColor: "#4c1024",
     borderWidth: 1,
-    borderColor: "#7f1d1d",
+    borderColor: tokens.colors.danger,
   },
   destructiveButtonText: {
-    color: "#fecaca",
+    color: "#fecdd3",
   },
   tabBar: {
     flexDirection: "row",
     borderTopWidth: 1,
-    borderTopColor: "#111827",
+    borderTopColor: tokens.colors.border,
+    backgroundColor: tokens.colors.surface,
   },
 });

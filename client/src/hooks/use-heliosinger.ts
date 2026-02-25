@@ -9,7 +9,6 @@ import { startSinging, updateSinging, stopSinging, setSingingVolume, ensureAudio
 import { apiRequest } from '@/lib/queryClient';
 import { getAmbientSettings } from '@/lib/localStorage';
 import { checkAndNotifyEvents, requestNotificationPermission, canSendNotifications } from '@/lib/notifications';
-import { calculateRefetchInterval } from '@/lib/adaptive-refetch';
 import { debugLog } from '@/lib/debug';
 import type { ComprehensiveSpaceWeatherData } from '@shared/schema';
 
@@ -17,6 +16,7 @@ interface UseHeliosingerOptions {
   enabled: boolean;
   volume?: number;
   backgroundMode?: boolean;
+  comprehensiveData?: ComprehensiveSpaceWeatherData;
   onError?: (error: Error) => void;
 }
 
@@ -35,14 +35,17 @@ interface UseHeliosingerReturn {
  * Integrates with React Query for automatic data fetching and audio updates
  */
 export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerReturn {
-  const { enabled, volume = 0.3, backgroundMode: backgroundModeProp = false, onError } = options;
+  const { enabled, volume = 0.3, backgroundMode: backgroundModeProp = false, comprehensiveData, onError } = options;
   const queryClient = useQueryClient();
   const [isSinging, setIsSinging] = useState(false);
   const [backgroundMode, setBackgroundMode] = useState(backgroundModeProp);
   const currentDataRef = useRef<ReturnType<typeof mapSpaceWeatherToHeliosinger> | null>(null);
   const previousDataRef = useRef<ComprehensiveSpaceWeatherData | null>(null);
   const mappingContextRef = useRef(createMappingContext());
-  
+  const hasStartedRef = useRef(false);
+  const lastUpdateTimeRef = useRef(0);
+  const pendingUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Request notification permission on first use
   useEffect(() => {
     if (enabled && !canSendNotifications()) {
@@ -53,7 +56,7 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
       });
     }
   }, [enabled]);
-  
+
   // Sync background mode from localStorage
   useEffect(() => {
     const settings = getAmbientSettings();
@@ -61,80 +64,46 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
       setBackgroundMode(true);
     }
   }, []);
-  
+
   // Handle visibility changes - keep audio running in background mode
   useEffect(() => {
     if (!backgroundMode || !enabled) return;
-    
+
     const handleVisibilityChange = () => {
-      // When tab becomes hidden, ensure audio context stays active
       if (document.hidden && isSinging) {
-        // Audio should continue playing - browsers allow this if audio is already playing
         debugLog('🌞 Tab hidden - audio continues in background mode');
       } else if (!document.hidden && isSinging) {
-        // Tab visible again - ensure audio context is resumed
         debugLog('🌞 Tab visible - audio continues');
       }
     };
-    
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [backgroundMode, enabled, isSinging]);
-  
-  // Fetch comprehensive space weather data
-  // Always fetch data (not just when enabled) so UI can display it
-  // Uses adaptive refetch interval based on space weather conditions
-  const { data: comprehensiveData, error: dataError } = useQuery<ComprehensiveSpaceWeatherData>({
-    queryKey: ['/api/space-weather/comprehensive'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/space-weather/comprehensive');
-      return (await response.json()) as ComprehensiveSpaceWeatherData;
-    },
-    refetchInterval: (query) => {
-      // Calculate adaptive interval based on current and previous data
-      const currentData = query.state.data;
-      const interval = calculateRefetchInterval(currentData ?? undefined, previousDataRef.current ?? undefined);
-      // Update previous data ref for next calculation
-      if (currentData) {
-        previousDataRef.current = currentData;
-      }
-      return interval;
-    },
-    enabled: true, // Always fetch for UI display
-  });
 
-  // Handle data errors
-  useEffect(() => {
-    if (dataError && onError) {
-      onError(dataError instanceof Error ? dataError : new Error('Unknown data error'));
-    }
-  }, [dataError, onError]);
-
-  // Start singing when enabled and data is available
+  // Start singing when enabled and data is available (with hasStartedRef guard)
   useEffect(() => {
     let isMounted = true;
-    
+
     const startAudio = async () => {
       if (!enabled || !comprehensiveData) return;
-      
+
       try {
-        // Map space weather data to Heliosinger parameters
         const heliosingerData = mapSpaceWeatherToHeliosinger(
           comprehensiveData,
           mappingContextRef.current,
           { now: Date.now() }
         );
         currentDataRef.current = heliosingerData;
-        
-        // Start the Heliosinger engine
+
         await startSinging(heliosingerData);
         if (isMounted) {
           setIsSinging(true);
+          hasStartedRef.current = true;
         }
-        
-        // Set initial volume after starting
+
         setSingingVolume(volume);
-        
+
         debugLog('🌞 Heliosinger started:', {
           note: heliosingerData.baseNote,
           frequency: heliosingerData.frequency.toFixed(1) + ' Hz',
@@ -148,6 +117,7 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
         console.error('Failed to start Heliosinger:', error);
         if (isMounted) {
           setIsSinging(false);
+          hasStartedRef.current = false;
         }
         if (onError) {
           onError(error instanceof Error ? error : new Error('Failed to start audio'));
@@ -155,92 +125,106 @@ export function useHeliosinger(options: UseHeliosingerOptions): UseHeliosingerRe
       }
     };
 
-    // Only start/stop based on enabled and data availability
-    // Don't restart on volume changes - volume is handled separately
-    if (enabled && comprehensiveData && !isSinging) {
+    if (enabled && comprehensiveData && !isSinging && !hasStartedRef.current) {
       startAudio();
     } else if (!enabled && isSinging) {
-      // Stop if disabled
       stopSinging();
       setIsSinging(false);
+      hasStartedRef.current = false;
     }
-    
+
     return () => {
       isMounted = false;
-      // Only cleanup if we're actually stopping (enabled changed to false)
       if (!enabled && isSinging) {
         stopSinging();
         setIsSinging(false);
+        hasStartedRef.current = false;
       }
     };
-  }, [enabled, comprehensiveData, isSinging, onError]); // Removed volume from dependencies to prevent restarts
+  }, [enabled, comprehensiveData, isSinging, onError]);
 
-  // Update singing when data changes
+  // Update singing when data changes — throttled to max once per 5 seconds
   useEffect(() => {
     if (!enabled || !comprehensiveData || !isSinging) return;
-    
-    try {
-      // Map new data to Heliosinger parameters
-      const heliosingerData = mapSpaceWeatherToHeliosinger(
-        comprehensiveData,
-        mappingContextRef.current,
-        { now: Date.now() }
-      );
-      const previousData = currentDataRef.current;
-      const previousComprehensiveData = previousDataRef.current;
-      currentDataRef.current = heliosingerData;
-      
-      // Check for significant changes and send notifications
-      if (previousComprehensiveData && comprehensiveData) {
-        const previousKp = previousComprehensiveData.k_index?.kp;
-        const currentKp = comprehensiveData.k_index?.kp;
-        const previousCondition = previousData?.condition;
-        const currentCondition = heliosingerData.condition;
-        const previousVelocity = previousComprehensiveData.solar_wind?.velocity;
-        const currentVelocity = comprehensiveData.solar_wind?.velocity;
-        const previousBz = previousComprehensiveData.solar_wind?.bz;
-        const currentBz = comprehensiveData.solar_wind?.bz;
-        
-        // Check for events and send notifications
-        checkAndNotifyEvents({
-          previousKp,
-          currentKp,
-          previousCondition,
-          currentCondition,
-          previousVelocity,
-          currentVelocity,
-          previousBz,
-          currentBz,
-        });
+
+    const doUpdate = () => {
+      try {
+        const heliosingerData = mapSpaceWeatherToHeliosinger(
+          comprehensiveData,
+          mappingContextRef.current,
+          { now: Date.now() }
+        );
+        const previousData = currentDataRef.current;
+        const previousComprehensiveData = previousDataRef.current;
+        currentDataRef.current = heliosingerData;
+
+        // Check for significant changes and send notifications
+        if (previousComprehensiveData && comprehensiveData) {
+          const previousKp = previousComprehensiveData.k_index?.kp;
+          const currentKp = comprehensiveData.k_index?.kp;
+          const previousCondition = previousData?.condition;
+          const currentCondition = heliosingerData.condition;
+          const previousVelocity = previousComprehensiveData.solar_wind?.velocity;
+          const currentVelocity = comprehensiveData.solar_wind?.velocity;
+          const previousBz = previousComprehensiveData.solar_wind?.bz;
+          const currentBz = comprehensiveData.solar_wind?.bz;
+
+          checkAndNotifyEvents({
+            previousKp,
+            currentKp,
+            previousCondition,
+            currentCondition,
+            previousVelocity,
+            currentVelocity,
+            previousBz,
+            currentBz,
+          });
+        }
+
+        // Only log significant changes
+        if (!previousData ||
+            Math.abs(heliosingerData.frequency - previousData.frequency) > 10 ||
+            heliosingerData.condition !== previousData.condition ||
+            heliosingerData.vowelName !== previousData.vowelName ||
+            heliosingerData.harmonicCount !== previousData.harmonicCount) {
+          debugLog('🌞 Heliosinger updated:', {
+            note: heliosingerData.baseNote,
+            frequency: heliosingerData.frequency.toFixed(1) + ' Hz',
+            vowel: heliosingerData.currentVowel.displayName,
+            mood: heliosingerData.solarMood,
+            harmonics: heliosingerData.harmonicCount,
+            condition: heliosingerData.condition,
+            kpIndex: heliosingerData.kIndex
+          });
+        }
+
+        updateSinging(heliosingerData);
+
+        previousDataRef.current = comprehensiveData;
+        lastUpdateTimeRef.current = Date.now();
+      } catch (error) {
+        console.error('Failed to update Heliosinger:', error);
+        if (onError) {
+          onError(error instanceof Error ? error : new Error('Failed to update audio'));
+        }
       }
-      
-      // Only log significant changes
-      if (!previousData || 
-          Math.abs(heliosingerData.frequency - previousData.frequency) > 10 ||
-          heliosingerData.condition !== previousData.condition ||
-          heliosingerData.vowelName !== previousData.vowelName ||
-          heliosingerData.harmonicCount !== previousData.harmonicCount) {
-        debugLog('🌞 Heliosinger updated:', {
-          note: heliosingerData.baseNote,
-          frequency: heliosingerData.frequency.toFixed(1) + ' Hz',
-          vowel: heliosingerData.currentVowel.displayName,
-          mood: heliosingerData.solarMood,
-          harmonics: heliosingerData.harmonicCount,
-          condition: heliosingerData.condition,
-          kpIndex: heliosingerData.kIndex
-        });
-      }
-      
-      // Update the Heliosinger engine with new parameters
-      updateSinging(heliosingerData);
-      
-      // Store previous data for next comparison
-      previousDataRef.current = comprehensiveData;
-    } catch (error) {
-      console.error('Failed to update Heliosinger:', error);
-      if (onError) {
-        onError(error instanceof Error ? error : new Error('Failed to update audio'));
-      }
+    };
+
+    const elapsed = Date.now() - lastUpdateTimeRef.current;
+    const MIN_UPDATE_INTERVAL = 5000; // 5 seconds
+
+    if (elapsed >= MIN_UPDATE_INTERVAL) {
+      doUpdate();
+    } else {
+      // Schedule a delayed update and return cleanup
+      const delay = MIN_UPDATE_INTERVAL - elapsed;
+      pendingUpdateTimerRef.current = setTimeout(doUpdate, delay);
+      return () => {
+        if (pendingUpdateTimerRef.current) {
+          clearTimeout(pendingUpdateTimerRef.current);
+          pendingUpdateTimerRef.current = null;
+        }
+      };
     }
   }, [comprehensiveData, enabled, isSinging, onError]);
 

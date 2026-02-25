@@ -10,5 +10,6 @@ export type {
 export * from "./midi";
 export * from "./vowel-filters";
 export * from "./chord-utils";
+export * from "./plasmatail";
 export * from "./mapping";
 export * from "./educational-narrator";

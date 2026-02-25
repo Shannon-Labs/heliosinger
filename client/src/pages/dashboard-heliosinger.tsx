@@ -16,8 +16,6 @@ import { MobilePlayer } from "@/components/MobilePlayer";
 import { BrutalistLogo } from "@/components/BrutalistLogo";
 import { SonificationTrainer } from "@/components/SonificationTrainer";
 import { EducationalInsight } from "@/components/stream-enhancements/EducationalInsight";
-import { DataDashboard } from "@/components/data-dashboard";
-
 const SolarHologram = lazy(() => import("@/components/SolarHologram").then(m => ({ default: m.SolarHologram })));
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -60,17 +58,43 @@ export default function Dashboard() {
   // Progressive disclosure state
   const [showAdvancedAudio, setShowAdvancedAudio] = useState(false);
   const [showAdvancedAlerts, setShowAdvancedAlerts] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showSystemStatus, setShowSystemStatus] = useState(false);
 
   // Robustness: prevent race conditions and track network state
   const toggleInProgressRef = useRef(false);
   const backgroundModeDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const volumeAudioDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  
+
+  const previousComprehensiveDataRef = useRef<ComprehensiveSpaceWeatherData | undefined>(undefined);
+  const mappingContextRef = useRef(createMappingContext());
+
+  // Fetch comprehensive space weather data — single polling source for the whole dashboard
+  const { data: comprehensiveData, isLoading: comprehensiveLoading } = useQuery<ComprehensiveSpaceWeatherData>({
+    queryKey: ["/api/space-weather/comprehensive"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/space-weather/comprehensive");
+      return (await response.json()) as ComprehensiveSpaceWeatherData;
+    },
+    refetchInterval: (query) => {
+      const currentData = query.state.data;
+      const interval = calculateRefetchInterval(currentData, previousComprehensiveDataRef.current);
+      if (currentData) {
+        previousComprehensiveDataRef.current = currentData;
+      }
+      return interval;
+    },
+  });
+
+  // Derive update frequency from current data (no state → no re-render cascade)
+  const updateFrequency = calculateRefetchInterval(comprehensiveData, previousComprehensiveDataRef.current);
+
   const heliosinger = useHeliosinger({
     enabled: isHeliosingerEnabled,
     volume: ambientVolume,
     backgroundMode: backgroundMode,
+    comprehensiveData,
     onError: (error) => {
       toast({
         title: "Heliosinger Error",
@@ -94,7 +118,6 @@ export default function Dashboard() {
 
     const handleOnline = () => {
       setIsOffline(false);
-      // Invalidate queries to refetch fresh data
       queryClient.invalidateQueries({ queryKey: ["/api/space-weather"] });
       queryClient.invalidateQueries({ queryKey: ["/api/solar-wind"] });
       toast({
@@ -111,31 +134,6 @@ export default function Dashboard() {
       window.removeEventListener('online', handleOnline);
     };
   }, [queryClient, toast]);
-
-  // Local state for adaptive refetch interval (must be declared before queries that use it)
-  const [updateFrequency, setUpdateFrequency] = useState(60000);
-  const previousComprehensiveDataRef = useRef<ComprehensiveSpaceWeatherData | undefined>(undefined);
-  const mappingContextRef = useRef(createMappingContext());
-
-  // Fetch comprehensive space weather data (used for adaptive interval calculation)
-  const { data: comprehensiveData, isLoading: comprehensiveLoading } = useQuery<ComprehensiveSpaceWeatherData>({
-    queryKey: ["/api/space-weather/comprehensive"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/space-weather/comprehensive");
-      return (await response.json()) as ComprehensiveSpaceWeatherData;
-    },
-    refetchInterval: (query) => {
-      // Calculate adaptive interval based on current and previous data
-      const currentData = query.state.data;
-      const interval = calculateRefetchInterval(currentData, previousComprehensiveDataRef.current);
-      setUpdateFrequency(interval);
-      // Update previous data ref for next calculation
-      if (currentData) {
-        previousComprehensiveDataRef.current = currentData;
-      }
-      return interval;
-    },
-  });
 
   const heliosingerPreviewData = useMemo(() => {
     if (heliosinger.currentData) return heliosinger.currentData;
@@ -376,6 +374,21 @@ export default function Dashboard() {
     return { scale, label, tone, flux: longWave };
   }, [comprehensiveData?.xray_flux?.long_wave]);
 
+  const tailMetrics = useMemo(() => {
+    const data = heliosinger.currentData?.tailMetrics;
+    if (!data) return null;
+
+    const stretch = Math.max(0, Math.min(1, data.stretchingProgress));
+    return {
+      ...data,
+      stretchPercent: Math.round(stretch * 100),
+      bLobe: `${data.bLobe.toFixed(1)} nT`,
+      jCross: `${data.jCross.toFixed(2)} nA/m²`,
+      dSheet: `${data.dSheet.toFixed(2)} Rₑ`,
+      eTail: `${data.eTail.toExponential(2)} J`,
+    };
+  }, [heliosinger.currentData?.tailMetrics]);
+
   // Fetch current solar wind data (uses adaptive interval)
   const { data: currentData, isLoading: currentLoading, error: currentError } = useQuery<SolarWindReading>({
     queryKey: ["/api/solar-wind/current"],
@@ -445,35 +458,6 @@ export default function Dashboard() {
     }
   }, [ambientSettings]);
 
-  // Fetch NOAA data mutation
-  const fetchDataMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/solar-wind/fetch"),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/solar-wind"] });
-      toast({
-        title: "Data Updated",
-        description: "Successfully fetched latest NOAA solar wind data",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Fetch Failed",
-        description: error.message || "Failed to fetch NOAA data",
-        variant: "destructive",
-      });
-    }
-  });
-
-  // Auto-fetch data on component mount and periodically
-  useEffect(() => {
-    fetchDataMutation.mutate();
-    // Use adaptive interval for data fetching
-    const interval = setInterval(() => {
-      fetchDataMutation.mutate();
-    }, updateFrequency);
-
-    return () => clearInterval(interval);
-  }, [updateFrequency]);
 
   // Heliosinger toggle with race condition guard
   const handleHeliosingerToggle = async (enabled: boolean) => {
@@ -626,12 +610,12 @@ export default function Dashboard() {
                 : "Unable to connect to solar wind data stream. The NOAA DSCOVR service may be temporarily unavailable."}
             </p>
             <Button
-              onClick={() => fetchDataMutation.mutate()}
-              disabled={fetchDataMutation.isPending || isOffline}
+              onClick={() => { queryClient.invalidateQueries({ queryKey: ["/api/space-weather"] }); queryClient.invalidateQueries({ queryKey: ["/api/solar-wind"] }); }}
+              disabled={comprehensiveLoading || isOffline}
               data-testid="button-retry-fetch"
             >
               <i className="fas fa-refresh mr-2" />
-              {fetchDataMutation.isPending ? "Retrying..." : isOffline ? "Waiting for Connection..." : "Retry Connection"}
+              {comprehensiveLoading ? "Retrying..." : isOffline ? "Waiting for Connection..." : "Retry Connection"}
             </Button>
           </CardContent>
         </Card>
@@ -672,7 +656,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-black text-white pb-20 md:pb-0 relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-0 opacity-5 bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:24px_24px]" />
+      <div className="pointer-events-none absolute inset-0 opacity-[0.02] bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:24px_24px]" />
       {/* ARIA Live Region for Dynamic Updates */}
       <div
         aria-live="polite"
@@ -704,12 +688,12 @@ export default function Dashboard() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => fetchDataMutation.mutate()}
-                disabled={fetchDataMutation.isPending}
+                onClick={() => { queryClient.invalidateQueries({ queryKey: ["/api/space-weather"] }); queryClient.invalidateQueries({ queryKey: ["/api/solar-wind"] }); }}
+                disabled={comprehensiveLoading}
                 data-testid="button-refresh-data"
                 className="border-2 border-white bg-black text-white hover:bg-white hover:text-black uppercase font-black tracking-tight h-8 w-8 md:h-auto md:w-auto p-0 md:p-2"
               >
-                <i className={`fas fa-sync-alt text-xs md:text-sm ${fetchDataMutation.isPending ? 'animate-spin' : ''}`} aria-hidden="true" />
+                <i className={`fas fa-sync-alt text-xs md:text-sm ${comprehensiveLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
               </Button>
               <Link href="/stream">
                 <Button
@@ -726,20 +710,12 @@ export default function Dashboard() {
       </nav>
 
       <main id="main" className="container mx-auto px-3 py-4 md:px-4 md:py-8 relative z-10">
-        {/* Hero Section - Simplified */}
-        <section className="mb-6 md:mb-8 text-center relative">
-          <div className="flex justify-center mb-3 md:mb-4">
-            <BrutalistLogo className="scale-90 md:scale-110" />
-          </div>
-          <h1 className="text-lg sm:text-xl md:text-2xl font-black mb-2 text-white uppercase tracking-tighter inline-block px-2 py-1 border border-white/30 bg-black/50">
-            Real-Time Space Weather Sonification
-          </h1>
-        </section>
+        <h1 className="sr-only">Heliosinger: Real-Time Space Weather Sonification</h1>
 
         {/* Data-driven 3D solar hologram */}
-        <div className="mb-6 md:mb-10">
+        <div className="mb-8 md:mb-12 -mx-3 md:-mx-4">
           <Suspense fallback={
-            <div className="w-full h-[200px] md:h-[320px] bg-black border-2 border-primary/30 flex flex-col items-center justify-center">
+            <div className="w-full h-[220px] md:h-[360px] bg-black border-2 border-primary/30 flex flex-col items-center justify-center">
               <div className="w-16 h-16 md:w-24 md:h-24 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
               <span className="text-primary/50 font-mono text-xs md:text-sm mt-4 uppercase tracking-wider">Loading visualization...</span>
             </div>
@@ -816,7 +792,7 @@ export default function Dashboard() {
                   >
                     <span className="flex items-center gap-2">
                       <Settings className="w-4 h-4" />
-                      Audio Settings
+                      Settings
                     </span>
                     {showAdvancedAudio ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </Button>
@@ -876,103 +852,268 @@ export default function Dashboard() {
                       data-testid="switch-background-mode"
                     />
                   </div>
+
+                  {/* Status and Information */}
+                  <div className="border-t border-white/10 pt-4 mt-2 space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Audio Status:</span>
+                      <span className={`font-medium ${isHeliosingerEnabled ? 'text-accent' : 'text-muted-foreground'}`} data-testid="text-audio-status">
+                        {isHeliosingerEnabled ? 'Singing' : 'Silent'}
+                      </span>
+                    </div>
+
+                    {backgroundMode && (
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Background Mode:</span>
+                        <Badge variant="default" className="text-xs">
+                          Active
+                        </Badge>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Update Frequency:</span>
+                      <span className="font-mono text-xs" data-testid="text-update-frequency">
+                        {getUpdateFrequencyDescription(updateFrequency)}
+                      </span>
+                    </div>
+
+                    {heliosinger.currentData && (
+                      <>
+                        {/* Chord Information - Consolidated */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Chord:</span>
+                            <div className="flex gap-1 flex-wrap justify-end max-w-[60%]">
+                              {heliosinger.currentData.chordVoicing.map((tone, i) => (
+                                <Badge
+                                  key={i}
+                                  variant={i === 0 ? "default" : "outline"}
+                                  className="text-xs font-mono"
+                                  title={`${tone.noteName} (${tone.frequency.toFixed(1)} Hz)`}
+                                >
+                                  {tone.noteName}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                          {(() => {
+                            const chordQuality = getChordQuality(
+                              heliosinger.currentData.condition,
+                              heliosinger.currentData.chordVoicing,
+                              comprehensiveData?.solar_wind?.temperature,
+                              heliosinger.currentData.density,
+                              comprehensiveData?.solar_wind?.bz,
+                              heliosinger.currentData.kIndex
+                            );
+                            return (
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="text-muted-foreground">Quality:</span>
+                                  <Badge variant="outline" className="text-xs font-semibold">
+                                    {chordQuality.name} ({chordQuality.symbol})
+                                  </Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground italic text-right">
+                                  {chordQuality.description}
+                                </p>
+                              </div>
+                            );
+                          })()}
+                        </div>
+
+                        {/* Condition Badge */}
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Condition:</span>
+                          <Badge variant={heliosinger.currentData.condition === 'extreme' ? 'destructive' :
+                                         heliosinger.currentData.condition === 'storm' ? 'secondary' : 'default'}
+                                 className="text-xs">
+                            {String(heliosinger.currentData.condition)}
+                          </Badge>
+                        </div>
+                      </>
+                    )}
+
+                    {!heliosinger.currentData && (
+                      <div className="text-xs text-muted-foreground italic text-right">
+                        Heliosinger telemetry unavailable — enable to hear live mapping.
+                      </div>
+                    )}
+                  </div>
                 </CollapsibleContent>
               </Collapsible>
 
-              {/* Status and Information */}
-              <div className="bg-secondary/20 rounded-lg p-4 space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Audio Status:</span>
-                  <span className={`font-medium ${isHeliosingerEnabled ? 'text-accent' : 'text-muted-foreground'}`} data-testid="text-audio-status">
-                    {isHeliosingerEnabled ? 'Singing' : 'Silent'}
-                  </span>
-                </div>
-                
-                {backgroundMode && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Background Mode:</span>
-                    <Badge variant="default" className="text-xs">
-                      Active
-                    </Badge>
-                  </div>
-                )}
-                
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Update Frequency:</span>
-                  <span className="font-mono text-xs" data-testid="text-update-frequency">
-                    {getUpdateFrequencyDescription(updateFrequency)}
-                  </span>
-                </div>
-                
-                {heliosinger.currentData && (
-                  <>
-                    {/* Chord Information - Consolidated */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Chord:</span>
-                        <div className="flex gap-1 flex-wrap justify-end max-w-[60%]">
-                          {heliosinger.currentData.chordVoicing.map((tone, i) => (
-                            <Badge 
-                              key={i} 
-                              variant={i === 0 ? "default" : "outline"} 
-                              className="text-xs font-mono"
-                              title={`${tone.noteName} (${tone.frequency.toFixed(1)} Hz)`}
-                            >
-                              {tone.noteName}
-                            </Badge>
-                          ))}
+              {/* Alerts — notification settings */}
+              {isNotificationSupported() && (
+                <Collapsible open={showAdvancedAlerts} onOpenChange={setShowAdvancedAlerts}>
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="flex items-center justify-between w-full text-sm font-bold uppercase hover:bg-secondary/30"
+                    >
+                      <span className="flex items-center gap-2">
+                        <i className="fas fa-bell w-4 h-4 flex items-center justify-center text-xs" aria-hidden="true" />
+                        Alerts
+                        {!canSendNotifications() && (
+                          <Badge variant="secondary" className="text-[10px] rounded-none">Permission Needed</Badge>
+                        )}
+                      </span>
+                      {showAdvancedAlerts ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-4 pt-4">
+                    {!canSendNotifications() && (
+                      <div className="border border-white/20 bg-black/40 px-3 py-2 md:px-4 md:py-3">
+                        <div className="flex items-center gap-2 md:gap-3">
+                          <i className="fas fa-bolt text-primary" />
+                          <div>
+                            <p className="text-sm font-bold uppercase tracking-tight">Enable Heliosinger Alerts</p>
+                            <p className="text-xs text-white/70">Get alerts when storms hit.</p>
+                          </div>
+                          <Button
+                            onClick={async () => {
+                              const permission = await requestNotificationPermission();
+                              if (permission === 'granted') {
+                                toast({
+                                  title: "Notifications Enabled",
+                                  description: "You'll now receive alerts for significant space weather events.",
+                                });
+                                setNotificationSettings(getNotificationSettings());
+                              } else {
+                                toast({
+                                  title: "Permission Denied",
+                                  description: "Please enable notifications in your browser settings.",
+                                  variant: "destructive",
+                                });
+                              }
+                            }}
+                            size="sm"
+                            className="ml-auto bg-white text-black font-black uppercase tracking-widest border-2 border-black hover:bg-primary hover:text-black"
+                          >
+                            Activate
+                          </Button>
                         </div>
                       </div>
-                      {(() => {
-                        const chordQuality = getChordQuality(
-                          heliosinger.currentData.condition,
-                          heliosinger.currentData.chordVoicing,
-                          comprehensiveData?.solar_wind?.temperature,
-                          heliosinger.currentData.density,
-                          comprehensiveData?.solar_wind?.bz,
-                          heliosinger.currentData.kIndex
-                        );
-                        return (
+                    )}
+
+                    {canSendNotifications() && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between border border-white/20 bg-black/40 px-3 py-2 md:px-4 md:py-3">
                           <div className="space-y-1">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">Quality:</span>
-                              <Badge variant="outline" className="text-xs font-semibold">
-                                {chordQuality.name} ({chordQuality.symbol})
-                              </Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground italic text-right">
-                              {chordQuality.description}
-                            </p>
+                            <p className="text-xs font-bold uppercase tracking-widest">Global Alerts</p>
+                            <p className="text-[11px] text-white/60">Notifications when thresholds trip.</p>
                           </div>
-                        );
-                      })()}
-                    </div>
-                    
-                    {/* Condition Badge */}
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Condition:</span>
-                      <Badge variant={heliosinger.currentData.condition === 'extreme' ? 'destructive' : 
-                                     heliosinger.currentData.condition === 'storm' ? 'secondary' : 'default'}
-                             className="text-xs">
-                        {String(heliosinger.currentData.condition)}
-                      </Badge>
-                    </div>
-                  </>
-                )}
-                
-                {!heliosinger.currentData && (
-                  <div className="text-xs text-muted-foreground italic text-right">
-                    Heliosinger telemetry unavailable — enable to hear live mapping.
-                  </div>
-                )}
-              </div>
+                          <Switch
+                            id="notifications-enabled"
+                            checked={notificationSettings.enabled}
+                            onCheckedChange={(checked) => {
+                              const updated = { ...notificationSettings, enabled: checked };
+                              setNotificationSettings(updated);
+                              saveNotificationSettings(updated);
+                            }}
+                          />
+                        </div>
+
+                        {notificationSettings.enabled && (
+                          <Collapsible open={showNotifications} onOpenChange={setShowNotifications}>
+                            <CollapsibleTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                className="flex w-full items-center justify-between border border-white/20 bg-black/40 px-2 py-2 text-left hover:bg-secondary/20"
+                              >
+                                <span className="text-[11px] uppercase tracking-wider text-white/50 font-bold">Thresholds</span>
+                                {showNotifications ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                              </Button>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="pt-3">
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="border border-white/20 bg-black/40 p-2 md:p-3">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className="text-[11px] uppercase font-bold tracking-widest">Kp Spikes</p>
+                                      <p className="text-[10px] text-white/50">Stormfront alerts</p>
+                                    </div>
+                                    <Switch
+                                      id="notify-kp"
+                                      checked={notificationSettings.kpThresholds}
+                                      onCheckedChange={(checked) => {
+                                        const updated = { ...notificationSettings, kpThresholds: checked };
+                                        setNotificationSettings(updated);
+                                        saveNotificationSettings(updated);
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="border border-white/20 bg-black/40 p-2 md:p-3">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className="text-[11px] uppercase font-bold tracking-widest">Bz Swings</p>
+                                      <p className="text-[10px] text-white/50">Southward alarms</p>
+                                    </div>
+                                    <Switch
+                                      id="notify-bz"
+                                      checked={notificationSettings.bzEvents}
+                                      onCheckedChange={(checked) => {
+                                        const updated = { ...notificationSettings, bzEvents: checked };
+                                        setNotificationSettings(updated);
+                                        saveNotificationSettings(updated);
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="border border-white/20 bg-black/40 p-2 md:p-3">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className="text-[11px] uppercase font-bold tracking-widest">Density Jumps</p>
+                                      <p className="text-[10px] text-white/50">Plasma surge pings</p>
+                                    </div>
+                                    <Switch
+                                      id="notify-density"
+                                      checked={notificationSettings.densityAlerts ?? false}
+                                      onCheckedChange={(checked) => {
+                                        const updated = { ...notificationSettings, densityAlerts: checked };
+                                        setNotificationSettings(updated);
+                                        saveNotificationSettings(updated);
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="border border-white/20 bg-black/40 p-2 md:p-3">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className="text-[11px] uppercase font-bold tracking-widest">Sound Notifications</p>
+                                      <p className="text-[10px] text-white/50">Cues sync with vocalizer</p>
+                                    </div>
+                                    <Switch
+                                      id="notify-sound"
+                                      checked={notificationSettings.soundEnabled}
+                                      onCheckedChange={(checked) => {
+                                        const updated = { ...notificationSettings, soundEnabled: checked };
+                                        setNotificationSettings(updated);
+                                        saveNotificationSettings(updated);
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </CollapsibleContent>
+                          </Collapsible>
+                        )}
+                      </div>
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
 
             </CardContent>
           </Card>
         </section>
 
-        {/* Space Weather Implications + Live Narrator */}
-        <section className="mb-6 md:mb-10 grid gap-4 md:gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        {/* Space Weather Implications + Magnetotail + Live Narrator */}
+        <section className="mb-6 md:mb-10 grid gap-4 md:gap-6 lg:grid-cols-[1.3fr_0.7fr_1fr]">
           <Card className="border-2 md:border-4 border-primary bg-black/80 shadow-[4px_4px_0px_rgba(0,0,0,0.6)] md:shadow-[8px_8px_0px_rgba(0,0,0,0.6)]">
             <CardHeader className="bg-primary text-black border-b-2 md:border-b-4 border-black md:skew-x-3 px-3 py-2 md:px-6 md:py-4">
               <CardTitle className="flex items-center gap-2 md:gap-3 md:-skew-x-3 uppercase tracking-wider md:tracking-widest font-black text-sm md:text-xl">
@@ -1051,17 +1192,74 @@ export default function Dashboard() {
               <div className="text-[11px] text-white/50">
                 Signals derived from NOAA live feeds, IMF orientation, and geomagnetic indices.
               </div>
+              </CardContent>
+            </Card>
+
+          <Card className="border md:border-2 border-white/30 bg-black/80 shadow-[2px_2px_0px_rgba(0,0,0,0.3)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.3)]">
+              <CardHeader className="bg-white/5 text-white border-b border-white/20 px-3 py-2 md:px-6 md:py-3">
+              <CardTitle className="flex items-center gap-2 md:gap-3 uppercase tracking-wider font-bold text-xs md:text-base">
+                <i className="fas fa-magnet text-white/60" />
+                <span className="truncate">Magnetotail</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-3 md:p-6 space-y-3 md:space-y-4">
+              {tailMetrics ? (
+                <>
+                  <div className="flex flex-wrap gap-1.5 md:gap-2 text-[9px] md:text-[11px] uppercase tracking-wider md:tracking-widest text-white/70 font-mono">
+                    <span className="border border-white/20 bg-black/40 px-1.5 py-0.5 md:px-2 md:py-1">
+                      B_lobe {tailMetrics.bLobe}
+                    </span>
+                    <span className="border border-white/20 bg-black/40 px-1.5 py-0.5 md:px-2 md:py-1">
+                      J_x {tailMetrics.jCross}
+                    </span>
+                    <span className="border border-white/20 bg-black/40 px-1.5 py-0.5 md:px-2 md:py-1">
+                      D_sheet {tailMetrics.dSheet}
+                    </span>
+                    <span className="border border-white/20 bg-black/40 px-1.5 py-0.5 md:px-2 md:py-1">
+                      Phase {tailMetrics.phase}
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs uppercase tracking-wider">
+                      <span className="text-white/70">Tail stretching</span>
+                      <span className="text-muted-foreground">{tailMetrics.stretchPercent}%</span>
+                    </div>
+                    <div className="h-2 rounded-full overflow-hidden bg-black/60 border border-white/20">
+                      <div
+                        className="h-full bg-accent transition-[width] duration-500"
+                        style={{ width: `${tailMetrics.stretchPercent}%` }}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] md:text-xs text-white/60">
+                    E_tail {tailMetrics.eTail}
+                  </p>
+                  <div className={`text-[10px] md:text-[11px] uppercase font-black tracking-wider ${
+                    tailMetrics.phase === "ONSET" || tailMetrics.phase === "EXPANSION" ? "text-red-400"
+                    : tailMetrics.phase === "RECOVERY" ? "text-blue-300"
+                    : tailMetrics.stretchPercent > 65 ? "text-amber-300"
+                    : "text-primary"
+                  }`}>
+                    {tailMetrics.phase === "ONSET" ? "SUBSTORM ONSET DETECTED"
+                    : tailMetrics.phase === "EXPANSION" ? "ENERGY RELEASE IN PROGRESS"
+                    : tailMetrics.phase === "RECOVERY" ? "MAGNETOTAIL RECOVERING"
+                    : tailMetrics.stretchPercent > 65 ? "ENERGY LOADING INTENSIFIES"
+                    : "CALM TAIL"}
+                  </div>
+                </>
+              ) : (
+                <div className="text-xs text-muted-foreground italic">
+                  Magnetotail data will appear once Heliosinger is live.
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          <Card className="border-2 md:border-4 border-primary bg-black/80 shadow-[4px_4px_0px_rgba(0,0,0,0.6)] md:shadow-[8px_8px_0px_rgba(0,0,0,0.6)] relative overflow-hidden">
-            <CardHeader className="bg-primary text-black border-b-2 md:border-b-4 border-black md:skew-x-3 px-3 py-2 md:px-6 md:py-4">
-              <CardTitle className="flex items-center gap-2 md:gap-3 md:-skew-x-3 uppercase tracking-wider md:tracking-widest font-black text-sm md:text-xl">
-                <i className="fas fa-bolt text-black" />
+          <Card className="border md:border-2 border-white/30 bg-black/80 shadow-[2px_2px_0px_rgba(0,0,0,0.3)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.3)] relative overflow-hidden">
+            <CardHeader className="bg-white/5 text-white border-b border-white/20 px-3 py-2 md:px-6 md:py-3">
+              <CardTitle className="flex items-center gap-2 md:gap-3 uppercase tracking-wider font-bold text-xs md:text-base">
+                <i className="fas fa-bolt text-white/60" />
                 Live Narrator
-                <Badge variant="secondary" className="ml-auto bg-black text-white border-2 border-black rounded-none text-[10px] md:text-xs flex-shrink-0">
-                  Auto
-                </Badge>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-3 md:p-6">
@@ -1081,173 +1279,6 @@ export default function Dashboard() {
           </Card>
         </section>
 
-        {/* Notification Settings */}
-        {isNotificationSupported() && (
-          <section className="mb-6 md:mb-8">
-            <Card className="border-2 md:border-4 border-primary bg-black relative overflow-hidden shadow-[4px_4px_0px_rgba(0,0,0,0.5)] md:shadow-[10px_10px_0px_rgba(0,0,0,0.5)]">
-              <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle,white_1px,transparent_1px)] bg-[length:22px_22px]" />
-              <CardHeader className="bg-primary text-black border-b-2 md:border-b-4 border-black md:skew-x-3 px-3 py-2 md:px-6 md:py-4">
-                <CardTitle className="flex items-center gap-2 md:gap-3 md:-skew-x-3 uppercase tracking-wider md:tracking-widest font-black text-sm md:text-xl">
-                  <i className="fas fa-bell text-black" />
-                  Alerts
-                  {!canSendNotifications() && (
-                    <Badge variant="secondary" className="ml-auto bg-black text-white border-2 border-black rounded-none text-[10px] md:text-xs flex-shrink-0">
-                      Permission Needed
-                    </Badge>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="relative space-y-3 md:space-y-4 p-3 md:p-6">
-                {!canSendNotifications() && (
-                  <div className="bg-black/80 text-white border-2 border-primary px-3 py-2 md:px-4 md:py-3 md:-skew-x-3 shadow-[3px_3px_0px_rgba(0,0,0,0.6)] md:shadow-[6px_6px_0px_rgba(0,0,0,0.6)]">
-                    <div className="flex items-center gap-2 md:gap-3 md:skew-x-3">
-                      <i className="fas fa-bolt text-primary" />
-                      <div>
-                        <p className="text-sm font-bold uppercase tracking-tight">Enable Heliosinger Alerts</p>
-                        <p className="text-xs text-white/70">Get dramatic pop-in alerts when storms hit.</p>
-                      </div>
-                      <Button
-                        onClick={async () => {
-                          const permission = await requestNotificationPermission();
-                          if (permission === 'granted') {
-                            toast({
-                              title: "Notifications Enabled",
-                              description: "You'll now receive alerts for significant space weather events.",
-                            });
-                            setNotificationSettings(getNotificationSettings());
-                          } else {
-                            toast({
-                              title: "Permission Denied",
-                              description: "Please enable notifications in your browser settings.",
-                              variant: "destructive",
-                            });
-                          }
-                        }}
-                        size="sm"
-                        className="ml-auto bg-white text-black font-black uppercase tracking-widest border-2 border-black hover:bg-primary hover:text-black"
-                      >
-                        Activate
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {canSendNotifications() && (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between bg-white text-black px-3 py-2 md:px-4 md:py-3 md:-skew-x-3 border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,0.5)] md:shadow-[6px_6px_0px_rgba(0,0,0,0.5)]">
-                      <div className="space-y-1 md:skew-x-3">
-                        <p className="text-xs font-black uppercase tracking-widest">Global Alerts</p>
-                        <p className="text-[11px] opacity-70">High-contrast flashes when thresholds trip.</p>
-                      </div>
-                      <Switch
-                        id="notifications-enabled"
-                        checked={notificationSettings.enabled}
-                        onCheckedChange={(checked) => {
-                          const updated = { ...notificationSettings, enabled: checked };
-                          setNotificationSettings(updated);
-                          saveNotificationSettings(updated);
-                        }}
-                      />
-                    </div>
-
-                    {notificationSettings.enabled && (
-                      <Collapsible open={showAdvancedAlerts} onOpenChange={setShowAdvancedAlerts}>
-                        <CollapsibleTrigger asChild>
-                          <Button 
-                            variant="ghost" 
-                            className="flex items-center justify-between w-full text-sm font-bold uppercase hover:bg-secondary/30"
-                          >
-                            <span className="flex items-center gap-2">
-                              <Settings className="w-4 h-4" />
-                              Alert Thresholds
-                            </span>
-                            {showAdvancedAlerts ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                          </Button>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="space-y-3 pt-3">
-                          <div className="grid gap-3 sm:grid-cols-3">
-                            <div className="bg-black/80 text-white border-2 border-primary p-2 md:p-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
-                              <div className="md:skew-x-3 flex items-center justify-between">
-                                <div>
-                                  <p className="text-[11px] uppercase font-black tracking-widest">Kp Spikes</p>
-                                  <p className="text-[10px] text-white/70">Stormfront flashes</p>
-                                </div>
-                                <Switch
-                                  id="notify-kp"
-                                  checked={notificationSettings.kpThresholds}
-                                  onCheckedChange={(checked) => {
-                                    const updated = { ...notificationSettings, kpThresholds: checked };
-                                    setNotificationSettings(updated);
-                                    saveNotificationSettings(updated);
-                                  }}
-                                />
-                              </div>
-                            </div>
-
-                            <div className="bg-white text-black border-2 border-black p-2 md:p-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
-                              <div className="md:skew-x-3 flex items-center justify-between">
-                                <div>
-                                  <p className="text-[11px] uppercase font-black tracking-widest">Bz Swings</p>
-                                  <p className="text-[10px] text-black/70">Southward alarms</p>
-                                </div>
-                                <Switch
-                                  id="notify-bz"
-                                  checked={notificationSettings.bzEvents}
-                                  onCheckedChange={(checked) => {
-                                    const updated = { ...notificationSettings, bzEvents: checked };
-                                    setNotificationSettings(updated);
-                                    saveNotificationSettings(updated);
-                                  }}
-                                />
-                              </div>
-                            </div>
-
-                            <div className="bg-destructive text-white border-2 border-black p-2 md:p-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)]">
-                              <div className="md:skew-x-3 flex items-center justify-between">
-                                <div>
-                                  <p className="text-[11px] uppercase font-black tracking-widest">Density Jumps</p>
-                                  <p className="text-[10px] text-white/80">Plasma surge pings</p>
-                                </div>
-                                <Switch
-                                  id="notify-density"
-                                  checked={notificationSettings.densityAlerts ?? false}
-                                  onCheckedChange={(checked) => {
-                                    const updated = { ...notificationSettings, densityAlerts: checked };
-                                    setNotificationSettings(updated);
-                                    saveNotificationSettings(updated);
-                                  }}
-                                />
-                              </div>
-                            </div>
-
-                            <div className="bg-primary text-black border-2 border-black p-2 md:p-3 md:-skew-x-3 shadow-[2px_2px_0px_rgba(0,0,0,0.5)] md:shadow-[4px_4px_0px_rgba(0,0,0,0.5)] sm:col-span-3">
-                              <div className="md:skew-x-3 flex items-center justify-between">
-                                <div>
-                                  <p className="text-[11px] uppercase font-black tracking-widest">Sound Notifications</p>
-                                  <p className="text-[10px] text-black/70">Cues sync with vocalizer</p>
-                                </div>
-                                <Switch
-                                  id="notify-sound"
-                                  checked={notificationSettings.soundEnabled}
-                                  onCheckedChange={(checked) => {
-                                    const updated = { ...notificationSettings, soundEnabled: checked };
-                                    setNotificationSettings(updated);
-                                    saveNotificationSettings(updated);
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </CollapsibleContent>
-                      </Collapsible>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </section>
-        )}
-
         {/* Space Weather Examples - What You're Listening For */}
         {/* <section className="mb-8">
           <SpaceWeatherExamples />
@@ -1258,59 +1289,21 @@ export default function Dashboard() {
           <HeliosingerGuide />
         </section> */}
 
-        {/* Data Dashboard */}
+        {/* System Status — collapsed by default */}
         <section className="mb-6 md:mb-10">
-          <DataDashboard />
-        </section>
-
-        {/* Quality Signals */}
-        <section className="mb-6 md:mb-10">
-          <Card className="border-2 md:border-4 border-accent/50 bg-black/80">
-            <CardHeader className="bg-accent/10 text-accent-foreground border-b-2 border-accent/30 px-3 py-2 md:px-4 md:py-3">
-              <CardTitle className="flex items-center gap-2 uppercase tracking-wider font-black text-sm md:text-lg">
-                <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                </svg>
-                Engineering Quality
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 md:p-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-                <div className="text-center">
-                  <div className="text-xl md:text-2xl font-black text-accent">100%</div>
-                  <div className="text-[10px] md:text-xs uppercase tracking-wider text-muted-foreground">Uptime</div>
-                  <div className="text-[9px] md:text-[10px] text-white/40">Real-time feed</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xl md:text-2xl font-black text-primary">&lt;50ms</div>
-                  <div className="text-[10px] md:text-xs uppercase tracking-wider text-muted-foreground">Latency</div>
-                  <div className="text-[9px] md:text-[10px] text-white/40">Audio processing</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xl md:text-2xl font-black text-warning">A+</div>
-                  <div className="text-[10px] md:text-xs uppercase tracking-wider text-muted-foreground">Data Quality</div>
-                  <div className="text-[9px] md:text-[10px] text-white/40">NOAA validation</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xl md:text-2xl font-black text-white/80">60Hz</div>
-                  <div className="text-[10px] md:text-xs uppercase tracking-wider text-muted-foreground">Refresh</div>
-                  <div className="text-[9px] md:text-[10px] text-white/40">Adaptive interval</div>
-                </div>
+          <Collapsible open={showSystemStatus} onOpenChange={setShowSystemStatus}>
+            <CollapsibleTrigger asChild>
+              <button className="w-full flex items-center justify-between border border-white/20 bg-black/40 px-3 py-2 md:px-4 md:py-3 text-white/60 hover:text-white/80 transition-colors">
+                <h3 className="font-bold uppercase tracking-widest text-xs md:text-sm">System Status</h3>
+                {showSystemStatus ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="border border-white/20 border-t-0 bg-black/40 p-3 md:p-4">
+                <SystemStatus variant="atlus" showTitle={false} />
               </div>
-            </CardContent>
-          </Card>
-        </section>
-
-        {/* System Status */}
-        <section className="mb-6 md:mb-10">
-          <div className="border-2 md:border-4 border-primary bg-black/80 shadow-[4px_4px_0px_rgba(0,0,0,0.6)] md:shadow-[8px_8px_0px_rgba(0,0,0,0.6)]">
-            <div className="px-3 py-2 md:px-4 md:py-3 border-b-2 md:border-b-4 border-white/20 bg-primary text-black md:-skew-x-6">
-              <h3 className="font-black uppercase tracking-widest text-sm md:text-lg md:skew-x-6">System Status</h3>
-            </div>
-            <div className="p-3 md:p-4">
-              <SystemStatus variant="atlus" showTitle={false} />
-            </div>
-          </div>
+            </CollapsibleContent>
+          </Collapsible>
         </section>
 
         {/* Footer */}

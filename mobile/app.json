@@ -5,12 +5,12 @@
     "scheme": "heliosinger",
     "version": "0.1.0",
     "orientation": "portrait",
-    "icon": "../generated-icon.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "../generated-icon.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#000000"
+      "backgroundColor": "#030712"
     },
     "ios": {
       "supportsTablet": true,
@@ -22,8 +22,8 @@
     "android": {
       "package": "com.shannonlabs.heliosinger",
       "adaptiveIcon": {
-        "foregroundImage": "../generated-icon.png",
-        "backgroundColor": "#000000"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#030712"
       },
       "permissions": [
         "android.permission.FOREGROUND_SERVICE",

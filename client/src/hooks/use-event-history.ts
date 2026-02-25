@@ -51,13 +51,22 @@ export function useEventHistory(
   const previousDataRef = useRef<ComprehensiveSpaceWeatherData | undefined>(previousData);
 
   useEffect(() => {
+    previousDataRef.current = previousData;
+  }, [previousData]);
+
+  useEffect(() => {
     if (!currentData || !previousDataRef.current) {
-      previousDataRef.current = currentData;
+      if (currentData) {
+        previousDataRef.current = currentData;
+      }
       return;
     }
 
     const prev = previousDataRef.current;
     const curr = currentData;
+    const parsedEventTime = Date.parse(curr.timestamp);
+    const eventTimeMs = Number.isFinite(parsedEventTime) ? parsedEventTime : Date.now();
+    const eventTimestamp = new Date(eventTimeMs);
     const newEvents: SpaceWeatherEvent[] = [];
 
     // Detect CME impact: velocity spike (>150 km/s) + Bz change
@@ -67,9 +76,9 @@ export function useEventHistory(
       
       if (velocityChange > 150 && bzChange > 5) {
         newEvents.push({
-          id: `cme-${Date.now()}`,
+          id: `cme-${eventTimeMs}-${Math.round(velocityChange)}-${Math.round(bzChange)}`,
           type: 'cme',
-          timestamp: new Date(),
+          timestamp: eventTimestamp,
           description: 'CME impact detected',
           details: {
             previousValue: `${prev.solar_wind.velocity.toFixed(1)} km/s`,
@@ -89,9 +98,9 @@ export function useEventHistory(
       for (const threshold of thresholds) {
         if (prevKp < threshold && currKp >= threshold) {
           newEvents.push({
-            id: `kp-${threshold}-${Date.now()}`,
+            id: `kp-${threshold}-${eventTimeMs}`,
             type: 'kp_threshold',
-            timestamp: new Date(),
+            timestamp: eventTimestamp,
             description: `Kp index crossed ${threshold}`,
             details: {
               previousValue: prevKp.toFixed(1),
@@ -107,9 +116,9 @@ export function useEventHistory(
       const velocityChange = Math.abs(curr.solar_wind.velocity - prev.solar_wind.velocity);
       if (velocityChange > 100) {
         newEvents.push({
-          id: `velocity-${Date.now()}`,
+          id: `velocity-${eventTimeMs}-${Math.round(velocityChange)}`,
           type: 'velocity_spike',
-          timestamp: new Date(),
+          timestamp: eventTimestamp,
           description: 'Large velocity change',
           details: {
             previousValue: `${prev.solar_wind.velocity.toFixed(1)} km/s`,
@@ -122,9 +131,9 @@ export function useEventHistory(
     // Detect strong Bz events
     if (prev.solar_wind && curr.solar_wind && curr.solar_wind.bz < -10) {
       newEvents.push({
-        id: `bz-${Date.now()}`,
+        id: `bz-${eventTimeMs}-${Math.round(curr.solar_wind.bz * 10)}`,
         type: 'bz_event',
-        timestamp: new Date(),
+        timestamp: eventTimestamp,
         description: 'Strong southward Bz detected',
         details: {
           currentValue: `${curr.solar_wind.bz.toFixed(1)} nT`,
@@ -142,7 +151,7 @@ export function useEventHistory(
     }
 
     previousDataRef.current = currentData;
-  }, [currentData, previousData]);
+  }, [currentData]);
 
   const addEvent = (event: Omit<SpaceWeatherEvent, 'id' | 'timestamp'>) => {
     const newEvent: SpaceWeatherEvent = {

@@ -50,6 +50,10 @@ export function useEducationalNarrator(
   const [state, setState] = useState<NarratorState>(createNarratorState);
   const previousDataRef = useRef<ComprehensiveSpaceWeatherData | undefined>(previousData);
 
+  useEffect(() => {
+    previousDataRef.current = previousData;
+  }, [previousData]);
+
   // Update narrator when data changes
   useEffect(() => {
     if (!enabled) return;
