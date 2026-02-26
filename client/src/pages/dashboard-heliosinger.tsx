@@ -68,6 +68,8 @@ export default function Dashboard() {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   const previousComprehensiveDataRef = useRef<ComprehensiveSpaceWeatherData | undefined>(undefined);
+  const previousComprehensiveForIntervalRef = useRef<ComprehensiveSpaceWeatherData | undefined>(undefined);
+  const [updateFrequency, setUpdateFrequency] = useState(60000);
   const mappingContextRef = useRef(createMappingContext());
 
   const handleHeliosingerError = useCallback((error: Error) => {
@@ -86,18 +88,25 @@ export default function Dashboard() {
       const response = await apiRequest("GET", "/api/space-weather/comprehensive");
       return (await response.json()) as ComprehensiveSpaceWeatherData;
     },
-    refetchInterval: (query) => {
-      const currentData = query.state.data;
-      const interval = calculateRefetchInterval(currentData, previousComprehensiveDataRef.current);
-      if (currentData) {
-        previousComprehensiveDataRef.current = currentData;
-      }
-      return interval;
-    },
+    refetchInterval: updateFrequency,
   });
 
-  // Derive update frequency from current data (no state → no re-render cascade)
-  const updateFrequency = calculateRefetchInterval(comprehensiveData, previousComprehensiveDataRef.current);
+  // Keep the displayed interval aligned with the actual query polling interval.
+  useEffect(() => {
+    if (!comprehensiveData) return;
+    const interval = calculateRefetchInterval(
+      comprehensiveData,
+      previousComprehensiveForIntervalRef.current
+    );
+    setUpdateFrequency(interval);
+    previousComprehensiveForIntervalRef.current = comprehensiveData;
+  }, [comprehensiveData]);
+
+  // Preserve previous snapshot for comparison-oriented UI (events ticker, narrator).
+  useEffect(() => {
+    if (!comprehensiveData) return;
+    previousComprehensiveDataRef.current = comprehensiveData;
+  }, [comprehensiveData]);
 
   const heliosinger = useHeliosinger({
     enabled: isHeliosingerEnabled,
@@ -845,7 +854,7 @@ export default function Dashboard() {
                     )}
 
                     <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Update Frequency:</span>
+                      <span className="text-muted-foreground">Poll Interval:</span>
                       <span className="font-mono text-xs" data-testid="text-update-frequency">
                         {getUpdateFrequencyDescription(updateFrequency)}
                       </span>
@@ -1246,7 +1255,7 @@ export default function Dashboard() {
               </div>
               <div className="mt-4 flex items-center justify-between text-[10px] text-white/50 uppercase tracking-widest">
                 <span>Queue: {narrator.queueLength}</span>
-                <span>Update: {getUpdateFrequencyDescription(updateFrequency)}</span>
+                <span>Poll: {getUpdateFrequencyDescription(updateFrequency)}</span>
               </div>
             </CardContent>
           </Card>
